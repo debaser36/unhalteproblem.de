@@ -6,7 +6,7 @@
   };
 
   outputs = { self, nixpkgs }: {
-    packages.aarch64-linux.unhalteproblem.de = let
+    packages.aarch64-linux.website = let
       pkgs = import nixpkgs { system = "aarch64-linux"; };
     in pkgs.stdenv.mkDerivation {
       pname = "unhalteproblem.de";
