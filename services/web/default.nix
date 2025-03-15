@@ -13,23 +13,27 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     nodejs
     pnpm
-		pkgs.cacert
   ];
 
-  # This is crucial for network access
-  __noChroot = true;
+  # Replace the __noChroot approach with fetchDeps
+  pnpmDeps = pnpm.fetchDeps {
+    inherit pname version src;
+    # Replace this hash with the one you generated
+		hash = "sha256-pB46Yqa9ZcjT5pzzyeQxH0WrEm/aRXibV5whMiROYpo=";
+  };
   
   buildPhase = ''
-    export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-    export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
     export HOME=$TMPDIR
-    export HOME=$TMPDIR
+    
+    # Use the pre-fetched dependencies
+    export PNPM_STORE_DIR=${pnpmDeps}/store
+    
     echo "Working directory: $(pwd)"
     echo "Node.js version: $(node --version)"
     echo "pnpm version: $(pnpm --version)"
     
-    # Install dependencies with network access
-    pnpm install --frozen-lockfile
+    # Install dependencies from the local store - offline mode
+    pnpm install --frozen-lockfile --offline
     
     # Navigate to the web service and build
     cd services/web
@@ -39,12 +43,5 @@ stdenv.mkDerivation rec {
   installPhase = ''
     mkdir -p $out
     cp -r dist/* $out
-  '';
-  
-  # This helps with debugging
-  shellHook = ''
-    echo "Development environment ready!"
-    echo "Node.js: $(node --version)"
-    echo "pnpm: $(pnpm --version)"
   '';
 }
