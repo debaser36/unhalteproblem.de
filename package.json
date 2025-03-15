@@ -1,0 +1,12 @@
+{
+    "packageManager": "pnpm@10.6.3",
+	"private": true,
+	"devDependencies": {
+		"turbo": "^2.4.4"
+	},
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo watch dev lint",
+		"lint": "turbo run lint"
+	}
+}
