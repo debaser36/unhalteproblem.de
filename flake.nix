@@ -1,7 +1,7 @@
 {
-  description = Flake for unhalteproblem.de website and services;
+  description = "Flake for unhalteproblem.de website and services";
 
-  inputs.nixpkgs.url = github:NixOS/nixpkgs;
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs";
 
   outputs = { self, nixpkgs }: 
     let 
