@@ -14,9 +14,10 @@
           src = ./.;
           pnpmDeps = pkgs.pnpm.fetchDeps {
             pname = "unhalteproblem-website";
+						src = ./;
             version = "0.0.1";
             src = src;
-            hash = "sha256-95op+Lebn95TDlihUs6kTdl2rSXEEOy47Qnmsa8bgHk="; # Auto-update this!
+            hash ="sha256-GhKqbEuLQHj7nul0FB7hCRRb4th+45pBQDy8Pn6JO7A="; # Auto-update this!
           };
         in {
           default = pkgs.callPackage ./services/web/default.nix { inherit pnpmDeps; };
