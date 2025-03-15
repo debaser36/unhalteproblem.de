@@ -17,8 +17,8 @@
       buildInputs = [ pkgs.nodejs ];  # Adjust depending on what your website needs
 
       buildPhase = ''
-        npm install
-        npm run build  # Adjust this command to your build process
+        pnpm install
+        pnpm run build  # Adjust this command to your build process
       '';
 
       installPhase = ''
