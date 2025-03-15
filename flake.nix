@@ -14,5 +14,6 @@
     };
   in {
     packages.x86_64-linux.default = pkgs.callPackage ./services/web/default.nix { inherit pnpmDeps; };
+    packages.x86_64-darwin.default = pkgs.callPackage ./services/web/default.nix { inherit pnpmDeps; };
   };
 }
