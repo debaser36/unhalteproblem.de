@@ -10,7 +10,13 @@
     in {
       packages = forAllSystems (system:
         let 
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = import nixpkgs { 
+            inherit system; 
+            config = { 
+              allowUnfree = true;
+              permittedInsecurePackages = [ "nodejs-16.20.2" ];
+            };
+          };
         in {
           default = pkgs.callPackage ./services/web/default.nix { };
         }
