@@ -1,0 +1,14 @@
+@use "sass:color";
+
+// Mixin for applying a hover effect with color adjustment
+@mixin hover-effect($base-color, $lightness) {
+  background-color: color.adjust($base-color, $lightness: $lightness);
+  transition: background-color 0.3s ease;
+}
+
+// Mixin for centered content
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
