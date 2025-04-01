@@ -6,13 +6,14 @@ import NavigationBar from './components/NavigationBar/NavigationBar';
 import Home from './components/pages/Home';
 
 import './styles/index.scss'; // Import global Sass styles
+import GAME_SNAKE from './components/pages/games/Snake';
 
 // Example placeholder components for routes
 const Dashboard = () => <div className="page">Dashboard Page</div>;
 const Profile = () => <div className="page">Profile Page</div>;
 const Contact = () => <div className="page">Contact Page</div>;
 const Games = () => <div className="page">Games Overview Page</div>;
-const GameSnake = () => <div className="page">Snake</div>;
+const GameSnake = () => GAME_SNAKE({})
 
 const App: React.FC = () => {
   return (

@@ -1,0 +1,98 @@
+:root {
+    --board-size: 10; // Default value, will be updated dynamically
+  }
+  
+  .game-container {
+    text-align: center;
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    
+    h1 {
+      margin-bottom: 10px;
+    }
+    
+    p {
+      font-size: 1.2rem;
+      margin-bottom: 15px;
+    }
+  
+    .game-over {
+      margin: 20px 0;
+    }
+  
+    .board-size-form {
+      max-width: 300px;
+      margin: 0 auto;
+    }
+  }
+  
+  .game-board {
+    display: grid;
+    grid-template-columns: repeat(var(--board-size), 1fr);
+    width: min(90vw, 500px);
+    aspect-ratio: 1 / 1;
+    margin: 0 auto 20px;
+    border: 2px solid black;
+    background-color: #f8f8f8;
+    overflow: hidden; // Prevent cells from overflowing
+  }
+  
+  .cell {
+    aspect-ratio: 1 / 1;
+    border-top: 1px solid #ddd;
+    border-left: 1px solid #ddd;
+    box-sizing: border-box;
+  }
+  
+  // Add bottom and right borders to the game board to complete the grid
+  .game-board {
+    border-bottom: 1px solid #ddd;
+    border-right: 1px solid #ddd;
+  }
+  
+  .snake {
+    background-color: green;
+  }
+  
+  .food {
+    background-color: red;
+    border-radius: 50%;
+  }
+  
+  /* Controls for Mobile */
+  .controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 1rem;
+    
+    button {
+      background-color: #4caf50;
+      color: white;
+      font-size: 1.5rem;
+      margin: 0.25rem;
+      padding: 10px 15px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      width: 60px;
+      height: 60px;
+      transition: background 0.2s ease-in-out;
+      
+      &:hover {
+        background-color: #45a049;
+      }
+      
+      &:active {
+        background-color: #3d8b40;
+      }
+    }
+    
+    div {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+  }

@@ -65,7 +65,7 @@ footer {
 // Bootstrap card override
 .card {
   padding: 2em;
-  @extend .shadow-sm;
+  @extend .shadow-sm !optional; 
 
   &-title {
     color: $primary;
