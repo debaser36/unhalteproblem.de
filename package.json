@@ -1,9 +1,9 @@
 {
-    "packageManager": "pnpm@10.7.1",
+    "packageManager": "pnpm@10.8.1",
 	"private": true,
 	"devDependencies": {
-		"turbo": "^2.4.4",
-		"npm-check-updates": "^17.1.16"
+		"turbo": "^2.5.0",
+		"npm-check-updates": "^17.1.18"
 	},
 	"scripts": {
 		"build": "turbo run build",
