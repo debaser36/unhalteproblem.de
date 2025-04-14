@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate } from 'react-router-dom';
 import NavigationBar from './components/navigation/NavigationBar';
 import './styles/global.css';
 import VeryCoolButton from './components/general/VeryCoolButton';
+import LoginPage from './components/pages/LoginPage';
 
 // Page components
 const Home: React.FC = () => <div className="p-6"><h1 className="text-2xl font-bold">Home</h1><p>Welcome to the home page!</p></div>;
@@ -10,7 +11,7 @@ const Dashboard: React.FC = () => <div className="p-6"><h1 className="text-2xl f
 const Profile: React.FC = () => <div className="p-6"><h1 className="text-2xl font-bold">Profile</h1><p>User profile information</p></div>;
 const Contact: React.FC = () => <div className="p-6"><h1 className="text-2xl font-bold">Contact</h1><p>Contact information and form</p></div>;
 const Games: React.FC = () => <div className="p-6"><h1 className="text-2xl font-bold">Games</h1><p>Game library and features</p></div>;
-const LoginScreen: React.FC = () => <div className="p-6"><h1 className="text-2xl font-bold">Login</h1><p>Login form and authentication</p></div>;
+const LoginScreen = LoginPage
 
 
 
@@ -19,7 +20,7 @@ const App: React.FC = () => {
   return (
       <div className="flex flex-row max-h-15 ">
         <NavigationBar />
-        <VeryCoolButton color={'blue'} buttonText='Login' onClick={() => navigate("/login")}/>
+        <VeryCoolButton  color={'blue'} buttonText='Login' onClick={() => navigate("/login")}/>
         <div className="container mx-auto px-4">
         
           <main className="flex-grow py-5">
