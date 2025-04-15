@@ -7,7 +7,7 @@
 	},
 	"scripts": {
 		"build": "turbo run build",
-		"dev": "turbo watch dev lint",
+		"dev": "turbo watch lint dev",
 		"lint": "turbo run lint"
 	}
 }
