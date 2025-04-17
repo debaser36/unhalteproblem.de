@@ -1,6 +1,6 @@
 // App.tsx
 import React from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import NavigationBar from './components/navigation/NavigationBar';
 import './styles/global.css';
 import VeryCoolButton from './components/general/VeryCoolButton';
@@ -44,14 +44,15 @@ const Games: React.FC = () => (
 
 const App: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900">
       <header className="shadow-md bg-white">
-        <NavigationBar />
+        {location.pathname !== '/login' && <NavigationBar />}
       </header>
 
-      <main className="flex-grow">
+      <main className="flex-grow px-4 md:px-8 py-6">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
@@ -62,15 +63,20 @@ const App: React.FC = () => {
         </Routes>
       </main>
 
-      <footer className="bg-white text-center py-4 text-sm border-t">
+      {/* Login button with top-right positioning */}
+      {location.pathname !== '/login' && (
+        <VeryCoolButton 
+          onClick={() => navigate('/login')} 
+          color="blue" 
+          buttonText="Login"
+          position="top-right"
+          extraClasses="shadow-xl"
+        />
+      )}
+
+      <footer className="bg-white text-center py-4 text-xs sm:text-sm border-t">
         ©2025 Nico - All rights reserved
       </footer>
-
-      {/* Example button to trigger login navigation */}
-
-        <VeryCoolButton onClick={() => navigate('/login')} color='blue' buttonText='Login' extraClasses='w-32'>
-        </VeryCoolButton>
-
     </div>
   );
 };

@@ -20,14 +20,30 @@ const NavigationBar: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-between p-4 bg-white shadow">
-      <DropdownMenu 
-        items={navigationItems}
-        onSelect={onSelect}
-        color="indigo"
-        buttonText="Menu"
-        icon={<Menu className="ml-2 h-4 w-4" />}
-      />
+    <div className="flex items-center justify-between p-2 sm:p-4 bg-white shadow w-full">
+      <div className="w-full grid grid-cols-3 items-center">
+        {/* Left section with dropdown menu */}
+        <div className="justify-self-start">
+          <DropdownMenu 
+            items={navigationItems}
+            onSelect={onSelect}
+            color="indigo"
+            buttonText="Menu"
+            icon={<Menu className="ml-2 h-4 w-4" />}
+            direction="down" // Make the dropdown open downward
+          />
+        </div>
+        
+        {/* Center section with app name */}
+        <div className="text-lg font-semibold justify-self-center">
+          Unhalteproblem
+        </div>
+        
+        {/* Right section (empty for balance) */}
+        <div className="justify-self-end">
+          {/* Empty div for layout balance */}
+        </div>
+      </div>
     </div>
   );
 };
