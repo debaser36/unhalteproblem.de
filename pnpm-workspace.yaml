@@ -4,7 +4,13 @@ packages:
   - docs/*
   - services/*
   - lib/*
-
+ignoredBuiltDependencies:
+  - core-js
+  - core-js-pure
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - esbuild
+  - msgpackr-extract
 catalog:
   "typescript": "^5.9.3"
   "@types/node": "^25.1.0"
