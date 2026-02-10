@@ -6,7 +6,7 @@
       "build": {
         "dependsOn": ["^build"],
         "inputs": ["$TURBO_DEFAULT$", ".env*"],
-        "outputs": [".next/**", "!.next/cache/**","dist/**"]
+        "outputs": [".next/**", "!.next/cache/**","dist"]
       },
       "dev": {
         "persistent": true,
@@ -15,6 +15,9 @@
       },
       "lint": {
         "dependsOn": ["^lint"]
+      },
+      "check-types": {
+        "dependsOn": ["^check-types"]
       },
       "test": {
         "dependsOn": ["^test"],

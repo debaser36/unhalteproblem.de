@@ -1,13 +1,35 @@
 {
-    "packageManager": "pnpm@10.8.1",
+	"name": "unhalteproblem.de",
+	"packageManager": "pnpm@10.28.2",
+	"engines": {
+    	"node": ">=25"
+	},
 	"private": true,
+	"workspaces": [
+		"services/*",
+		"lib/*",
+		"packages/*",
+		"apps/*",
+		"docs/*"
+
+	],
 	"devDependencies": {
-		"turbo": "^2.8.4"
+		"@effect/language-service": "catalog:",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.2.7",
+		"dotenv-cli": "^11.0.0",
+		"prettier": "^3.8.1",
+		"turbo": "^2.8.4",
+		"typescript": "catalog:"
 	},
 	"scripts": {
 		"build": "dotenv -- turbo build",
 		"dev": "dotenv -- turbo watch lint dev",
 		"lint": "dotenv -- turbo lint",
-		"test": "dotenv -- turbo test"
+		"test": "dotenv -- turbo test",
+		"deploy": "dotenv -- turbo deploy",
+		"check-types": "dotenv -- turbo check-types",
+		"format": "prettier . --write",
+    	"prepare": "husky"
 	}
 }
