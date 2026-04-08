@@ -11,7 +11,8 @@
       "dev": {
         "persistent": true,
 				"interactive": true,
-        "cache": false
+        "cache": false,
+        "inputs": ["$TURBO_DEFAULT$", ".env*"]
       },
       "lint": {
         "dependsOn": ["^lint"]
