@@ -2,7 +2,7 @@
 	"name": "unhalteproblem.de",
 	"packageManager": "pnpm@10.33.0",
 	"engines": {
-    	"node": ">=25"
+		"node": ">=25"
 	},
 	"private": true,
 	"workspaces": [
@@ -11,7 +11,6 @@
 		"packages/*",
 		"apps/*",
 		"docs/*"
-
 	],
 	"devDependencies": {
 		"@effect/language-service": "catalog:",
@@ -30,6 +29,6 @@
 		"deploy": "dotenv -- turbo deploy",
 		"check-types": "dotenv -- turbo check-types",
 		"format": "prettier . --write",
-    	"prepare": "husky"
+		"prepare": "husky"
 	}
 }
