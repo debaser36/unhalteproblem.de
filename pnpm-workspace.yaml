@@ -17,7 +17,7 @@ catalog:
   "tsx": "4.21.0"
   "effect": ^3.19.15
   "@effect/cli": "0.75.0"
-  "@effect/language-service": ^0.84.3
+  "@effect/language-service": ^0.85.1
   "@effect/opentelemetry": ^0.63.0
   "@effect/platform": ^0.96.0
   "@effect/platform-node": ^0.106.0

@@ -1,10 +1,12 @@
 // App.tsx
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, /* useNavigate, */ useLocation } from 'react-router-dom';
 import NavigationBar from './components/navigation/NavigationBar';
 import './styles/global.css';
-import VeryCoolButton from './components/general/VeryCoolButton';
+/* import VeryCoolButton from './components/general/VeryCoolButton'; */
 import LoginPage from './components/pages/LoginPage';
+import ToolPage from './components/pages/ToolPage';
+import KiwiCalc from './components/pages/KiwiCalc';
 
 // Page components
 const Home: React.FC = () => (
@@ -42,8 +44,9 @@ const Games: React.FC = () => (
   </div>
 );
 
+
 const App: React.FC = () => {
-  const navigate = useNavigate();
+  //const navigate = useNavigate();
   const location = useLocation();
 
   return (
@@ -52,19 +55,21 @@ const App: React.FC = () => {
         {location.pathname !== '/login' && <NavigationBar />}
       </header>
 
-      <main className="flex-grow px-4 md:px-8 py-6">
+      <main className="grow px-4 md:px-8 py-6">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/games" element={<Games />} />
+          <Route path="/tools" element={<ToolPage />}/>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/tools/kiwiCalc" element={<KiwiCalc></KiwiCalc>}/>
         </Routes>
       </main>
 
       {/* Login button with top-right positioning */}
-      {location.pathname !== '/login' && (
+      {/*location.pathname !== '/login' && (
         <VeryCoolButton 
           onClick={() => navigate('/login')} 
           color="blue" 
@@ -72,10 +77,10 @@ const App: React.FC = () => {
           position="top-right"
           extraClasses="shadow-xl"
         />
-      )}
+      )*/}
 
       <footer className="bg-white text-center py-4 text-xs sm:text-sm border-t">
-        ©2025 Nico - All rights reserved
+        ©2026 Nico - All rights reserved
       </footer>
     </div>
   );

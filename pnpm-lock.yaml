@@ -7,8 +7,8 @@ settings:
 catalogs:
   default:
     '@effect/language-service':
-      specifier: ^0.84.3
-      version: 0.84.3
+      specifier: ^0.85.1
+      version: 0.85.1
     typescript:
       specifier: ^6.0.2
       version: 6.0.2
@@ -19,7 +19,7 @@ importers:
     devDependencies:
       '@effect/language-service':
         specifier: 'catalog:'
-        version: 0.84.3
+        version: 0.85.1
       dotenv-cli:
         specifier: ^11.0.0
         version: 11.0.0
@@ -65,6 +65,9 @@ importers:
         specifier: ^4.2.2
         version: 4.2.2
     devDependencies:
+      '@effect/language-service':
+        specifier: 'catalog:'
+        version: 0.85.1
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.2.0(jiti@2.6.1))
@@ -77,9 +80,6 @@ importers:
       '@types/react-router-dom':
         specifier: ^5.3.3
         version: 5.3.3
-      '@unhalteproblem.de/tsconfig':
-        specifier: workspace:*
-        version: link:../../lib/tsconfig
       '@vitejs/plugin-react':
         specifier: ^6.0.1
         version: 6.0.1(vite@8.0.7(esbuild@0.27.2)(jiti@2.6.1)(sass@1.86.1)(yaml@2.8.2))
@@ -180,8 +180,8 @@ packages:
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
 
-  '@effect/language-service@0.84.3':
-    resolution: {integrity: sha512-zpxi6rLCwst/cBQd7ElwDvt36Y6Jvz8v6bCLnNiOL6OXvdLmqjOFWyzWZdMh92vvBQA/aVKhfIAAOP3o4wKt0A==}
+  '@effect/language-service@0.85.1':
+    resolution: {integrity: sha512-EXnJjIy6zQ3nUO/MZ+ynWUb8B895KZPotd1++oTs9JjDkplwM7cb6zo8Zq2zU6piwq+KflO7amXbEfj1UMpHkw==}
     hasBin: true
 
   '@emnapi/core@1.9.1':
@@ -1793,7 +1793,7 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@effect/language-service@0.84.3': {}
+  '@effect/language-service@0.85.1': {}
 
   '@emnapi/core@1.9.1':
     dependencies:
