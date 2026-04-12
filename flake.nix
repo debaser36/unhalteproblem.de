@@ -37,7 +37,7 @@
 
           src = ./.;
 
-          nativeBuildInputs = [
+          nativeBuildInputs = with pkgs; [
             nodejs_25
             pnpm
           ];
