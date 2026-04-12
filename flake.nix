@@ -10,6 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+				pnpm = pkgs.pnpm.override {nodejs = pkgs.nodejs_25;};
       in
       {
         # -----------------
