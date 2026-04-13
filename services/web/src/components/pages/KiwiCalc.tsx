@@ -80,7 +80,7 @@ export default function KiwiCalc() {
          {/* Title */}
         <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-zinc-900">
-             🥝 No dropping guuuyys 🥝
+             🥝  KiwiCalc 🥝
             </h2>
         </div>
 
