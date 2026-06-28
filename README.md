@@ -1,54 +1,54 @@
-# React + TypeScript + Vite
+# Personal Website (Monorepo)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A monorepo-based personal website built with TypeScript, PNPM workspaces, Turborepo, and a Vite + React frontend. A backend written fully in [Effect TS](https://effect.website) is planned.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Status
 
-## Expanding the ESLint configuration
+![License](https://img.shields.io/badge/license-MIT-blue)
+![pnpm](https://img.shields.io/badge/pnpm-workspace-f69220)
+![Turbo](https://img.shields.io/badge/turborepo-monorepo-000000)
+![TypeScript](https://img.shields.io/badge/typescript-strict-3178c6)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+## Tech Stack
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- PNPM workspaces
+- Turborepo
+- React + TypeScript
+- Vite
+- PostCSS
+- ESLint
+- Shared TypeScript configs
+- Nix development environment
+- Effect TS
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+## Project Structure
+
+Inside the *services* folder you will find the main service applications in this monorepo. Notably this will be the website (frontend) and the backend.
+
+Inside the *lib* folder you will find shared components.
+
+Inside the *apps* folder you will find shared applications used throughout the stack.
+
+---
+
+## Development
+
+#### Dependencies
+Either a fully working Node JS Setup including pnpm, or a nix developing system (e.g. NixOS)
+
+#### Run the development server:
+```pnpm dev```
+Filters are planned to be added, once there are more packages.
+If you want to use the nix shell, run  ```nix develop```
+
+---
+
+## Building
+Run ```pnpm build```.
+Filters are planned to be added here aswell.
