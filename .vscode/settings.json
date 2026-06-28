@@ -2,5 +2,6 @@
     "json.schemaDownload.trustedDomains": {
         "https://turbo.build/schema.json": true
     },
-    "nixEnvSelector.suggestion": false
+    "nixEnvSelector.suggestion": false,
+    "js/ts.updateImportsOnFileMove.enabled": "always"
 }
