@@ -75,7 +75,7 @@ export default function KiwiCalc() {
   const symbol = currency === "EUR" ? "€" : "$";
 
   return (
-    <div className="bg-white border border-zinc-200 rounded-2xl p-6 flex flex-col gap-6 max-w-lg w-full">
+    <div className="bg-card border border-zinc-200 rounded-2xl p-6 flex flex-col gap-6 max-w-lg w-full">
 
          {/* Title */}
         <div className="flex items-center justify-between">
@@ -202,7 +202,7 @@ interface FieldProps {
 function Field({ label, children } : FieldProps ) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+      <span className="text-[11px] font-semibold uppercase tracking-widest text-foreground/60">
         {label}
       </span>
       {children}
@@ -219,7 +219,7 @@ interface StatProps {
 function Stat({ label, value, prefix = "" } : StatProps) {
   return (
     <div className="flex flex-col gap-1 rounded-xl bg-zinc-50 px-4 py-3">
-      <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+      <span className="text-[11px] font-semibold uppercase tracking-widest text-foreground/60">
         {label}
       </span>
       <span className="text-2xl font-semibold text-zinc-900">

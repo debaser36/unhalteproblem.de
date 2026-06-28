@@ -26,7 +26,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = (props) => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { 
     items, 
-    color = 'indigo', 
+    color = 'blue', 
     onSelect, 
     icon, 
     buttonText = 'Options',
@@ -161,7 +161,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = (props) => {
     <div className="relative inline-block text-left" ref={dropdownRef}>
       <button
         type="button"
-        className={`inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-medium text-white ${colorClasses.bg} rounded-md shadow-sm ${colorClasses.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 ${colorClasses.focus}`}
+        className={`inline-flex items-center justify-center px-3 py-2 text-xs sm:text-sm font-medium text-foreground ${colorClasses.bg} rounded-md shadow-sm ${colorClasses.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 ${colorClasses.focus}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         {buttonText}
@@ -170,20 +170,20 @@ const DropdownMenu: React.FC<DropdownMenuProps> = (props) => {
   
       {isOpen && (
         <div 
-          className={`absolute ${getPositionClasses()} ${getMenuLayoutClasses()} gap-1 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-2 w-48 sm:w-auto`}
+          className={`absolute ${getPositionClasses()} ${getMenuLayoutClasses()} gap-1 rounded-md shadow-lg bg-card ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-2 w-48 sm:w-auto`}
         >
           {items.flat().map((item) => (
             <a 
               key={item.id}
               href="#" 
-              className={`group flex flex-row sm:flex-col items-center justify-start sm:justify-center w-full sm:w-auto px-3 py-2 text-xs sm:text-sm text-gray-700 ${colorClasses.hoverBg} hover:text-gray-900 rounded`}
+              className={`group flex flex-row sm:flex-col items-center justify-start sm:justify-center w-full sm:w-auto px-3 py-2 text-xs sm:text-sm text-foreground/80 hover:text-foreground rounded hover:bg-primary/10 transition`}
               onClick={(e) => {
                 e.preventDefault();
                 handleItemClick(item);
               }}
             >
               {item.icon && (
-                <span className="mr-2 sm:mr-0 sm:mb-1 w-4 h-4 sm:w-5 sm:h-5 text-gray-500 group-hover:text-gray-900">
+                <span className="mr-2 sm:mr-0 sm:mb-1 w-4 h-4 sm:w-5 sm:h-5 text-foreground/60 group-hover:text-foreground">
                   {item.icon}
                 </span>
               )}

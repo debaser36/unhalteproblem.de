@@ -28,7 +28,7 @@ const VeryCoolButton: React.FC<VeryCoolButtonProps> = (props) => {
         const baseClasses = `
             flex items-center justify-center
             px-3 py-2 sm:px-4 sm:py-2
-            text-sm sm:text-base text-white
+            text-sm sm:text-base text-foreground
             font-medium sm:font-semibold rounded-lg
             shadow-md transition duration-200
             focus:outline-none focus:ring-2 focus:ring-offset-2

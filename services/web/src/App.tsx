@@ -3,32 +3,11 @@ import React from 'react';
 import { Routes, Route, /* useNavigate, */ useLocation } from 'react-router-dom';
 import NavigationBar from './components/navigation/NavigationBar';
 import './styles/global.css';
-/* import VeryCoolButton from './components/general/VeryCoolButton'; */
 import LoginPage from './components/pages/LoginPage';
 import ToolPage from './components/pages/ToolPage';
 import KiwiCalc from './components/pages/KiwiCalc';
-
-// Page components
-const Home: React.FC = () => (
-  <div className="p-4 text-center">
-    <h1 className="text-2xl font-bold">Home</h1>
-    <p>Welcome to the home page!</p>
-  </div>
-);
-
-const Dashboard: React.FC = () => (
-  <div className="p-4 text-center">
-    <h1 className="text-2xl font-bold">Dashboard</h1>
-    <p>Your dashboard content here</p>
-  </div>
-);
-
-const Profile: React.FC = () => (
-  <div className="p-4 text-center">
-    <h1 className="text-2xl font-bold">Profile</h1>
-    <p>User profile information</p>
-  </div>
-);
+import HomePage from './components/pages/HomePage';
+import Layout from './Layout';
 
 const Contact: React.FC = () => (
   <div className="p-4 text-center">
@@ -46,20 +25,17 @@ const Games: React.FC = () => (
 
 
 const App: React.FC = () => {
-  //const navigate = useNavigate();
   const location = useLocation();
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900">
-      <header className="shadow-md bg-white">
+    <Layout>
+      <header className="shadow-md bg-transparent">
         {location.pathname !== '/login' && <NavigationBar />}
       </header>
 
       <main className="grow px-4 md:px-8 py-6">
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/games" element={<Games />} />
           <Route path="/tools" element={<ToolPage />}/>
@@ -67,22 +43,10 @@ const App: React.FC = () => {
           <Route path="/tools/kiwiCalc" element={<KiwiCalc></KiwiCalc>}/>
         </Routes>
       </main>
-
-      {/* Login button with top-right positioning */}
-      {/*location.pathname !== '/login' && (
-        <VeryCoolButton 
-          onClick={() => navigate('/login')} 
-          color="blue" 
-          buttonText="Login"
-          position="top-right"
-          extraClasses="shadow-xl"
-        />
-      )*/}
-
-      <footer className="bg-white text-center py-4 text-xs sm:text-sm border-t">
+      <footer className="bg-card text-card-foreground border-t border-border text-center py-4 text-xs sm:text-sm">
         ©2026 Nico - All rights reserved
       </footer>
-    </div>
+    </Layout>
   );
 };
 

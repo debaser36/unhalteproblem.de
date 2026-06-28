@@ -1,1 +1,18 @@
-@import "tailwindcss"
+@import "tailwindcss";
+
+:root {
+  --background: 10 10 10;
+  --foreground: 245 245 245;
+
+  --card: 24 24 27;
+  --card-foreground: 245 245 245;
+
+  --border: 39 39 42;
+
+  --primary: 99 102 241;
+}
+
+body {
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
+}

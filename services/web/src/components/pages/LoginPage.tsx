@@ -19,7 +19,7 @@ export default function FancyLoginScreen() {
         transition={{ duration: 0.6 }}
         className="w-full max-w-md"
       >
-        <div className="rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md">
+        <div className="rounded-2xl shadow-2xl bg-card/80 backdrop-blur-md">
           <div className="p-8">
             <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">
               Welcome Back
@@ -50,7 +50,7 @@ export default function FancyLoginScreen() {
                 color="indigo"
                 buttonText="Login"
                 overrideClasses={true}
-                extraClasses="w-full py-3 mt-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-lg font-semibold shadow-lg transition-all duration-300"
+                extraClasses="w-full py-3 mt-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-foreground text-lg font-semibold shadow-lg transition-all duration-300"
               >
               </VeryCoolButton>
               <p className="text-center text-sm text-gray-600 mt-4">

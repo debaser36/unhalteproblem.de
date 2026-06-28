@@ -20,7 +20,7 @@ const NavigationBar: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-between p-2 sm:p-4 bg-white shadow w-full">
+    <div className="flex items-center justify-between p-2 sm:p-4 bg-card text-card-foreground border-b border-border shadow w-full">
       <div className="w-full grid grid-cols-3 items-center">
         {/* Left section with dropdown menu */}
         <div className="justify-self-start">
@@ -35,7 +35,7 @@ const NavigationBar: React.FC = () => {
         </div>
         
         {/* Center section with app name */}
-        <div className="text-lg font-semibold justify-self-center">
+        <div className="text-lg font-semibold justify-self-center text-foreground">
           Unhalteproblem
         </div>
         
