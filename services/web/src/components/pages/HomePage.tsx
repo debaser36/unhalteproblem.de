@@ -1,8 +1,8 @@
 import React from 'react';
 import HeroSection from '../home/HeroSection';
 import VeryCoolButton from '../general/VeryCoolButton';
-import NavCard from '../general/NavCard';
 import ProjectCard from '../home/ProjectCard';
+import NavCard from '../general/NavCard';
 
 const HomePage: React.FC = () => {
     return (
@@ -14,13 +14,13 @@ const HomePage: React.FC = () => {
 
                 {/* Quick Navigation */}
                 <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <NavCard title="Projects" desc="Things I built" />
-                    <NavCard title="About" desc="Who I am" />
-                    <NavCard title="Contact" desc="Get in touch" />
+                    <NavCard title="WIP" desc="Work in Progress" />
+                    <NavCard title="WIP" desc="Work in Progress" />
+                    <NavCard title="WIP" desc="Work in progress" />
                 </section>
 
                 {/* Featured Work */}
-                <section className="space-y-4">
+                <section className="space-y-2">
                     <h2 className="text-xl font-semibold text-foreground/80">
                         Featured Work
                     </h2>

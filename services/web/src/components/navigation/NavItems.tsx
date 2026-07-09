@@ -1,4 +1,4 @@
-import {HomeIcon, MailIcon, PackageIcon, WrenchIcon} from "lucide-react"  
+import {HomeIcon, /* MailIcon */ /* PackageIcon */ WrenchIcon} from "lucide-react"  
   // Extended MenuItem type with path property
   export type ExtendedMenuItem = {
     id: string;
@@ -36,7 +36,7 @@ export const navigationItems : ExtendedMenuItem[][] = [
       } */
     ],
     [
-      {
+      /* {
         id: 'contact',
         label: 'Contact',
         path: '/contact',
@@ -51,7 +51,7 @@ export const navigationItems : ExtendedMenuItem[][] = [
         icon: (
           <PackageIcon className="w-5 h-5" />
         ),
-      },
+      }, */
       {
         id: 'tools',
         label: 'Tools',
