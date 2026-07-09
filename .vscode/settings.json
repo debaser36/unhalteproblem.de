@@ -3,5 +3,6 @@
         "https://turbo.build/schema.json": true
     },
     "nixEnvSelector.suggestion": false,
-    "js/ts.updateImportsOnFileMove.enabled": "always"
+    "js/ts.updateImportsOnFileMove.enabled": "always",
+    "terminal.integrated.sendKeybindingsToShell": true,
 }
