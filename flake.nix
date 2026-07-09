@@ -10,7 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-				pnpm = pkgs.pnpm.override {nodejs = pkgs.nodejs_25;};
+			  pnpm = pkgs.pnpm.override { "nodejs-slim" = pkgs.nodejs_26; };
       in
       {
         # -----------------
@@ -18,7 +18,7 @@
         # -----------------
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            nodejs_25
+            nodejs_26
             pnpm
           ];
 
@@ -39,7 +39,7 @@
           src = ./.;
 
           nativeBuildInputs = with pkgs; [
-            nodejs_25
+            nodejs_26
             pnpm
           ];
 
