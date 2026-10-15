@@ -31,7 +31,7 @@ user-invocable: false
 The catalog intentionally pins the Effect **v3** line (`effect@3`,
 `@effect/*@0.x`) until a planned migration to v4. Upgrades stay within v3 and
 its matching `@effect/*` 0.x versions, and `effect@4` is never adopted as part
-of a routine upgrade. `@effect/language-service` is versioned separately and
+of a routine upgrade. `@effect/tsgo` (the Effect language service) is versioned separately and
 may be upgraded normally. Adopt v4 only when the request explicitly asks for
 the Effect v4 migration. Then all Effect packages move together to the exact
 version in `repos/effect/packages/effect/package.json`.

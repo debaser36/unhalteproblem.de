@@ -34,12 +34,13 @@ Upgrade in this order and verify after each group:
    group, for example:
    - `react`, `react-dom`, `@types/react`, `@types/react-dom`
    - `vite`, `@vitejs/plugin-react`, other Vite plugins
-   - `eslint`, `@eslint/js`, `typescript-eslint` and the eslint plugins
+   - `oxlint` (plus `oxlint-tsgolint` if type-aware linting is enabled)
    - `tailwindcss`, `@tailwindcss/vite`, `@tailwindcss/postcss`
    - `vitest` with `@effect/vitest` (`@effect/vitest` v4 needs Vitest 5, so
      this group is blocked until the Effect v4 migration)
-   - `typescript`, which goes last, after the tools that depend on it have
-     moved
+   - `typescript` together with `@effect/tsgo` (`effect-tsgo patch` must
+     support the new TypeScript version; check it runs in `prepare`). This
+     goes last, after the tools that depend on TypeScript have moved
 
    Start with the majors that unblock others. Tooling with a low blast radius
    (prettier, husky, lint-staged, turbo, dotenv-cli) can go early.
@@ -60,7 +61,7 @@ Upgrade in this order and verify after each group:
 5. Commit the group if commits were requested (see the skill). Otherwise note
    its version bumps for the report.
 
-Config files are part of the upgrade, for example the ESLint flat config,
+Config files are part of the upgrade, for example `.oxlintrc.json`,
 `vite.config.ts`, the Tailwind/PostCSS config and `tsconfig` options that were
 renamed or removed. Change only what the migration guide requires, and keep
 the strictness settings as they are.

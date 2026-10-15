@@ -71,7 +71,7 @@ services/<name>/
   `@effect/platform-node`, `@unhalteproblem.de/api` (`workspace:*`)
 - devDependencies: `@unhalteproblem.de/tsconfig` (`workspace:*`),
   `typescript`, `tsx`, `@types/node`, `vitest`, `@effect/vitest`,
-  `@effect/language-service`
+  `@effect/tsgo`, `oxlint` (move `oxlint` from `services/web` into the catalog the first time a second package uses it)
 
 Rules for the code:
 
