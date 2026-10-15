@@ -35,9 +35,9 @@ Upgrade in this order and verify after each group:
    - `react`, `react-dom`, `@types/react`, `@types/react-dom`
    - `vite`, `@vitejs/plugin-react`, other Vite plugins
    - `oxlint` (plus `oxlint-tsgolint` if type-aware linting is enabled)
-   - `tailwindcss`, `@tailwindcss/vite`, `@tailwindcss/postcss`
-   - `vitest` with `@effect/vitest` (`@effect/vitest` v4 needs Vitest 5, so
-     this group is blocked until the Effect v4 migration)
+   - `tailwindcss`, `@tailwindcss/vite`
+   - `vitest` (`@effect/vitest` stays on the v3 line until the Effect v4
+     migration; its v4 release is the one that matches Vitest 5)
    - `typescript` together with `@effect/tsgo` (`effect-tsgo patch` must
      support the new TypeScript version; check it runs in `prepare`). This
      goes last, after the tools that depend on TypeScript have moved
