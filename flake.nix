@@ -1,5 +1,5 @@
 {
-  description = "Monorepo flake with pnpm + Node.js 25";
+  description = "Monorepo flake with pnpm + Node.js 26";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -10,15 +10,32 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-			  pnpm = pkgs.pnpm.override { "nodejs-slim" = pkgs.nodejs_26; };
+        inherit (pkgs) lib;
+
+        nodejs = pkgs.nodejs_26;
+        # pnpm 11 matches "packageManager" in package.json
+        pnpm = pkgs.pnpm_11.override { nodejs-slim = nodejs; };
+
+        # Only the files the website build needs, so edits elsewhere
+        # (docs, repos/, .claude/) do not trigger a rebuild.
+        src = lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [
+            ./package.json
+            ./pnpm-lock.yaml
+            ./pnpm-workspace.yaml
+            ./lib
+            ./services
+          ];
+        };
       in
       {
         # -----------------
         # DEV SHELL
         # -----------------
         devShells.default = pkgs.mkShell {
-          packages = with pkgs; [
-            nodejs_26
+          packages = [
+            nodejs
             pnpm
           ];
 
@@ -32,32 +49,42 @@
         # -----------------
         # BUILD PACKAGE
         # -----------------
-        packages.default = pkgs.stdenv.mkDerivation {
+        # The static website (services/web/dist), served by nginx on nixos-oracle.
+        packages.default = pkgs.stdenv.mkDerivation (finalAttrs: {
           pname = "unhalteproblem.de";
           version = "0.1.0";
 
-          src = ./.;
+          inherit src;
 
-          nativeBuildInputs = with pkgs; [
-            nodejs_26
+          # The build has no network access, so the dependencies are fetched
+          # beforehand into a fixed-output derivation. When pnpm-lock.yaml changes,
+          # set hash = "", run `nix build` and copy the "got:" hash in here.
+          pnpmDeps = pkgs.fetchPnpmDeps {
+            inherit (finalAttrs) pname version src;
+            inherit pnpm;
+            fetcherVersion = 4;
+            hash = "sha256-aNS3iESYeBukAwj7OW8pDhhT7BOa1/E60dsgQyMrzMQ=";
+          };
+
+          nativeBuildInputs = [
+            nodejs
             pnpm
+            pkgs.pnpmConfigHook
           ];
 
-          # Ensures reproducibility
-          PNPM_STORE_DIR = "/build/pnpm-store";
-
           buildPhase = ''
-            export HOME=$TMPDIR
-
-            pnpm install --frozen-lockfile
-            pnpm -r build
+            runHook preBuild
+            # The website and the workspace packages it depends on
+            pnpm --filter "@unhalteproblem.de/website..." build
+            runHook postBuild
           '';
 
           installPhase = ''
-            mkdir -p $out
-            cp -r . $out/
+            runHook preInstall
+            cp -r services/web/dist $out
+            runHook postInstall
           '';
-        };
+        });
       }
     );
 }
