@@ -40,7 +40,7 @@ summary:
 | `update:` | dependency, flake or subtree version bumps |
 | `test:` | tests only |
 | `docs:` | documentation only (README, CLAUDE.md, agent-patterns) |
-| `build:` | build tooling and config (turbo, tsconfig, nix, vite, eslint, prettier) |
+| `build:` | build tooling and config (turbo, tsconfig, nix, vite, oxlint, prettier) |
 | `chore:` | everything else (repo housekeeping, Claude Code config) |
 
 Keep commits modular: one feature, change or fix per commit. Stage only the
@@ -114,7 +114,7 @@ secrets need two checks before they count as done: a review by the
 
 `.claude/settings.json` runs a type-check when Claude finishes a turn
 (`.claude/hooks/typecheck.sh`). It runs `tsc` on every workspace package with
-TypeScript files edited that turn, plus Effect language service diagnostics on
+TypeScript files edited that turn, plus Effect language service diagnostics (`effect-tsgo`) on
 edited files that import Effect. Errors are fed back once for fixing. Fix them;
 don't silence them.
 

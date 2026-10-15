@@ -20,7 +20,7 @@ A monorepo-based personal website built with TypeScript, PNPM workspaces, Turbor
 - React + TypeScript
 - Vite
 - PostCSS
-- ESLint
+- oxlint
 - Shared TypeScript configs
 - Nix development environment
 - Effect TS
