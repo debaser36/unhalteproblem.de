@@ -12,7 +12,7 @@ onlyBuiltDependencies:
   - esbuild
   - msgpackr-extract
 catalog:
-  "typescript": "^6.0.2"
+  "typescript": "^6.0.3"
   "@types/node": "^25.5.2"
   "tsx": "4.21.0"
   "effect": ^3.19.15
