@@ -58,7 +58,7 @@ for pkg in "${!packages[@]}"; do
   [[ $? -ne 0 ]] && report+="## tsc: ${pkg#"$root"/}"$'\n'"$out"$'\n\n'
 done
 
-els=$root/node_modules/.bin/effect-language-service
+els=$root/node_modules/.bin/effect-tsgo
 if [[ -x $els ]]; then
   for file in "${effect_files[@]:0:20}"; do
     out=$("$els" diagnostics --file "$file" --format text --severity error,warning 2>&1)
