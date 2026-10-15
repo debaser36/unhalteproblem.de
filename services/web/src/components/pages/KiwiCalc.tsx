@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
-
-type KiwiVariety = "normal" | "gold";
-type BinSize = "560" | "600";
-type Currency = "EUR" | "NZD";
+import { useState } from "react";
+import {
+  calculateKiwiEarnings,
+  type BinSize,
+  type Currency,
+  type KiwiVariety,
+} from "../../lib/kiwiCalc";
 
 export default function KiwiCalc() {
   const [people, setPeople]       = useState("");
@@ -15,62 +17,19 @@ export default function KiwiCalc() {
   const [taxAmount, setTaxAmount] = useState("17");
   const [subtractTax, setSubtractTax] = useState(false);
 
-  const [binsPerPersonTotal, setBinsPerPersonTotal]        = useState<number | null>(null);
-  const [binsPerPersonPerHour, setBinsPerPersonPerHour]   = useState<number | null>(null);
-  const [earningsTotal, setEarningsTotal]                 = useState<number | null>(null);
-  const [earningsPerHour, setEarningsPerHour]             = useState<number | null>(null);
-
-
-  const GA_560l = 28.0;
-  const GA_600l = 30.5;
-  const HW_560l = 25.18;
-  const HW_600l = 27.54;
-
-  useEffect(() => {
-    function recalculate() {
-        const binsPerPerson = Number(people) > 0 && Number(totalBins) > 0 ? Number(totalBins) / Number(people) : null;
-        setBinsPerPersonTotal(binsPerPerson);
-      
-        const binsPerPersonPerHour =  (binsPerPerson && Number(hoursWorked) > 0) ? binsPerPerson / Number(hoursWorked) : null;
-      setBinsPerPersonPerHour(binsPerPersonPerHour);
-
-
-      let totalEarnings = 0;
-      if(binsPerPerson)
-        {
-             switch(binSize)
-             {
-                case "560":
-                    if(variety == "normal") totalEarnings = HW_560l;
-                    else totalEarnings  = GA_560l;
-                    break;
-                case "600":
-                    if(variety == "normal") totalEarnings = HW_600l;
-                    else totalEarnings = GA_600l;
-                    break;
-                default:
-                    break;
-             }
-             if(includeHolidayBonus) totalEarnings*=1.08;
-             
-             if(currency == "EUR") totalEarnings /= 2;
-
-             totalEarnings *= binsPerPerson;
-
-             if(subtractTax) totalEarnings -= (totalEarnings * (Number(taxAmount) / 100));
-             setEarningsTotal(totalEarnings);
-        }
-        else setEarningsTotal(null);
-
-        if(binsPerPersonPerHour)
-        {
-            setEarningsPerHour(totalEarnings/Number(hoursWorked));
-
-        }
-      else setEarningsPerHour(null);
-    }
-    recalculate();
-  }, [people, totalBins, variety, binSize, currency, hoursWorked, includeHolidayBonus, subtractTax, taxAmount]);
+  // Derived from the inputs on every render; no extra state or effect needed.
+  const { binsPerPersonTotal, binsPerPersonPerHour, earningsTotal, earningsPerHour } =
+    calculateKiwiEarnings({
+      people: Number(people),
+      totalBins: Number(totalBins),
+      hoursWorked: Number(hoursWorked),
+      variety,
+      binSize,
+      currency,
+      includeHolidayBonus,
+      subtractTax,
+      taxPercent: Number(taxAmount),
+    });
 
   const symbol = currency === "EUR" ? "€" : "$";
 
