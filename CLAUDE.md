@@ -86,10 +86,13 @@ agents can read real library source instead of guessing or searching the web.
   `effect/cli`, `effect/sql`, etc. Check the `exports` map of
   `repos/effect/packages/effect/package.json` for valid import paths.
 - **Pending migration:** the pnpm catalog (`pnpm-workspace.yaml`) still pins the
-  Effect v3 ecosystem (`effect@3`, `@effect/platform@0.x`, `vitest@4`). The move
-  to v4 happens later, deliberately. Until then, do not bump, add or remove Effect
+  Effect v3 ecosystem (`effect@3`, `@effect/platform@0.x`). The move to v4
+  happens later, deliberately. Until then, do not bump, add or remove Effect
   dependencies unless asked. If v4 code you write cannot compile against the
-  installed v3 packages, say so instead of falling back to v3 APIs.
+  installed v3 packages, say so instead of falling back to v3 APIs. `vitest` is
+  already on 5, which `@effect/vitest` v4 requires; the catalog's v3
+  `@effect/vitest@0.x` only supports Vitest 3, so don't use it before the
+  migration.
 - Check an API's `@stability` JSDoc tag before relying on it. `unstable` APIs can
   break in minor releases, `experimental` ones in patch releases.
 
