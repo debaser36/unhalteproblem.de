@@ -21,7 +21,7 @@ export default function FancyLoginScreen() {
       >
         <div className="rounded-2xl shadow-2xl bg-card/80 backdrop-blur-md">
           <div className="p-8">
-            <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">
+            <h2 className="text-3xl font-bold text-center text-card-foreground mb-6">
               Welcome Back
             </h2>
             <div className="space-y-4">
@@ -53,7 +53,7 @@ export default function FancyLoginScreen() {
                 extraClasses="w-full py-3 mt-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-foreground text-lg font-semibold shadow-lg transition-all duration-300"
               >
               </VeryCoolButton>
-              <p className="text-center text-sm text-gray-600 mt-4">
+              <p className="text-center text-sm text-foreground/60 mt-4">
                 Don’t have an account? <a href="#" className="text-purple-600 hover:underline">Sign up</a>
               </p>
             </div>

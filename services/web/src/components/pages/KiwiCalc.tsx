@@ -79,7 +79,7 @@ export default function KiwiCalc() {
 
          {/* Title */}
         <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-zinc-900">
+            <h2 className="text-lg font-semibold text-card-foreground">
              🥝  KiwiCalc 🥝
             </h2>
         </div>
@@ -219,7 +219,7 @@ interface StatProps {
 function Stat({ label, value, prefix = "" } : StatProps) {
   return (
     <div className="flex flex-col gap-1 rounded-xl bg-zinc-50 px-4 py-3">
-      <span className="text-[11px] font-semibold uppercase tracking-widest text-foreground/60">
+      <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
         {label}
       </span>
       <span className="text-2xl font-semibold text-zinc-900">
