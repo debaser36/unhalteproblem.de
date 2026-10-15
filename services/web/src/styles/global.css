@@ -12,6 +12,16 @@
   --primary: 99 102 241;
 }
 
+/* Expose the palette as Tailwind colors (bg-card, text-foreground/60, ...). */
+@theme inline {
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-card: rgb(var(--card));
+  --color-card-foreground: rgb(var(--card-foreground));
+  --color-border: rgb(var(--border));
+  --color-primary: rgb(var(--primary));
+}
+
 body {
   background-color: rgb(var(--background));
   color: rgb(var(--foreground));
