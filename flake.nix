@@ -13,8 +13,8 @@
         inherit (pkgs) lib;
 
         nodejs = pkgs.nodejs_26;
-        # pnpm 11 matches "packageManager" in package.json
-        pnpm = pkgs.pnpm_11.override { nodejs-slim = nodejs; };
+        # pnpm 12 matches "packageManager" in package.json
+        pnpm = pkgs.pnpm_12.override { nodejs-slim = nodejs; };
 
         # Only the files the website build needs, so edits elsewhere
         # (docs, repos/, .claude/) do not trigger a rebuild.
@@ -63,7 +63,7 @@
             inherit (finalAttrs) pname version src;
             inherit pnpm;
             fetcherVersion = 4;
-            hash = "sha256-gIjJ2cvBz7xicIu1FyTqBrccAhxgzp7MM2D+rWZrVZA=";
+            hash = "sha256-7RZHvYjDs4KsyolZ1iWsdwg7EeYWpUrlj5LIzwXYSmw=";
           };
 
           nativeBuildInputs = [
