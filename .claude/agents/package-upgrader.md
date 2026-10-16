@@ -36,8 +36,8 @@ Upgrade in this order and verify after each group:
    - `vite`, `@vitejs/plugin-react`, other Vite plugins
    - `oxlint` (plus `oxlint-tsgolint` if type-aware linting is enabled)
    - `tailwindcss`, `@tailwindcss/vite`
-   - `vitest` (`@effect/vitest` stays on the v3 line until the Effect v4
-     migration; its v4 release is the one that matches Vitest 5)
+   - `vitest` (check the `vitest` peer range of the pinned `@effect/vitest`
+     first; if it excludes the new major, hold `vitest` back)
    - `typescript` together with `@effect/tsgo` (`effect-tsgo patch` must
      support the new TypeScript version; check it runs in `prepare`). This
      goes last, after the tools that depend on TypeScript have moved
@@ -45,8 +45,9 @@ Upgrade in this order and verify after each group:
    Start with the majors that unblock others. Tooling with a low blast radius
    (prettier, husky, lint-staged, turbo, dotenv-cli) can go early.
 
-3. Effect packages: latest within the v3 line only (see the skill). List v4
-   as "held back: planned migration".
+3. Effect packages: not bumped here. They follow `repos/effect` (see the
+   skill). If npm has a newer version, list it as "held back: run
+   `/effect-update` first".
 
 ## 3. For each major group
 

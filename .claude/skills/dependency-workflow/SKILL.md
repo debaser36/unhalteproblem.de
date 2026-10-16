@@ -28,13 +28,14 @@ user-invocable: false
 
 ## Effect packages
 
-The catalog intentionally pins the Effect **v3** line (`effect@3`,
-`@effect/*@0.x`) until a planned migration to v4. Upgrades stay within v3 and
-its matching `@effect/*` 0.x versions, and `effect@4` is never adopted as part
-of a routine upgrade. `@effect/tsgo` (the Effect language service) is versioned separately and
-may be upgraded normally. Adopt v4 only when the request explicitly asks for
-the Effect v4 migration. Then all Effect packages move together to the exact
-version in `repos/effect/packages/effect/package.json`.
+The catalog pins `effect` and every `@effect/*` package (except
+`@effect/tsgo`) to the exact version in
+`repos/effect/packages/effect/package.json`. They always move together and
+follow the vendored subtree; a routine upgrade never bumps them. If npm has a
+newer Effect, report it as "held back: run `/effect-update` first".
+`@effect/tsgo` (the Effect language service) is versioned separately and may
+be upgraded normally. Never add `@effect/platform`, `@effect/sql`,
+`@effect/cli` or `@effect/rpc`; in v4 their code lives in `effect` itself.
 
 ## Baseline (before changing anything)
 

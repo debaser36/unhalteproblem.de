@@ -89,9 +89,10 @@ authorization, sessions, cookies, tokens or secrets.
 - Recommend running `/security-review` in addition to this checklist for
   auth changes.
 
-**Dependency reality.** The pnpm catalog still pins Effect v3 until a planned
-migration. If correct v4 code cannot compile against the installed packages,
-report that as a note, not as a defect in the code. Do not recommend v3 APIs.
+**Dependency reality.** The pnpm catalog pins Effect to the version of
+`repos/effect`. If the two ever differ and code that is correct for the
+vendored source cannot compile against the installed packages, report the
+mismatch as a note, not as a defect in the code. Do not recommend v3 APIs.
 
 ## Output
 

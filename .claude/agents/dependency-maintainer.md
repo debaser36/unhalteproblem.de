@@ -23,7 +23,8 @@ commits and report. Branch name: `update/deps-maintenance-<YYYY-MM-DD>`.
 ## 2. Safe updates
 
 - Apply patch and minor updates (minors of 0.x packages count as major and are
-  only reported). Keep Effect packages on the v3 line.
+  only reported). Leave Effect packages at their pinned version; they follow
+  the vendored subtree (see the skill).
 - Run all gates. If one fails, bisect within the batch, revert the offender
   and report it.
 

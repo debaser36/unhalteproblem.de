@@ -37,8 +37,9 @@ The ref to pull is `$ARGUMENTS`; use `main` if it is empty.
      changed.
 4. **Check the catalog.** Compare the new version with the Effect entries in
    `pnpm-workspace.yaml` and list each mismatch. Do not change the catalog
-   unless the user asks. The project is still on v3 by choice, and the
-   migration to v4 is planned separately.
+   unless the user asks. When they do, move `effect` and all `@effect/*`
+   entries except `@effect/tsgo` together to the new subtree version on an
+   `update/` branch, following the `dependency-workflow` skill.
 5. **Check the pattern files.** If `agent-patterns/` exists, list each pattern
    file whose APIs appear in the changelog entries, and suggest refreshing it
    with `/effect-patterns <topic>`.

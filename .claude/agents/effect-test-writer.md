@@ -15,8 +15,8 @@ follow Effect v4 as vendored in `repos/effect`.
    location, naming and style.
 2. Check the target package's `package.json` for `vitest`, `@effect/vitest` and
    a `test` script. If they are missing, stop and report what is needed. Do
-   not add dependencies or bump the catalog; the move to Effect v4 is planned
-   separately. Note that `@effect/vitest` v4 requires Vitest 5.
+   not add dependencies or bump the catalog yourself; both `vitest` and
+   `@effect/vitest` come from the catalog (`"catalog:"`).
 3. Look up the test helpers in the vendored sources instead of recalling them:
    - `repos/effect/ai-docs/src/09_testing/` (`10_effect-tests.ts`,
      `20_layer-tests.ts`)
