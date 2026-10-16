@@ -32,6 +32,8 @@ Run from the repo root; everything goes through Turborepo with `.env` loaded.
 - One alias per source folder, named exactly like the folder:
   `"#domain/*": "./src/domain/*.ts"` gives `import { User } from "#domain/User"`.
   No abbreviations and no catch-alls like `#src/*` or `#/*`.
+- A file directly in `src/` that other folders import gets a single-file
+  alias named exactly like the file: `"#Config": "./src/Config.ts"`.
 - When you add a folder or module, add its alias in the same change.
 - Across packages, import by workspace package name and its `exports`
   (`@unhalteproblem.de/api`), never from another package's `src/`. A `#…`
