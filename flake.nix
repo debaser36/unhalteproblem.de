@@ -130,5 +130,9 @@
           };
         };
       }
-    );
+    ) // {
+      # NixOS module that runs the backend image with oci-containers behind
+      # nginx. See nix/backend-module.nix for the options.
+      nixosModules.backend = import ./nix/backend-module.nix self;
+    };
 }
