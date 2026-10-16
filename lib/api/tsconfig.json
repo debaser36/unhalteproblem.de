@@ -2,26 +2,6 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@unhalteproblem.de/tsconfig/tsconfig.base.json",
   "compilerOptions": {
-    /* Replaces the base's plugin entry (arrays are not merged). The whole of
-       effect/http-api is @stability unstable, and this package exists to use
-       it, so it is allowed explicitly here instead of downgrading the
-       unstableApiUsage rule for everything. The other two entries are only
-       used by the tests. */
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "allowedUnstableApis": [
-          "effect/http-api",
-          "effect/http/HttpServer#layerServices",
-          "@effect/vitest"
-        ]
-      }
-    ],
-    /* The base's target (ES2022) implies the ES2022 + DOM libs. effect's
-       declarations also use `Disposable` / `Symbol.asyncDispose`, which only
-       exist in ESNext.Disposable. DOM stays because the website bundles this
-       package and effect/http types use fetch's Request/Response/URL. */
-    "lib": ["ES2022", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     /* Source-only package: consumers (Vite, Node, Vitest) load the .ts files
        directly through the "exports" and "imports" maps, so nothing is emitted. */
     "noEmit": true,

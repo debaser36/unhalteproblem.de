@@ -1,14 +1,30 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    /* Everything outside `effect` itself, and effect/http, effect/http-api and
+       effect/sql, is @stability unstable. The backend is built on exactly these
+       modules on purpose, so they are allowed here instead of downgrading the
+       unstableApiUsage rule. Each entry covers its module subtree. A package
+       that needs more must repeat this whole list: its own
+       "allowedUnstableApis" replaces this one instead of adding to it. */
     "plugins": [
       {
-        "name": "@effect/language-service"
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "effect/http",
+          "effect/http-api",
+          "effect/sql",
+          "@effect/platform-node",
+          "@effect/sql-pg",
+          "@effect/vitest"
+        ]
       }
     ],
     /* Language and Environment */
     "target": "ES2022" /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */,
-    // "lib": [],                                        /* Specify a set of bundled library declaration files that describe the target runtime environment. */
+    /* The ES2022 target's default libs, plus ESNext.Disposable for the
+       `Disposable` / `Symbol.asyncDispose` types effect's declarations use. */
+    "lib": ["ES2022", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     // "jsx": "preserve",                                /* Specify what JSX code is generated. */
     // "experimentalDecorators": true,                   /* Enable experimental support for legacy experimental decorators. */
     // "emitDecoratorMetadata": true,                    /* Emit design-type metadata for decorated declarations in source files. */
