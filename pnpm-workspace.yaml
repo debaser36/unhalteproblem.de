@@ -15,15 +15,12 @@ catalog:
   "typescript": "^7.0.2"
   "@types/node": "^25.5.2"
   "tsx": "4.21.0"
-  "effect": ^3.19.15
-  "@effect/cli": "0.75.0"
+  "effect": "4.0.5"
   "@effect/tsgo": ^0.53.0
-  "@effect/opentelemetry": ^0.63.0
-  "@effect/platform": ^0.96.0
-  "@effect/platform-node": ^0.106.0
-  "@effect/sql": ^0.51.0
-  "@effect/sql-pg": ^0.52.1
-  "@effect/vitest": ^0.29.0
+  "@effect/opentelemetry": "4.0.5"
+  "@effect/platform-node": "4.0.5"
+  "@effect/sql-pg": "4.0.5"
+  "@effect/vitest": "4.0.5"
   "vitest": "^5.0.4"
 minimumReleaseAgeExclude:
   - prettier@3.9.1
