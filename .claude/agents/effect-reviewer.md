@@ -27,12 +27,14 @@ sure exists in v4, grep `repos/effect/migration/v3-to-v4.md` (e.g.
 `@effect/cli`, `@effect/sql` or `@effect/rpc`; in v4 these live in `effect/*`.
 
 **Functions and composition.**
+
 - Reusable effectful functions use `Effect.fn("name")` (or `Effect.fnUntraced`
   on hot paths), not functions that only return `Effect.gen`.
 - `Effect.gen` is used for sequential logic, and combinators are attached with
   `.pipe`.
 
 **Errors.**
+
 - Domain errors are `Schema.TaggedError` classes, and expected failures are
   typed in the error channel.
 - No `throw`, `try/catch` or unhandled promise rejections inside Effect code.
@@ -41,6 +43,7 @@ sure exists in v4, grep `repos/effect/migration/v3-to-v4.md` (e.g.
 - Defects (`Effect.die`, `orDie`) are only used for real programmer errors.
 
 **Services and Layers.**
+
 - Dependencies come in through `Context` services and the requirements channel,
   not module-level singletons or ad hoc imports of clients.
 - Layers are composed at the application edge.
@@ -49,21 +52,25 @@ sure exists in v4, grep `repos/effect/migration/v3-to-v4.md` (e.g.
   library code.
 
 **Boundaries.**
+
 - HTTP payloads, env configuration (`Config`), DB rows and external JSON are
   decoded with `Schema`. No `as` casts on untrusted data.
 
 **Resources and concurrency.**
+
 - Acquired resources use `Effect.acquireRelease` or a scoped Layer.
 - Concurrency is explicit (`{ concurrency: ... }`).
 - Long-running fibers are supervised, not left floating.
 
 **Imports and stability.**
+
 - Imports use package names, never `repos/` paths.
 - Import paths exist in the package `exports` map.
 - Uses of `@stability unstable` or `experimental` APIs are called out.
 
 **Auth and security.** Apply these whenever the diff touches authentication,
 authorization, sessions, cookies, tokens or secrets.
+
 - Protected endpoints get their `HttpApiMiddleware` (with `HttpApiSecurity`)
   at the group or API level, so protection is the default. Public endpoints
   are deliberate and commented. Handlers read the user from the middleware's

@@ -44,6 +44,7 @@ Upgrade in this order and verify after each group:
 
    Start with the majors that unblock others. Tooling with a low blast radius
    (prettier, husky, lint-staged, turbo, dotenv-cli) can go early.
+
 3. Effect packages: latest within the v3 line only (see the skill). List v4
    as "held back: planned migration".
 

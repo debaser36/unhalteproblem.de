@@ -32,16 +32,16 @@ way, note it for its own branch instead of fixing it on the current one.
 Commit-style messages: a type, a colon, and a short lowercase imperative
 summary:
 
-| Type | For |
-|---|---|
-| `feat:` | new functionality |
-| `fix:` | bug fixes |
-| `refactor:` | code changes with no behaviour change |
-| `update:` | dependency, flake or subtree version bumps |
-| `test:` | tests only |
-| `docs:` | documentation only (README, CLAUDE.md, agent-patterns) |
-| `build:` | build tooling and config (turbo, tsconfig, nix, vite, oxlint, prettier) |
-| `chore:` | everything else (repo housekeeping, Claude Code config) |
+| Type        | For                                                                     |
+| ----------- | ----------------------------------------------------------------------- |
+| `feat:`     | new functionality                                                       |
+| `fix:`      | bug fixes                                                               |
+| `refactor:` | code changes with no behaviour change                                   |
+| `update:`   | dependency, flake or subtree version bumps                              |
+| `test:`     | tests only                                                              |
+| `docs:`     | documentation only (README, CLAUDE.md, agent-patterns)                  |
+| `build:`    | build tooling and config (turbo, tsconfig, nix, vite, oxlint, prettier) |
+| `chore:`    | everything else (repo housekeeping, Claude Code config)                 |
 
 Keep commits modular: one feature, change or fix per commit. Stage only the
 files that belong to that change (`git add <paths>`; interactive `git add -p`
@@ -99,7 +99,7 @@ agents can read real library source instead of guessing or searching the web.
 ## Backend architecture (once on Effect v4)
 
 - The HTTP contract lives in `lib/api` (`@unhalteproblem.de/api`): `HttpApi`
-  groups, endpoints, schemas and middleware *definitions*, depending only on
+  groups, endpoints, schemas and middleware _definitions_, depending only on
   `effect`. Services implement it, and `services/web` consumes it with
   `HttpApiClient`. Change it only through the `api-contract` agent, which
   checks for breaking changes.

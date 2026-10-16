@@ -21,11 +21,18 @@ describe("calculateKiwiEarnings", () => {
   });
 
   it("pays the NZD rate per bin for the bin size and variety", () => {
-    expect(calculateKiwiEarnings(base).earningsTotal).toBeCloseTo((25.18 * 1000) / 3);
-    expect(calculateKiwiEarnings({ ...base, binSize: "600" }).earningsTotal).toBeCloseTo((27.54 * 1000) / 3);
-    expect(calculateKiwiEarnings({ ...base, variety: "gold" }).earningsTotal).toBeCloseTo((28.0 * 1000) / 3);
+    expect(calculateKiwiEarnings(base).earningsTotal).toBeCloseTo(
+      (25.18 * 1000) / 3,
+    );
     expect(
-      calculateKiwiEarnings({ ...base, variety: "gold", binSize: "600" }).earningsTotal,
+      calculateKiwiEarnings({ ...base, binSize: "600" }).earningsTotal,
+    ).toBeCloseTo((27.54 * 1000) / 3);
+    expect(
+      calculateKiwiEarnings({ ...base, variety: "gold" }).earningsTotal,
+    ).toBeCloseTo((28.0 * 1000) / 3);
+    expect(
+      calculateKiwiEarnings({ ...base, variety: "gold", binSize: "600" })
+        .earningsTotal,
     ).toBeCloseTo((30.5 * 1000) / 3);
   });
 
@@ -44,9 +51,9 @@ describe("calculateKiwiEarnings", () => {
   });
 
   it("ignores the tax rate unless tax is subtracted", () => {
-    expect(calculateKiwiEarnings({ ...base, taxPercent: 50 }).earningsTotal).toBeCloseTo(
-      (25.18 * 1000) / 3,
-    );
+    expect(
+      calculateKiwiEarnings({ ...base, taxPercent: 50 }).earningsTotal,
+    ).toBeCloseTo((25.18 * 1000) / 3);
   });
 
   it("returns null for everything until people and bins are positive", () => {

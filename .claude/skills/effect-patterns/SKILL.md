@@ -27,11 +27,17 @@ avoid, each with `file:line` sources from:
 > Re-generate with `/effect-patterns <topic>` after `/effect-update`.
 
 ## Imports
+
 ## Core constructors and combinators
-## Common patterns        (small examples, each with a "Source:" line)
+
+## Common patterns (small examples, each with a "Source:" line)
+
 ## Error handling
+
 ## Testing
-## v3 → v4 differences    (old spelling → new spelling)
+
+## v3 → v4 differences (old spelling → new spelling)
+
 ## Avoid
 ```
 

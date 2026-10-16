@@ -39,12 +39,20 @@ const NZD_PER_EUR = 2;
 export function calculateKiwiEarnings(input: KiwiCalcInput): KiwiCalcResult {
   const { people, totalBins, hoursWorked } = input;
 
-  const binsPerPersonTotal = people > 0 && totalBins > 0 ? totalBins / people : null;
+  const binsPerPersonTotal =
+    people > 0 && totalBins > 0 ? totalBins / people : null;
   const binsPerPersonPerHour =
-    binsPerPersonTotal !== null && hoursWorked > 0 ? binsPerPersonTotal / hoursWorked : null;
+    binsPerPersonTotal !== null && hoursWorked > 0
+      ? binsPerPersonTotal / hoursWorked
+      : null;
 
   if (binsPerPersonTotal === null) {
-    return { binsPerPersonTotal, binsPerPersonPerHour, earningsTotal: null, earningsPerHour: null };
+    return {
+      binsPerPersonTotal,
+      binsPerPersonPerHour,
+      earningsTotal: null,
+      earningsPerHour: null,
+    };
   }
 
   let earnings = RATES_NZD[input.binSize][input.variety];
@@ -57,6 +65,7 @@ export function calculateKiwiEarnings(input: KiwiCalcInput): KiwiCalcResult {
     binsPerPersonTotal,
     binsPerPersonPerHour,
     earningsTotal: earnings,
-    earningsPerHour: binsPerPersonPerHour !== null ? earnings / hoursWorked : null,
+    earningsPerHour:
+      binsPerPersonPerHour !== null ? earnings / hoursWorked : null,
   };
 }

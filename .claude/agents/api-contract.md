@@ -37,7 +37,7 @@ lib/api/
 **Dependency rule.** `lib/api` depends on `effect` only. No `node:*` imports,
 no `@effect/platform-*`, no SQL clients and no server logic, because the
 browser bundle of `services/web` imports this package. Middleware
-*implementations* live in the services (server side) and in the web client
+_implementations_ live in the services (server side) and in the web client
 (`HttpApiMiddleware.layerClient`), never here.
 
 ## Conventions
@@ -59,6 +59,7 @@ Compare with `main`: `git diff main -- lib/api`, and read the old versions with
 `git show main:<path>` where needed. Classify each change.
 
 **Breaking:**
+
 - removed or renamed groups or endpoints;
 - a changed method or path;
 - a new required field in path, query, headers or payload;
@@ -69,6 +70,7 @@ Compare with `main`: `git diff main -- lib/api`, and read the old versions with
 - auth newly required on an existing endpoint.
 
 **Compatible:**
+
 - new endpoints or groups;
 - new optional request fields;
 - new response fields, as long as clients don't decode strictly with

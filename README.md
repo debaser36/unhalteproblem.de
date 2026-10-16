@@ -29,26 +29,29 @@ A monorepo-based personal website built with TypeScript, PNPM workspaces, Turbor
 
 ## Project Structure
 
-Inside the *services* folder you will find the main service applications in this monorepo. Notably this will be the website (frontend) and the backend.
+Inside the _services_ folder you will find the main service applications in this monorepo. Notably this will be the website (frontend) and the backend.
 
-Inside the *lib* folder you will find shared components.
+Inside the _lib_ folder you will find shared components.
 
-Inside the *apps* folder you will find shared applications used throughout the stack.
+Inside the _apps_ folder you will find shared applications used throughout the stack.
 
 ---
 
 ## Development
 
 #### Dependencies
+
 Either a fully working Node JS Setup including pnpm, or a nix developing system (e.g. NixOS)
 
 #### Run the development server:
-```pnpm dev```
+
+`pnpm dev`
 Filters are planned to be added, once there are more packages.
-If you want to use the nix shell, run  ```nix develop```
+If you want to use the nix shell, run `nix develop`
 
 ---
 
 ## Building
-Run ```pnpm build```.
+
+Run `pnpm build`.
 Filters are planned to be added here aswell.

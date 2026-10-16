@@ -1,10 +1,10 @@
 {
-    "json.schemaDownload.trustedDomains": {
-        "https://turbo.build/schema.json": true
-    },
-    "nixEnvSelector.suggestion": false,
-    "js/ts.updateImportsOnFileMove.enabled": "always",
-    "terminal.integrated.sendKeybindingsToShell": true,
+  "json.schemaDownload.trustedDomains": {
+    "https://turbo.build/schema.json": true
+  },
+  "nixEnvSelector.suggestion": false,
+  "js/ts.updateImportsOnFileMove.enabled": "always",
+  "terminal.integrated.sendKeybindingsToShell": true,
 
   "ts.preferences.autoImportFileExcludePatterns": ["repos/**"],
   "js.preferences.autoImportFileExcludePatterns": ["repos/**"],
@@ -20,5 +20,4 @@
   "search.exclude": {
     "repos/**": true
   }
-
 }

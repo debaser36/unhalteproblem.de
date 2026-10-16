@@ -1,5 +1,5 @@
 import { useState } from "react";
-import  VeryCoolButton  from "../general/VeryCoolButton";
+import VeryCoolButton from "../general/VeryCoolButton";
 import { motion } from "framer-motion";
 import { Lock, Mail } from "lucide-react";
 
@@ -51,10 +51,12 @@ export default function FancyLoginScreen() {
                 buttonText="Login"
                 overrideClasses={true}
                 extraClasses="w-full py-3 mt-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-foreground text-lg font-semibold shadow-lg transition-all duration-300"
-              >
-              </VeryCoolButton>
+              ></VeryCoolButton>
               <p className="text-center text-sm text-foreground/60 mt-4">
-                Don’t have an account? <a href="#" className="text-purple-600 hover:underline">Sign up</a>
+                Don’t have an account?{" "}
+                <a href="#" className="text-purple-600 hover:underline">
+                  Sign up
+                </a>
               </p>
             </div>
           </div>

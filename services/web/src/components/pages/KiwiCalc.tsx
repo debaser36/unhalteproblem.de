@@ -7,68 +7,83 @@ import {
 } from "../../lib/kiwiCalc";
 
 export default function KiwiCalc() {
-  const [people, setPeople]       = useState("");
+  const [people, setPeople] = useState("");
   const [totalBins, setTotalBins] = useState("");
   const [hoursWorked, setHoursWorked] = useState("");
-  const [variety, setVariety]     = useState<KiwiVariety>("normal");
-  const [binSize, setBinSize]     = useState<BinSize>("560");
-  const [currency, setCurrency]   = useState<Currency>("EUR");
+  const [variety, setVariety] = useState<KiwiVariety>("normal");
+  const [binSize, setBinSize] = useState<BinSize>("560");
+  const [currency, setCurrency] = useState<Currency>("EUR");
   const [includeHolidayBonus, setHolidayBonus] = useState(false);
   const [taxAmount, setTaxAmount] = useState("17");
   const [subtractTax, setSubtractTax] = useState(false);
 
   // Derived from the inputs on every render; no extra state or effect needed.
-  const { binsPerPersonTotal, binsPerPersonPerHour, earningsTotal, earningsPerHour } =
-    calculateKiwiEarnings({
-      people: Number(people),
-      totalBins: Number(totalBins),
-      hoursWorked: Number(hoursWorked),
-      variety,
-      binSize,
-      currency,
-      includeHolidayBonus,
-      subtractTax,
-      taxPercent: Number(taxAmount),
-    });
+  const {
+    binsPerPersonTotal,
+    binsPerPersonPerHour,
+    earningsTotal,
+    earningsPerHour,
+  } = calculateKiwiEarnings({
+    people: Number(people),
+    totalBins: Number(totalBins),
+    hoursWorked: Number(hoursWorked),
+    variety,
+    binSize,
+    currency,
+    includeHolidayBonus,
+    subtractTax,
+    taxPercent: Number(taxAmount),
+  });
 
   const symbol = currency === "EUR" ? "€" : "$";
 
   return (
     <div className="bg-card border border-zinc-200 rounded-2xl p-6 flex flex-col gap-6 max-w-lg w-full">
-
-         {/* Title */}
-        <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-card-foreground">
-             🥝  KiwiCalc 🥝
-            </h2>
-        </div>
+      {/* Title */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-card-foreground">
+          🥝 KiwiCalc 🥝
+        </h2>
+      </div>
 
       {/* Row 1 — numeric inputs */}
       <div className="grid grid-cols-2 gap-3">
         <Field label="People">
           <input
-            type="number" min={1} value={people} placeholder="e.g. 10" 
+            type="number"
+            min={1}
+            value={people}
+            placeholder="e.g. 10"
             onChange={(e) => setPeople(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400"
           />
         </Field>
         <Field label="Total bins">
           <input
-            type="number" min={1} value={totalBins} placeholder="e.g. 1000"
+            type="number"
+            min={1}
+            value={totalBins}
+            placeholder="e.g. 1000"
             onChange={(e) => setTotalBins(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400"
           />
         </Field>
         <Field label="Hours worked">
           <input
-            type="number" min={1} value={hoursWorked} placeholder="e.g. 8"
+            type="number"
+            min={1}
+            value={hoursWorked}
+            placeholder="e.g. 8"
             onChange={(e) => setHoursWorked(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400"
           />
         </Field>
         <Field label="Tax Percentage (1-100)">
           <input
-            type="number" min={1} value={taxAmount} placeholder="e.g. 17"
+            type="number"
+            min={1}
+            value={taxAmount}
+            placeholder="e.g. 17"
             onChange={(e) => setTaxAmount(e.target.value)}
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400"
           />
@@ -79,7 +94,8 @@ export default function KiwiCalc() {
       <div className="grid grid-cols-3 gap-3">
         <Field label="Variety">
           <select
-            value={variety} onChange={(e) => setVariety(e.target.value as KiwiVariety)}
+            value={variety}
+            onChange={(e) => setVariety(e.target.value as KiwiVariety)}
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400"
           >
             <option value="normal">Normal / Red</option>
@@ -88,7 +104,8 @@ export default function KiwiCalc() {
         </Field>
         <Field label="Bin size">
           <select
-            value={binSize} onChange={(e) => setBinSize(e.target.value as BinSize)}
+            value={binSize}
+            onChange={(e) => setBinSize(e.target.value as BinSize)}
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400"
           >
             <option value="560">560 L</option>
@@ -97,7 +114,8 @@ export default function KiwiCalc() {
         </Field>
         <Field label="Currency">
           <select
-            value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value as Currency)}
             className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400"
           >
             <option value="EUR">€ Euro</option>
@@ -106,49 +124,64 @@ export default function KiwiCalc() {
         </Field>
       </div>
 
-    { /* Check Boxes */}
-    <div className="grid grid-cols-2 gap-3">
-    <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 hover:bg-zinc-100 transition">
-        
-        <input
-        type="checkbox"
-        checked={subtractTax}
-        onChange={(e) => setSubtractTax(e.target.checked)}
-        className="h-5 w-5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400"
-        />
-
-        <span className="text-sm text-zinc-800 font-medium">
-        Subtract Tax
-        </span>
-
-    </label>
+      {/* Check Boxes */}
+      <div className="grid grid-cols-2 gap-3">
         <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 hover:bg-zinc-100 transition">
-        
-        <input
-        type="checkbox"
-        checked={includeHolidayBonus}
-        onChange={(e) => setHolidayBonus(e.target.checked)}
-        className="h-5 w-5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400"
-        />
+          <input
+            type="checkbox"
+            checked={subtractTax}
+            onChange={(e) => setSubtractTax(e.target.checked)}
+            className="h-5 w-5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400"
+          />
 
-        <span className="text-sm text-zinc-800 font-medium">
-        Include 8% Holiday Pay
-        </span>
+          <span className="text-sm text-zinc-800 font-medium">
+            Subtract Tax
+          </span>
+        </label>
+        <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 hover:bg-zinc-100 transition">
+          <input
+            type="checkbox"
+            checked={includeHolidayBonus}
+            onChange={(e) => setHolidayBonus(e.target.checked)}
+            className="h-5 w-5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400"
+          />
 
-    </label>
-    </div>
+          <span className="text-sm text-zinc-800 font-medium">
+            Include 8% Holiday Pay
+          </span>
+        </label>
+      </div>
 
       {/* Divider */}
       <div className="border-t border-zinc-100" />
 
       {/* Results */}
       <div className="grid grid-cols-2 gap-3">
-        <Stat label="Bins / person total"    value={binsPerPersonTotal ? Number(binsPerPersonTotal.toFixed(2)) : null} />
-        <Stat label="Bins / person / hour"   value={binsPerPersonPerHour ? Number(binsPerPersonPerHour.toFixed(2)) : null} />
-        <Stat label="Earnings total"         value={earningsTotal ? Number(earningsTotal?.toFixed(2)) : null}    prefix={symbol} />
-        <Stat label="Earnings / hour"        value={earningsPerHour ? Number(earningsPerHour?.toFixed(2)) : null}  prefix={symbol} />
+        <Stat
+          label="Bins / person total"
+          value={
+            binsPerPersonTotal ? Number(binsPerPersonTotal.toFixed(2)) : null
+          }
+        />
+        <Stat
+          label="Bins / person / hour"
+          value={
+            binsPerPersonPerHour
+              ? Number(binsPerPersonPerHour.toFixed(2))
+              : null
+          }
+        />
+        <Stat
+          label="Earnings total"
+          value={earningsTotal ? Number(earningsTotal?.toFixed(2)) : null}
+          prefix={symbol}
+        />
+        <Stat
+          label="Earnings / hour"
+          value={earningsPerHour ? Number(earningsPerHour?.toFixed(2)) : null}
+          prefix={symbol}
+        />
       </div>
-
     </div>
   );
 }
@@ -158,7 +191,7 @@ interface FieldProps {
   children: React.ReactNode;
 }
 
-function Field({ label, children } : FieldProps ) {
+function Field({ label, children }: FieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[11px] font-semibold uppercase tracking-widest text-foreground/60">
@@ -175,7 +208,7 @@ interface StatProps {
   prefix?: string;
 }
 
-function Stat({ label, value, prefix = "" } : StatProps) {
+function Stat({ label, value, prefix = "" }: StatProps) {
   return (
     <div className="flex flex-col gap-1 rounded-xl bg-zinc-50 px-4 py-3">
       <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500">

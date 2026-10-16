@@ -1,34 +1,34 @@
 {
-	"name": "unhalteproblem.de",
-	"packageManager": "pnpm@12.9.0",
-	"engines": {
-		"node": ">=25"
-	},
-	"private": true,
-	"workspaces": [
-		"services/*",
-		"lib/*",
-		"packages/*",
-		"apps/*",
-		"docs/*"
-	],
-	"devDependencies": {
-		"@effect/tsgo": "catalog:",
-		"dotenv-cli": "^11.0.0",
-		"husky": "^9.1.7",
-		"lint-staged": "^17.6.0",
-		"prettier": "^3.9.10",
-		"turbo": "^2.11.8",
-		"typescript": "catalog:"
-	},
-	"scripts": {
-		"build": "dotenv -- turbo build",
-		"dev": "dotenv -- turbo watch lint dev",
-		"lint": "dotenv -- turbo lint",
-		"test": "dotenv -- turbo test",
-		"deploy": "dotenv -- turbo deploy",
-		"check-types": "dotenv -- turbo check-types",
-		"format": "prettier . --write",
-		"prepare": "husky && effect-tsgo patch"
-	}
+  "name": "unhalteproblem.de",
+  "packageManager": "pnpm@12.9.0",
+  "engines": {
+    "node": ">=25"
+  },
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "lib/*",
+    "packages/*",
+    "apps/*",
+    "docs/*"
+  ],
+  "devDependencies": {
+    "@effect/tsgo": "catalog:",
+    "dotenv-cli": "^11.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.8",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "build": "dotenv -- turbo build",
+    "dev": "dotenv -- turbo watch lint dev",
+    "lint": "dotenv -- turbo lint",
+    "test": "dotenv -- turbo test",
+    "deploy": "dotenv -- turbo deploy",
+    "check-types": "dotenv -- turbo check-types",
+    "format": "prettier . --write",
+    "prepare": "husky && effect-tsgo patch"
+  }
 }

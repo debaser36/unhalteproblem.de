@@ -1,13 +1,17 @@
 // App.tsx
-import React from 'react';
-import { Routes, Route, /* useNavigate, */ useLocation } from 'react-router-dom';
-import NavigationBar from './components/navigation/NavigationBar';
-import './styles/global.css';
-import LoginPage from './components/pages/LoginPage';
-import ToolPage from './components/pages/ToolPage';
-import KiwiCalc from './components/pages/KiwiCalc';
-import HomePage from './components/pages/HomePage';
-import Layout from './Layout';
+import React from "react";
+import {
+  Routes,
+  Route,
+  /* useNavigate, */ useLocation,
+} from "react-router-dom";
+import NavigationBar from "./components/navigation/NavigationBar";
+import "./styles/global.css";
+import LoginPage from "./components/pages/LoginPage";
+import ToolPage from "./components/pages/ToolPage";
+import KiwiCalc from "./components/pages/KiwiCalc";
+import HomePage from "./components/pages/HomePage";
+import Layout from "./Layout";
 
 const Contact: React.FC = () => (
   <div className="p-4 text-center">
@@ -23,14 +27,13 @@ const Games: React.FC = () => (
   </div>
 );
 
-
 const App: React.FC = () => {
   const location = useLocation();
 
   return (
     <Layout>
       <header className="shadow-md bg-transparent">
-        {location.pathname !== '/login' && <NavigationBar />}
+        {location.pathname !== "/login" && <NavigationBar />}
       </header>
 
       <main className="grow px-4 md:px-8 py-6">
@@ -38,9 +41,9 @@ const App: React.FC = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/games" element={<Games />} />
-          <Route path="/tools" element={<ToolPage />}/>
+          <Route path="/tools" element={<ToolPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/tools/kiwiCalc" element={<KiwiCalc></KiwiCalc>}/>
+          <Route path="/tools/kiwiCalc" element={<KiwiCalc></KiwiCalc>} />
         </Routes>
       </main>
       <footer className="bg-card text-card-foreground border-t border-border text-center py-4 text-xs sm:text-sm">
