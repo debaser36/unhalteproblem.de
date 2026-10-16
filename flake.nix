@@ -16,7 +16,7 @@
         # pnpm 12 matches "packageManager" in package.json
         pnpm = pkgs.pnpm_12.override { nodejs-slim = nodejs; };
 
-        # Only the files the website build needs, so edits elsewhere
+        # Only the files the builds need, so edits elsewhere
         # (docs, repos/, .claude/) do not trigger a rebuild.
         src = lib.fileset.toSource {
           root = ./.;
@@ -27,6 +27,53 @@
             ./lib
             ./services
           ];
+        };
+
+        # The builds have no network access, so the dependencies of the whole
+        # workspace are fetched beforehand into one fixed-output derivation that
+        # every package below shares. When pnpm-lock.yaml changes, set
+        # hash = "", run `nix build` and copy the "got:" hash in here.
+        pnpmDeps = pkgs.fetchPnpmDeps {
+          pname = "unhalteproblem.de";
+          version = "0.1.0";
+          inherit src pnpm;
+          fetcherVersion = 4;
+          hash = "sha256-hDcKuTGo81l9xEdl1jMCz4i2vNa+zgpSOY5zwrRGdRU=";
+        };
+
+        # Builds one workspace package (and the workspace packages it depends
+        # on) with the shared dependencies.
+        buildWorkspacePackage = { pname, filter, installPhase }:
+          pkgs.stdenv.mkDerivation {
+            inherit pname src pnpmDeps;
+            version = "0.1.0";
+
+            nativeBuildInputs = [
+              nodejs
+              pnpm
+              pkgs.pnpmConfigHook
+            ];
+
+            buildPhase = ''
+              runHook preBuild
+              pnpm --filter "${filter}..." build
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              ${installPhase}
+              runHook postInstall
+            '';
+          };
+
+        # The backend as a single bundled file (services/backend/dist/main.js).
+        backend = buildWorkspacePackage {
+          pname = "unhalteproblem-backend";
+          filter = "@unhalteproblem.de/backend";
+          installPhase = ''
+            install -Dm444 services/backend/dist/main.js $out/lib/main.js
+          '';
         };
       in
       {
@@ -47,44 +94,41 @@
         };
 
         # -----------------
-        # BUILD PACKAGE
+        # BUILD PACKAGES
         # -----------------
         # The static website (services/web/dist), served by nginx on nixos-oracle.
-        packages.default = pkgs.stdenv.mkDerivation (finalAttrs: {
+        packages.default = buildWorkspacePackage {
           pname = "unhalteproblem.de";
-          version = "0.1.0";
-
-          inherit src;
-
-          # The build has no network access, so the dependencies are fetched
-          # beforehand into a fixed-output derivation. When pnpm-lock.yaml changes,
-          # set hash = "", run `nix build` and copy the "got:" hash in here.
-          pnpmDeps = pkgs.fetchPnpmDeps {
-            inherit (finalAttrs) pname version src;
-            inherit pnpm;
-            fetcherVersion = 4;
-            hash = "sha256-hDcKuTGo81l9xEdl1jMCz4i2vNa+zgpSOY5zwrRGdRU=";
-          };
-
-          nativeBuildInputs = [
-            nodejs
-            pnpm
-            pkgs.pnpmConfigHook
-          ];
-
-          buildPhase = ''
-            runHook preBuild
-            # The website and the workspace packages it depends on
-            pnpm --filter "@unhalteproblem.de/website..." build
-            runHook postBuild
-          '';
-
+          filter = "@unhalteproblem.de/website";
           installPhase = ''
-            runHook preInstall
             cp -r services/web/dist $out
-            runHook postInstall
           '';
-        });
+        };
+
+        packages.backend = backend;
+
+        # The backend's OCI image: Node and the bundle, nothing else (no shell,
+        # no package manager). It runs as an unprivileged user and needs no
+        # writable filesystem. The tag is derived from the contents, so every
+        # change produces a new image. Load it with `docker load < result` or
+        # let the NixOS module below do it.
+        packages.backend-image = pkgs.dockerTools.buildLayeredImage {
+          name = "unhalteproblem-backend";
+          config = {
+            Cmd = [
+              "${pkgs.nodejs-slim_26}/bin/node"
+              "${backend}/lib/main.js"
+            ];
+            Env = [
+              "NODE_ENV=production"
+              "HOST=0.0.0.0"
+              "PORT=3000"
+              "LOG_FORMAT=json"
+            ];
+            ExposedPorts."3000/tcp" = { };
+            User = "65534:65534";
+          };
+        };
       }
     );
 }
