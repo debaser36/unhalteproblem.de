@@ -20,6 +20,23 @@ Run from the repo root; everything goes through Turborepo with `.env` loaded.
 - Scope to one package with `pnpm --filter <package-name> <script>`.
 - Dev environment: `nix develop` (Node and pnpm come from `flake.nix`; they are not on the PATH outside it).
 
+## Imports and path aliases
+
+- Inside a package, import across folders through aliases, never through
+  relative paths like `../../domain/User`. Relative imports are only for files
+  in the same folder.
+- Aliases are Node subpath imports in the package's own `package.json`
+  `"imports"` field, prefixed with `#` (`@` is reserved for npm scopes).
+  Node, Vite, Vitest and TypeScript resolve them natively, so don't duplicate
+  them as tsconfig `paths` or Vite `resolve.alias`.
+- One alias per source folder, named exactly like the folder:
+  `"#domain/*": "./src/domain/*.ts"` gives `import { User } from "#domain/User"`.
+  No abbreviations and no catch-alls like `#src/*` or `#/*`.
+- When you add a folder or module, add its alias in the same change.
+- Across packages, import by workspace package name and its `exports`
+  (`@unhalteproblem.de/api`), never from another package's `src/`. A `#…`
+  alias always resolves against the importing file's own package.
+
 ## Git workflow
 
 **Branches.** Do each task on its own branch, created from up-to-date `main`
