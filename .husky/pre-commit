@@ -1,0 +1,7 @@
+# Format staged files (see .lintstagedrc.mjs). pnpm only exists inside the Nix
+# dev shell, and git may run this hook outside it (an editor, a plain terminal).
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm exec lint-staged
+else
+  nix develop --option warn-dirty false -c pnpm exec lint-staged
+fi
