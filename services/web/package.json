@@ -3,6 +3,12 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "imports": {
+    "#assets/*": "./src/assets/*",
+    "#components/*": "./src/components/*.tsx",
+    "#lib/*": "./src/lib/*.ts",
+    "#styles/*": "./src/styles/*"
+  },
   "scripts": {
     "preinstall": "only-allow pnpm",
     "dev": "vite",

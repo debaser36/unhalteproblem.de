@@ -4,7 +4,7 @@ import {
   type BinSize,
   type Currency,
   type KiwiVariety,
-} from "../../lib/kiwiCalc";
+} from "#lib/kiwiCalc";
 
 export default function KiwiCalc() {
   const [people, setPeople] = useState("");

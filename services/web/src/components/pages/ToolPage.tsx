@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import VeryCoolButton from "../general/VeryCoolButton";
+import VeryCoolButton from "#components/general/VeryCoolButton";
 import { AppleIcon } from "lucide-react";
 
 export default function ToolPage() {

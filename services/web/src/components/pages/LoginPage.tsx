@@ -1,5 +1,5 @@
 import { useState } from "react";
-import VeryCoolButton from "../general/VeryCoolButton";
+import VeryCoolButton from "#components/general/VeryCoolButton";
 import { motion } from "framer-motion";
 import { Lock, Mail } from "lucide-react";
 

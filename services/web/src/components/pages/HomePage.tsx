@@ -1,8 +1,8 @@
 import React from "react";
-import HeroSection from "../home/HeroSection";
-import VeryCoolButton from "../general/VeryCoolButton";
-import ProjectCard from "../home/ProjectCard";
-import NavCard from "../general/NavCard";
+import HeroSection from "#components/home/HeroSection";
+import VeryCoolButton from "#components/general/VeryCoolButton";
+import ProjectCard from "#components/home/ProjectCard";
+import NavCard from "#components/general/NavCard";
 
 const HomePage: React.FC = () => {
   return (

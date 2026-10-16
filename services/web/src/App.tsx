@@ -5,12 +5,12 @@ import {
   Route,
   /* useNavigate, */ useLocation,
 } from "react-router-dom";
-import NavigationBar from "./components/navigation/NavigationBar";
-import "./styles/global.css";
-import LoginPage from "./components/pages/LoginPage";
-import ToolPage from "./components/pages/ToolPage";
-import KiwiCalc from "./components/pages/KiwiCalc";
-import HomePage from "./components/pages/HomePage";
+import NavigationBar from "#components/navigation/NavigationBar";
+import "#styles/global.css";
+import LoginPage from "#components/pages/LoginPage";
+import ToolPage from "#components/pages/ToolPage";
+import KiwiCalc from "#components/pages/KiwiCalc";
+import HomePage from "#components/pages/HomePage";
 import Layout from "./Layout";
 
 const Contact: React.FC = () => (

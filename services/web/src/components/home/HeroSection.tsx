@@ -1,5 +1,5 @@
 import React from "react";
-import FadeIn from "../general/FadeIn";
+import FadeIn from "#components/general/FadeIn";
 
 const HeroSection: React.FC = () => {
   return (
