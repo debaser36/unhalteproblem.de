@@ -119,7 +119,9 @@ secrets need two checks before they count as done: a review by the
 (`.claude/hooks/typecheck.sh`). It runs `tsc` on every workspace package with
 TypeScript files edited that turn, plus Effect language service diagnostics (`effect-tsgo`) on
 edited files that import Effect. Errors are fed back once for fixing. Fix them;
-don't silence them.
+don't silence them. Edits in other git worktrees of this repository are checked
+with that worktree's `node_modules`; a worktree without them is skipped with a
+note, so run `pnpm install` there first.
 
 ## Agents and skills
 
