@@ -167,6 +167,12 @@ catalogs:
     '@effect/tsgo':
       specifier: ^0.53.0
       version: 0.53.0
+    '@effect/vitest':
+      specifier: 4.0.5
+      version: 4.0.5
+    effect:
+      specifier: 4.0.5
+      version: 4.0.5
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -199,6 +205,31 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+
+  lib/api:
+    dependencies:
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.5
+    devDependencies:
+      '@effect/tsgo':
+        specifier: 'catalog:'
+        version: 0.53.0
+      '@effect/vitest':
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)(vitest@5.0.4(vite@8.3.4(jiti@2.7.0)(yaml@2.9.1)))
+      '@unhalteproblem.de/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      oxlint:
+        specifier: ^1.88.0
+        version: 1.88.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.4(vite@8.3.4(jiti@2.7.0)(yaml@2.9.1))
 
   lib/tsconfig: {}
 
@@ -297,6 +328,12 @@ packages:
   '@effect/tsgo@0.53.0':
     resolution: {integrity: sha512-a8Ss/rI9QoOvJTQPet0YUpLqXp+/Qaydil+WpIHOhhsqvCu3l6aqN5xB+C/Mff/QW51r54n3Frk7a/joFszHgw==}
     hasBin: true
+
+  '@effect/vitest@4.0.5':
+    resolution: {integrity: sha512-q64paZ/i4V2NiRhTyqCmT2KiDbFjlxc2EZrZca8GGt+Nf8844946HyJM5bPk/q+YeRkFSxIrlCs+J+LSfky/wA==}
+    peerDependencies:
+      effect: ^4.0.5
+      vitest: '>=5.0.0 <6.0.0'
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -877,6 +914,9 @@ packages:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
+  effect@4.0.5:
+    resolution: {integrity: sha512-BY4/28NlpOd99yzmV741xbVGmp+1U7tks4oB7F/Png64bTa5tm5eCA6W0RiXsnuLDDoJpjfVSo4Dnq4BZb/89Q==}
+
   enhanced-resolve@5.26.0:
     resolution: {integrity: sha512-9vhedylFonb2YGogzUKX6+Ja72gOJbN1QHAqdrvqLwhdl/QWbKopzoUC9EbQNVsAns/bx/4uyqalrQAoy1IByw==}
     engines: {node: '>=10.13.0'}
@@ -1377,6 +1417,11 @@ snapshots:
       '@effect/tsgo-win32-arm64': 0.53.0
       '@effect/tsgo-win32-x64': 0.53.0
 
+  '@effect/vitest@4.0.5(effect@4.0.5)(vitest@5.0.4(vite@8.3.4(jiti@2.7.0)(yaml@2.9.1)))':
+    dependencies:
+      effect: 4.0.5
+      vitest: 5.0.4(vite@8.3.4(jiti@2.7.0)(yaml@2.9.1))
+
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
@@ -1724,6 +1769,8 @@ snapshots:
   dotenv@16.6.1: {}
 
   dotenv@17.4.2: {}
+
+  effect@4.0.5: {}
 
   enhanced-resolve@5.26.0:
     dependencies:

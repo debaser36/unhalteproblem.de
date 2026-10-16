@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@unhalteproblem.de/api",
+  "description": "Shared HttpApi contract between the unhalteproblem.de backend services and the website",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "#domain/*": "./src/domain/*.ts",
+    "#errors/*": "./src/errors/*.ts",
+    "#groups/*": "./src/groups/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit -p .",
+    "lint": "oxlint",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@unhalteproblem.de/tsconfig": "workspace:*",
+    "oxlint": "^1.88.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
