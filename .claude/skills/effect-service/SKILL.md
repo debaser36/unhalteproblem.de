@@ -12,10 +12,9 @@ only on request.
 ## 0. Preconditions
 
 - `$ARGUMENTS` must be kebab-case, and `services/$ARGUMENTS` must not exist.
-- **Effect v4 must be installed.** If `pnpm-workspace.yaml` still pins
+- **Effect v4 must be installed.** If `pnpm-workspace.yaml` pins
   `effect: ^3…`, stop. Tell the user the scaffold uses v4 APIs (`effect/http`,
-  `effect/http-api`, `effect/sql`) and needs the planned v4 migration first.
-  Don't scaffold v3 code instead.
+  `effect/http-api`, `effect/sql`). Don't scaffold v3 code instead.
 - Read `CLAUDE.md`, and any `agent-patterns/effect-*.md` files.
 
 ## 1. Ground the code in the vendored docs
@@ -45,38 +44,69 @@ or extend the contract, at minimum with a `system` group containing a
 ```
 services/<name>/
 ├── package.json
-├── tsconfig.json          # extends @unhalteproblem.de/tsconfig/tsconfig.base.json (src only)
-├── tsconfig.test.json     # same base, rootDir "${configDir}", include src + test, noEmit
-├── vitest.config.ts
-├── src/
-│   ├── main.ts            # Layer.launch(HttpServerLive).pipe(NodeRuntime.runMain); nothing else
-│   ├── Server.ts          # HttpApiBuilder.layer(Api) + HttpRouter.serve + NodeHttpServer.layer
-│   ├── Config.ts          # all settings via Config (PORT, HOST, …); secrets via Config.Redacted
-│   ├── http/<Group>.ts    # one HttpApiBuilder.group(...) handler Layer per contract group
-│   └── services/          # domain services: Context.Service + Layer, one per file
-└── test/
-    └── http.test.ts       # @effect/vitest + HttpApiTest against in-memory service Layers
+├── tsconfig.json              # extends @unhalteproblem.de/tsconfig/tsconfig.base.json, noEmit
+└── src/
+    ├── main.ts                # Layer.launch(Server).pipe(NodeRuntime.runMain); nothing else
+    ├── Server.ts              # HttpApiBuilder.layer(Api) + HttpRouter.serve + NodeHttpServer.layer
+    ├── Config.ts              # all settings via Config (PORT, HOST, …); secrets via Config.Redacted
+    ├── http/<Group>.ts        # one HttpApiBuilder.group(...) handler Layer per contract group
+    ├── http/<Group>.test.ts   # @effect/vitest + HttpApiTest against in-memory service Layers
+    └── services/<Name>.ts     # domain services: Context.Service + Layer, one per file
 ```
+
+Tests sit next to the code they test, so they import it with same-folder
+relative paths (`./System.ts`) and everything else through aliases. There is
+no separate `test/` folder.
+
+The service runs from source with Node's built-in type stripping (Node comes
+from the flake), like `lib/api`. There is no build step and no `dist/`: the
+aliases point at `./src/*.ts`, so compiled output would load the sources
+anyway. That needs `verbatimModuleSyntax` and `erasableSyntaxOnly` (no enums,
+no parameter properties, no namespaces).
 
 `package.json`:
 
 - `"name": "@unhalteproblem.de/<name>"`, `"private": true`, `"type": "module"`
-- scripts:
-  - `dev`: `tsx watch src/main.ts`
-  - `build`: `tsc -b`
-  - `start`: `node dist/main.js`
-  - `check-types`: `tsc --noEmit -p tsconfig.test.json`
+- `imports`, following "Imports and path aliases" in `CLAUDE.md`. One alias
+  per folder, and one single-file alias for each file directly in `src/` that
+  other folders import:
+  ```json
+  "imports": {
+    "#Config": "./src/Config.ts",
+    "#http/*": "./src/http/*.ts",
+    "#services/*": "./src/services/*.ts"
+  }
+  ```
+  Add `#Server` only if something besides `main.ts` imports it. Add the alias
+  for every new folder in the same change.
+- scripts (no `build`; Turborepo skips packages without one):
+  - `dev`: `node --watch src/main.ts`
+  - `start`: `node src/main.ts`
+  - `check-types`: `tsc --noEmit -p .`
+  - `lint`: `oxlint`
   - `test`: `vitest run`
 - dependencies, all `catalog:` except the workspace packages: `effect`,
   `@effect/platform-node`, `@unhalteproblem.de/api` (`workspace:*`)
 - devDependencies: `@unhalteproblem.de/tsconfig` (`workspace:*`),
-  `typescript`, `tsx`, `@types/node`, `vitest`, `@effect/vitest`,
-  `@effect/tsgo`, `oxlint` (move `oxlint` from `services/web` into the catalog the first time a second package uses it)
+  `typescript`, `@types/node`, `vitest`, `@effect/vitest`, `@effect/tsgo`,
+  `oxlint` (if it isn't in the catalog yet, use the version `services/web`
+  uses and report that it should move to the catalog)
+
+`tsconfig.json`: copy `lib/api/tsconfig.json` (`noEmit`, no declarations,
+`allowImportingTsExtensions`, `verbatimModuleSyntax`, `erasableSyntaxOnly`)
+and add `"types": ["node"]`. The base already sets `lib` and allows the
+unstable modules the backend is built on (`effect/http`, `effect/http-api`,
+`effect/sql`, `@effect/platform-node`, `@effect/sql-pg`, `@effect/vitest`).
+If the service needs another unstable module, repeat the base's whole
+`allowedUnstableApis` list plus the new entry, because a package's own list
+replaces the base's.
 
 Rules for the code:
 
 - Copy wiring from the vendored examples above, adapted to package imports.
   Never import from `repos/`.
+- Imports across folders go through the `#` aliases, never `../`. The
+  contract is imported by package name (`@unhalteproblem.de/api`).
 - No `Effect.runPromise`/`runSync` anywhere except through
   `NodeRuntime.runMain` in `main.ts`.
 - Handlers stay thin. They decode via the contract, call services, and map
@@ -93,7 +123,7 @@ Rules for the code:
 
 ## 5. Verify
 
-Run `pnpm --filter @unhalteproblem.de/<name> check-types`, then `test`, then
-`build`. After that, start `dev` briefly and `curl` the health endpoint. Then
+Run `pnpm --filter @unhalteproblem.de/<name> check-types`, then `lint`, then
+`test`. After that, start `dev` briefly and `curl` the health endpoint. Then
 ask the `effect-reviewer` agent to review the new package and address its
 findings. Report the created files and every command's result.
