@@ -34,7 +34,7 @@
     "@types/react-router-dom": "^5.3.3",
     "@vitejs/plugin-react": "^6.1.2",
     "only-allow": "^1.2.2",
-    "oxlint": "^1.88.0",
+    "oxlint": "catalog:",
     "typescript": "catalog:",
     "vite": "^8.3.4",
     "vitest": "catalog:"

@@ -25,7 +25,7 @@
     "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
     "@unhalteproblem.de/tsconfig": "workspace:*",
-    "oxlint": "^1.88.0",
+    "oxlint": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

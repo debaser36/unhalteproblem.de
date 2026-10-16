@@ -173,6 +173,9 @@ catalogs:
     effect:
       specifier: 4.0.5
       version: 4.0.5
+    oxlint:
+      specifier: ^1.88.0
+      version: 1.88.0
     typescript:
       specifier: ^7.0.2
       version: 7.0.2
@@ -222,7 +225,7 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       oxlint:
-        specifier: ^1.88.0
+        specifier: 'catalog:'
         version: 1.88.0
       typescript:
         specifier: 'catalog:'
@@ -276,7 +279,7 @@ importers:
         specifier: ^1.2.2
         version: 1.2.2
       oxlint:
-        specifier: ^1.88.0
+        specifier: 'catalog:'
         version: 1.88.0
       typescript:
         specifier: 'catalog:'
