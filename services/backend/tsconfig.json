@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@unhalteproblem.de/tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    /* The base's list plus effect/persistence (RateLimiter) and the body-size
+       limit's ByteSize.kibibytes. A package's own
+       list replaces the base's, so the whole list is repeated. */
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "effect/http",
+          "effect/http-api",
+          "effect/sql",
+          "effect/persistence",
+          "effect/ByteSize#kibibytes",
+          "@effect/platform-node",
+          "@effect/sql-pg",
+          "@effect/vitest"
+        ]
+      }
+    ],
+    /* Runs from source in development (Node type stripping) and is bundled
+       with rolldown for deployment, so tsc only type-checks. */
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    /* Same-folder imports keep their .ts extension (e.g. "./System.ts"). */
+    "allowImportingTsExtensions": true,
+    /* Keep the source runnable under Node's type stripping: type-only
+       imports must be marked, no enums or other non-erasable syntax. */
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "types": ["node"]
+  }
+}

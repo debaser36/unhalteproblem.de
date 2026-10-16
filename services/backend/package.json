@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@unhalteproblem.de/backend",
+  "description": "Backend service of unhalteproblem.de, implementing the @unhalteproblem.de/api contract",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#Config": "./src/Config.ts",
+    "#http/*": "./src/http/*.ts",
+    "#services/*": "./src/services/*.ts"
+  },
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "build": "rolldown src/main.ts --platform node --format esm --file dist/main.js",
+    "start": "node dist/main.js",
+    "check-types": "tsc --noEmit -p .",
+    "lint": "oxlint",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:",
+    "@unhalteproblem.de/api": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "@unhalteproblem.de/tsconfig": "workspace:*",
+    "oxlint": "catalog:",
+    "rolldown": "^1.2.13",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
