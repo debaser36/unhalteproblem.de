@@ -143,3 +143,6 @@ resul
 
 #nixos 
 result
+
+# Claude Code worktrees
+.claude/worktrees/
