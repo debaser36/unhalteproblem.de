@@ -58,11 +58,17 @@ Tests sit next to the code they test, so they import it with same-folder
 relative paths (`./System.ts`) and everything else through aliases. There is
 no separate `test/` folder.
 
-The service runs from source with Node's built-in type stripping (Node comes
-from the flake), like `lib/api`. There is no build step and no `dist/`: the
-aliases point at `./src/*.ts`, so compiled output would load the sources
-anyway. That needs `verbatimModuleSyntax` and `erasableSyntaxOnly` (no enums,
-no parameter properties, no namespaces).
+In development the service runs from source with Node's built-in type
+stripping (Node comes from the flake), like `lib/api`. That needs
+`verbatimModuleSyntax` and `erasableSyntaxOnly` (no enums, no parameter
+properties, no namespaces). `tsc` never emits: the aliases point at
+`./src/*.ts`, so compiled output would load the sources anyway.
+
+For deployment, `build` bundles `src/main.ts` with rolldown into one
+self-contained `dist/main.js`. That bundle is the only thing the container
+image needs besides Node. Running the sources in production would not work:
+Node refuses to strip types under `node_modules`, where a deployed copy of
+`@unhalteproblem.de/api` would live.
 
 `package.json`:
 
@@ -79,9 +85,10 @@ no parameter properties, no namespaces).
   ```
   Add `#Server` only if something besides `main.ts` imports it. Add the alias
   for every new folder in the same change.
-- scripts (no `build`; Turborepo skips packages without one):
+- scripts:
   - `dev`: `node --watch src/main.ts`
-  - `start`: `node src/main.ts`
+  - `build`: `rolldown src/main.ts --platform node --format esm --file dist/main.js`
+  - `start`: `node dist/main.js`
   - `check-types`: `tsc --noEmit -p .`
   - `lint`: `oxlint`
   - `test`: `vitest run`
@@ -89,8 +96,8 @@ no parameter properties, no namespaces).
   `@effect/platform-node`, `@unhalteproblem.de/api` (`workspace:*`)
 - devDependencies: `@unhalteproblem.de/tsconfig` (`workspace:*`),
   `typescript`, `@types/node`, `vitest`, `@effect/vitest`, `@effect/tsgo`,
-  `oxlint` (if it isn't in the catalog yet, use the version `services/web`
-  uses and report that it should move to the catalog)
+  `oxlint`, and `rolldown` (the version already in `pnpm-lock.yaml` through
+  Vite; move it to the catalog once a second service uses it)
 
 `tsconfig.json`: copy `lib/api/tsconfig.json` (`noEmit`, no declarations,
 `allowImportingTsExtensions`, `verbatimModuleSyntax`, `erasableSyntaxOnly`)
@@ -124,6 +131,7 @@ Rules for the code:
 ## 5. Verify
 
 Run `pnpm --filter @unhalteproblem.de/<name> check-types`, then `lint`, then
-`test`. After that, start `dev` briefly and `curl` the health endpoint. Then
+`test`, then `build`. After that, run `start` (the bundle) briefly and `curl`
+the health endpoint. Then
 ask the `effect-reviewer` agent to review the new package and address its
 findings. Report the created files and every command's result.
