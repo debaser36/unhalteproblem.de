@@ -8,6 +8,7 @@
   "imports": {
     "#auth/*": "./src/auth/*.ts",
     "#Config": "./src/Config.ts",
+    "#cqrs/*": "./src/cqrs/*.ts",
     "#http/*": "./src/http/*.ts",
     "#migrations/*": "./src/migrations/*.ts",
     "#repositories/*": "./src/repositories/*.ts",
