@@ -26,6 +26,7 @@ export const CodeVerifier = Schema.RedactedFromValue(
     Schema.isPattern(pkceCharset, { expected: "a PKCE code verifier" }),
   ).pipe(Schema.brand("CodeVerifier")),
 ).annotate({ description: "PKCE code verifier (RFC 7636 §4.1)." });
+export type CodeVerifier = typeof CodeVerifier.Type;
 
 /**
  * PKCE `code_challenge` (RFC 7636 §4.2). With `S256` it is the unpadded
