@@ -118,7 +118,8 @@ agents can read real library source instead of guessing or searching the web.
 
 - The HTTP contract lives in `lib/api` (`@unhalteproblem.de/api`): `HttpApi`
   groups, endpoints, schemas and middleware _definitions_, depending only on
-  `effect`. Services implement it, and `services/web` consumes it with
+  `effect` and the browser-safe protocol schemas of `@unhalteproblem.de/oidc`.
+  Services implement it, and `services/web` consumes it with
   `HttpApiClient`. Change it only through the `api-contract` agent, which
   checks for breaking changes.
 - OpenID Connect lives in `lib/oidc` (`@unhalteproblem.de/oidc`): protocol
