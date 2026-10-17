@@ -6,9 +6,13 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#auth/*": "./src/auth/*.ts",
     "#Config": "./src/Config.ts",
     "#http/*": "./src/http/*.ts",
-    "#services/*": "./src/services/*.ts"
+    "#migrations/*": "./src/migrations/*.ts",
+    "#repositories/*": "./src/repositories/*.ts",
+    "#services/*": "./src/services/*.ts",
+    "#testing/*": "./src/testing/*.ts"
   },
   "scripts": {
     "dev": "node --watch src/main.ts",
@@ -20,12 +24,17 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
+    "@effect/sql-pg": "catalog:",
     "@unhalteproblem.de/api": "workspace:*",
-    "effect": "catalog:"
+    "@unhalteproblem.de/oidc": "workspace:*",
+    "effect": "catalog:",
+    "jose": "^6.2.12"
   },
   "devDependencies": {
+    "@effect/sql-pglite": "catalog:",
     "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
+    "@types/emscripten": "^1.41.6",
     "@types/node": "catalog:",
     "@unhalteproblem.de/tsconfig": "workspace:*",
     "oxlint": "catalog:",

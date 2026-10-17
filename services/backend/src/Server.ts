@@ -5,13 +5,43 @@ import { HttpIncomingMessage, HttpRouter } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { createServer } from "node:http";
 import { LogFormat, ServerConfig } from "#Config";
+import { AuthHandlers } from "#http/Auth";
+import { AuthenticationLive } from "#http/Authentication";
 import { ContactHandlers } from "#http/Contact";
 import { SystemHandlers } from "#http/System";
+import { LoginAttempts } from "#repositories/LoginAttempts";
+import { LogoutTokens } from "#repositories/LogoutTokens";
+import { Sessions } from "#repositories/Sessions";
+import { AuthCleanup } from "#services/AuthCleanup";
 import { ContactDelivery } from "#services/ContactDelivery";
 import { ContactRateLimit } from "#services/ContactRateLimit";
+import { DatabaseLive } from "#services/Database";
+import { LoginRateLimit } from "#services/LoginRateLimit";
+import { OidcProvider } from "#services/OidcProvider";
+import { TokenVerifier } from "#services/TokenVerifier";
 
-const Handlers = Layer.mergeAll(SystemHandlers, ContactHandlers).pipe(
+// One database pool (and one migration run) shared by all repositories.
+const Repositories = Layer.mergeAll(
+  LoginAttempts.layer,
+  Sessions.layer,
+  LogoutTokens.layer,
+).pipe(Layer.provideMerge(DatabaseLive));
+
+const AuthServices = Layer.mergeAll(
+  AuthenticationLive,
+  OidcProvider.layer,
+  TokenVerifier.layer,
+  AuthCleanup,
+  LoginRateLimit.layer,
+).pipe(Layer.provideMerge(Repositories));
+
+const Handlers = Layer.mergeAll(
+  SystemHandlers,
+  ContactHandlers,
+  AuthHandlers,
+).pipe(
   Layer.provide([ContactDelivery.layerLog, ContactRateLimit.layer]),
+  Layer.provideMerge(AuthServices),
 );
 
 const ApiRoutes = HttpApiBuilder.layer(Api).pipe(Layer.provide(Handlers));

@@ -167,6 +167,12 @@ catalogs:
     '@effect/platform-node':
       specifier: 4.0.5
       version: 4.0.5
+    '@effect/sql-pg':
+      specifier: 4.0.5
+      version: 4.0.5
+    '@effect/sql-pglite':
+      specifier: 4.0.5
+      version: 4.0.5
     '@effect/tsgo':
       specifier: ^0.53.0
       version: 0.53.0
@@ -217,6 +223,9 @@ importers:
 
   lib/api:
     dependencies:
+      '@unhalteproblem.de/oidc':
+        specifier: workspace:*
+        version: link:../oidc
       effect:
         specifier: 'catalog:'
         version: 4.0.5
@@ -272,19 +281,34 @@ importers:
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)(redis@6.3.0)
+      '@effect/sql-pg':
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)
       '@unhalteproblem.de/api':
         specifier: workspace:*
         version: link:../../lib/api
+      '@unhalteproblem.de/oidc':
+        specifier: workspace:*
+        version: link:../../lib/oidc
       effect:
         specifier: 'catalog:'
         version: 4.0.5
+      jose:
+        specifier: ^6.2.12
+        version: 6.2.12
     devDependencies:
+      '@effect/sql-pglite':
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)
       '@effect/tsgo':
         specifier: 'catalog:'
         version: 0.53.0
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)(vitest@5.0.4(@types/node@25.9.9)(vite@8.3.4(@types/node@25.9.9)(jiti@2.7.0)(yaml@2.9.1)))
+      '@types/emscripten':
+        specifier: ^1.41.6
+        version: 1.41.6
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.9
@@ -374,6 +398,16 @@ packages:
       effect: ^4.0.5
       redis: '>=5.0.0 <7.0.0'
 
+  '@effect/sql-pg@4.0.5':
+    resolution: {integrity: sha512-F9tG76H+aryhYcp5pvgd+MwWrNltv3XAuLcZSBsOOX6q+PEl+IM4zkQKzx0TF9OsEMH/SQ+3gZRdYWOsDF+vJQ==}
+    peerDependencies:
+      effect: ^4.0.5
+
+  '@effect/sql-pglite@4.0.5':
+    resolution: {integrity: sha512-1kwizzeOqX3l/+YSTG+LWZq07xuKY+jYOziOEumqOCLGjfxr3S5m61jWrAGDFejQLK1zUQtBYNe6FpcFSynzaQ==}
+    peerDependencies:
+      effect: ^4.0.5
+
   '@effect/tsgo-darwin-arm64@0.53.0':
     resolution: {integrity: sha512-YDwx3cFpohEMtjbd+65iH/tVxIZs39pkR8KW2Vy7c5GB1LjOzkB+jo2rcku6DOueV/bfpS1wiSmsD1jsTVNIRg==}
     cpu: [arm64]
@@ -418,6 +452,9 @@ packages:
     peerDependencies:
       effect: ^4.0.5
       vitest: '>=5.0.0 <6.0.0'
+
+  '@electric-sql/pglite@0.5.10':
+    resolution: {integrity: sha512-tXc/25U3ulOkiRQuTFdwIv+JhBqtMdAF7Gvo6CfZZWtSB4+hgC4Wr2vwK5ngvvN5PJfAAEGIsfyCVy1JhCOBYw==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -825,6 +862,9 @@ packages:
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
+  '@types/emscripten@1.41.6':
+    resolution: {integrity: sha512-uN+9i8bFT5CUcZfyIEYDrSueACEyKGbUs5kC/72DGlZZoinh84sJfVV0i8UOJD1asdzkvLPBRrKs41kZ8MdEXg==}
+
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
@@ -1096,6 +1136,9 @@ packages:
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
+
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -1554,6 +1597,15 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  '@effect/sql-pg@4.0.5(effect@4.0.5)':
+    dependencies:
+      effect: 4.0.5
+
+  '@effect/sql-pglite@4.0.5(effect@4.0.5)':
+    dependencies:
+      '@electric-sql/pglite': 0.5.10
+      effect: 4.0.5
+
   '@effect/tsgo-darwin-arm64@0.53.0':
     optional: true
 
@@ -1589,6 +1641,8 @@ snapshots:
     dependencies:
       effect: 4.0.5
       vitest: 5.0.4(@types/node@25.9.9)(vite@8.3.4(@types/node@25.9.9)(jiti@2.7.0)(yaml@2.9.1))
+
+  '@electric-sql/pglite@0.5.10': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -1826,6 +1880,8 @@ snapshots:
 
   '@types/deep-eql@4.0.2': {}
 
+  '@types/emscripten@1.41.6': {}
+
   '@types/estree@1.0.9': {}
 
   '@types/history@4.7.11': {}
@@ -2002,6 +2058,8 @@ snapshots:
   isexe@2.0.0: {}
 
   jiti@2.7.0: {}
+
+  jose@6.2.12: {}
 
   lightningcss-android-arm64@1.32.0:
     optional: true

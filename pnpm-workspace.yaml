@@ -20,6 +20,7 @@ catalog:
   "@effect/opentelemetry": "4.0.5"
   "@effect/platform-node": "4.0.5"
   "@effect/sql-pg": "4.0.5"
+  "@effect/sql-pglite": "4.0.5"
   "@effect/vitest": "4.0.5"
   "vitest": "^5.0.4"
   "oxlint": "^1.88.0"

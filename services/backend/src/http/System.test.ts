@@ -3,6 +3,7 @@ import { Api } from "@unhalteproblem.de/api";
 import { Effect, Layer } from "effect";
 import { HttpServer } from "effect/http";
 import { HttpApiTest } from "effect/http-api";
+import { AuthenticationRejectAll } from "#testing/Authentication";
 import { SystemHandlers } from "./System.ts";
 
 const makeClient = HttpApiTest.groups(Api, ["system"]);
@@ -13,7 +14,13 @@ describe("system", () => {
       const client = yield* makeClient;
       assert.deepStrictEqual(yield* client.health(), { status: "ok" });
     }).pipe(
-      Effect.provide(Layer.merge(SystemHandlers, HttpServer.layerServices)),
+      Effect.provide(
+        Layer.mergeAll(
+          SystemHandlers,
+          HttpServer.layerServices,
+          AuthenticationRejectAll,
+        ),
+      ),
     ),
   );
 });

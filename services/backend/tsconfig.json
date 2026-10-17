@@ -2,9 +2,12 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@unhalteproblem.de/tsconfig/tsconfig.base.json",
   "compilerOptions": {
-    /* The base's list plus effect/persistence (RateLimiter) and the body-size
-       limit's ByteSize.kibibytes. A package's own
-       list replaces the base's, so the whole list is repeated. */
+    /* The base's list plus effect/persistence (RateLimiter), the body-size
+       limit's ByteSize.kibibytes, the database models (effect/schema/Model),
+       @effect/platform-node-shared (what @effect/platform-node re-exports,
+       e.g. its NodeChildProcessSpawner) and the PGlite test database. A
+       package's own list replaces the base's, so the whole list is
+       repeated. */
     "plugins": [
       {
         "name": "@effect/language-service",
@@ -13,9 +16,12 @@
           "effect/http-api",
           "effect/sql",
           "effect/persistence",
+          "effect/schema/Model",
           "effect/ByteSize#kibibytes",
           "@effect/platform-node",
+          "@effect/platform-node-shared",
           "@effect/sql-pg",
+          "@effect/sql-pglite",
           "@effect/vitest"
         ]
       }
@@ -31,6 +37,6 @@
        imports must be marked, no enums or other non-erasable syntax. */
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
-    "types": ["node"]
+    "types": ["node", "emscripten"]
   }
 }
