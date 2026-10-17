@@ -1,3 +1,4 @@
+import { AuthGroup } from "#groups/Auth";
 import { ContactGroup } from "#groups/Contact";
 import { SystemGroup } from "#groups/System";
 import { HttpApi, OpenApi } from "effect/http-api";
@@ -14,6 +15,7 @@ import { HttpApi, OpenApi } from "effect/http-api";
 export class Api extends HttpApi.make("unhalteproblem")
   .add(SystemGroup)
   .add(ContactGroup)
+  .add(AuthGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "unhalteproblem.de API",

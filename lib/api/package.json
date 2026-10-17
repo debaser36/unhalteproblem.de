@@ -9,6 +9,7 @@
     ".": "./src/index.ts"
   },
   "imports": {
+    "#Authentication": "./src/Authentication.ts",
     "#domain/*": "./src/domain/*.ts",
     "#errors/*": "./src/errors/*.ts",
     "#groups/*": "./src/groups/*.ts"
@@ -19,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@unhalteproblem.de/oidc": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {
