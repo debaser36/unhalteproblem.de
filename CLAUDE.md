@@ -121,6 +121,10 @@ agents can read real library source instead of guessing or searching the web.
   `effect`. Services implement it, and `services/web` consumes it with
   `HttpApiClient`. Change it only through the `api-contract` agent, which
   checks for breaking changes.
+- OpenID Connect lives in `lib/oidc` (`@unhalteproblem.de/oidc`): protocol
+  schemas and the `OidcApi` of the Keycloak realm, called with
+  `HttpApiClient`. Our own endpoints that take part in the protocol (login
+  callback, back-channel logout) belong in `lib/api` and reuse its schemas.
 - New services are scaffolded with `/effect-service <name>`, never by hand.
 - Database schema changes go through the `db-migration` agent. Committed
   migrations are immutable.
