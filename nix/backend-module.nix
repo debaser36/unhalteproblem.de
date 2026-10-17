@@ -12,17 +12,57 @@
 #       services.unhalteproblem-backend = {
 #         enable = true;
 #         nginx.virtualHost = "unhalteproblem.de";
+#         # Not secret, ends up in the Nix store.
+#         environment = {
+#           POSTGRES_HOST = "host.containers.internal";
+#         };
+#         # Secrets: a root-only file outside the Nix store with lines like
+#         #   OIDC_CLIENT_SECRET=...
+#         #   POSTGRES_PASSWORD=...
+#         # e.g. config.sops.secrets.<name>.path (sops-nix) or
+#         # config.age.secrets.<name>.path (agenix).
+#         environmentFiles = [ "/run/secrets/unhalteproblem-backend.env" ];
 #       };
 #     }
 #   ];
 #
 # The image is built for the server's own platform and loaded on every
 # `nixos-rebuild switch`, so there is no registry and no manual `docker load`.
+#
+# Postgres is not set up here; the database must already exist (the backend
+# creates its tables itself). The container has its own network namespace,
+# so `localhost` inside it is the container, not the host. To reach a
+# Postgres on the host with podman (the NixOS default backend, bridge
+# podman0, subnet 10.88.0.0/16, host side 10.88.0.1):
+#
+#   services.unhalteproblem-backend.environment.POSTGRES_HOST =
+#     "host.containers.internal";   # or "10.88.0.1"
+#   # Listen on all interfaces; the firewall keeps 5432 closed except on the
+#   # container bridge. (Listening only on 10.88.0.1 fails at boot, because
+#   # podman creates the bridge after Postgres starts.)
+#   services.postgresql.enableTCPIP = true;
+#   services.postgresql.authentication = ''
+#     host unhalteproblem unhalteproblem 10.88.0.0/16 scram-sha-256
+#   '';
+#   networking.firewall.interfaces.podman0.allowedTCPPorts = [ 5432 ];
+#
+# With docker instead, use the docker0 bridge (172.17.0.0/16, host side
+# 172.17.0.1): POSTGRES_HOST = "172.17.0.1", the same pg_hba line for
+# 172.17.0.0/16 and firewall.interfaces.docker0. Docker only knows
+# host.docker.internal with an extra
+#   virtualisation.oci-containers.containers.unhalteproblem-backend.extraOptions =
+#     [ "--add-host=host.docker.internal:host-gateway" ];
+# Never put POSTGRES_PASSWORD in `environment`; it belongs in environmentFiles.
 self:
 { config, lib, pkgs, ... }:
 let
   cfg = config.services.unhalteproblem-backend;
   image = self.packages.${pkgs.stdenv.hostPlatform.system}.backend-image;
+
+  # Variables that must never be written to the world-readable Nix store.
+  secretVariables = [ "OIDC_CLIENT_SECRET" "POSTGRES_PASSWORD" ];
+
+  backendUrl = path: "http://127.0.0.1:${toString cfg.port}${path}";
 
   proxyConfig = ''
     # Overwrite, never append: the backend rate-limits by this header.
@@ -31,6 +71,18 @@ let
     # clean 413 here instead of a dropped connection there.
     client_max_body_size 32k;
   '';
+
+  # Login start and callback each write a row to Postgres, so they get their
+  # own limit. Exact locations take precedence over the "/api/" prefix, and
+  # proxy_pass with a URI replaces the whole matched path while keeping the
+  # query string (returnTo, code, state).
+  authRateLimited = path: {
+    proxyPass = backendUrl path;
+    extraConfig = proxyConfig + ''
+      limit_req zone=unhalteproblem_auth burst=20 nodelay;
+      limit_req_status 429;
+    '';
+  };
 in
 {
   options.services.unhalteproblem-backend = {
@@ -50,13 +102,46 @@ in
       type = lib.types.attrsOf lib.types.str;
       default = { };
       example = {
+        OIDC_ISSUER = "https://auth.unhalteproblem.de/realms/unhalteproblem-main";
+        OIDC_CLIENT_ID = "unhalteproblem-backend";
+        PUBLIC_ORIGIN = "https://unhalteproblem.de";
+        POSTGRES_HOST = "host.containers.internal";
+        POSTGRES_DB = "unhalteproblem";
+        POSTGRES_USER = "unhalteproblem";
+        SESSION_MAX_AGE = "8 hours";
         CONTACT_RATE_LIMIT = "5";
         CONTACT_RATE_LIMIT_WINDOW = "1 hour";
       };
       description = ''
-        Extra environment variables for the backend (see
-        services/backend/README.md). HOST, PORT and LOG_FORMAT are set by the
-        image.
+        Extra, non-secret environment variables for the backend (see
+        services/backend/README.md for all of them and their defaults).
+        HOST, PORT and LOG_FORMAT are set by the image.
+
+        These values are written to the world-readable Nix store, so secrets
+        (OIDC_CLIENT_SECRET, POSTGRES_PASSWORD) go into
+        {option}`environmentFiles` instead.
+
+        POSTGRES_HOST defaults to localhost, which inside the container is
+        the container itself. For a Postgres on the host use
+        host.containers.internal or 10.88.0.1 (podman); see the comment at
+        the top of nix/backend-module.nix for the Postgres and firewall side.
+      '';
+    };
+
+    environmentFiles = lib.mkOption {
+      # externalPath rejects Nix path literals such as ./secrets.env, which
+      # would be copied to the store. Older nixpkgs lack it.
+      type = lib.types.listOf (lib.types.externalPath or lib.types.path);
+      default = [ ];
+      example = [ "/run/secrets/unhalteproblem-backend.env" ];
+      description = ''
+        Environment files (`NAME=value` per line) read by the container
+        runtime on the host when the container starts, so they can be
+        root-only. This is where secrets belong: OIDC_CLIENT_SECRET
+        (required) and POSTGRES_PASSWORD (if the database uses password
+        authentication). Provide them outside the Nix store, e.g. with
+        sops-nix (`config.sops.secrets.<name>.path`) or agenix
+        (`config.age.secrets.<name>.path`).
       '';
     };
 
@@ -66,19 +151,38 @@ in
       example = "unhalteproblem.de";
       description = ''
         nginx virtual host that gets a /api/ location proxying to the backend
-        (the /api prefix is stripped). The virtual host itself (TLS, root) is
-        configured elsewhere. null leaves nginx alone.
+        (the /api prefix is stripped), with rate limits on /api/contact,
+        /api/auth/login and /api/auth/callback. The virtual host itself (TLS,
+        root) is configured elsewhere. null leaves nginx alone.
       '';
     };
   };
 
   config = lib.mkIf cfg.enable (lib.mkMerge [
     {
+      assertions = [
+        {
+          assertion = cfg.environmentFiles != [ ] || cfg.environment ? OIDC_CLIENT_SECRET;
+          message = ''
+            services.unhalteproblem-backend: the backend needs OIDC_CLIENT_SECRET.
+            Put it in a file listed in services.unhalteproblem-backend.environmentFiles.
+          '';
+        }
+      ];
+
+      warnings = map
+        (name: ''
+          services.unhalteproblem-backend.environment.${name} is written to the
+          world-readable Nix store. Move it to a file in
+          services.unhalteproblem-backend.environmentFiles.
+        '')
+        (lib.filter (name: cfg.environment ? ${name}) secretVariables);
+
       virtualisation.oci-containers.containers.unhalteproblem-backend = {
         image = "${image.imageName}:${image.imageTag}";
         imageFile = image;
         ports = [ "127.0.0.1:${toString cfg.port}:3000" ];
-        inherit (cfg) environment;
+        inherit (cfg) environment environmentFiles;
         extraOptions = [
           "--read-only"
           "--cap-drop=ALL"
@@ -90,24 +194,31 @@ in
 
     (lib.mkIf (cfg.nginx.virtualHost != null) {
       # A first, fixed-size line of defence in front of the backend's own
-      # limiter: 1 MB of state (about 16k addresses, oldest evicted first).
+      # limiter: 1 MB of state per zone (about 16k addresses, oldest evicted
+      # first).
       services.nginx.appendHttpConfig = ''
         limit_req_zone $binary_remote_addr zone=unhalteproblem_contact:1m rate=6r/m;
+        limit_req_zone $binary_remote_addr zone=unhalteproblem_auth:1m rate=30r/m;
       '';
 
       services.nginx.virtualHosts.${cfg.nginx.virtualHost}.locations = {
+        # Everything else, including /api/auth/session and
+        # /api/auth/backchannel-logout (called server-to-server by Keycloak,
+        # so it must not share a per-IP limit), is not limited by nginx.
         "/api/" = {
           # The trailing slash strips the /api prefix: /api/health -> /health.
-          proxyPass = "http://127.0.0.1:${toString cfg.port}/";
+          proxyPass = backendUrl "/";
           extraConfig = proxyConfig;
         };
         "= /api/contact" = {
-          proxyPass = "http://127.0.0.1:${toString cfg.port}/contact";
+          proxyPass = backendUrl "/contact";
           extraConfig = proxyConfig + ''
             limit_req zone=unhalteproblem_contact burst=5 nodelay;
             limit_req_status 429;
           '';
         };
+        "= /api/auth/login" = authRateLimited "/auth/login";
+        "= /api/auth/callback" = authRateLimited "/auth/callback";
       };
     })
   ]);
