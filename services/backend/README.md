@@ -37,7 +37,7 @@ Invalid values stop the service at startup instead of being ignored.
 
 ## Database
 
-Login state and sessions live in Postgres. The database must exist; the
+Login state, sessions and users live in Postgres. The database must exist; the
 service creates its tables itself. At startup it applies all pending
 migrations from `src/migrations/` in one transaction (recorded in
 `effect_sql_migrations`) before it serves requests, and it doesn't start if
@@ -47,6 +47,55 @@ Migrations are imported statically (`src/services/Database.ts`), because the
 service runs as a single bundled file. Committed migrations are never edited;
 changes go into a new, numbered migration. Tests run all migrations on an
 in-memory PGlite database (`#testing/Database`).
+
+## Domains
+
+Business logic lives in domains under `src/domains/<domain>/`, built on a
+small kernel in `src/cqrs/`. For now there is one domain, `users`.
+
+| Kernel (`#cqrs/*`) | Purpose                                                                                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Transaction`      | Runs an effect in a database transaction; nested runs become savepoints. Collects the domain events recorded inside and publishes them only after the outermost commit           |
+| `DomainEvent`      | `record(...)` adds events to the current transaction (a defect outside one); `DomainEvents` delivers committed events in-process; `subscriber(...)` builds a background consumer |
+| `Command`          | `Command.boundary(transaction)`: the last argument of `Effect.fn` for a method that changes state. Runs it in a `Transaction` and turns `SqlError`/`SchemaError` into defects    |
+| `Query`            | `Query.boundary`: the same for reads, without a transaction                                                                                                                      |
+
+Events are delivered at most once: they live in memory, so the ones not yet
+handled when the process stops are lost, and so are events beyond the queue
+capacity (4096) of a subscriber that falls behind (logged as a warning).
+Whatever has to happen together with a change belongs into the command
+itself, not a subscriber.
+
+Inside a command: open transactions only through `Transaction` (running it
+inside a bare `sql.withTransaction`, or recording events inside one, is a
+defect), never catch a
+`SqlError` and carry on (Postgres would silently roll back the COMMIT; use a
+nested `transaction.run` as a savepoint instead), and run statements one
+after another, not concurrently.
+
+A domain folder holds:
+
+- the aggregate (`User.ts`): its `Model.Class`, ids, events and errors, and
+  the rules as pure functions from the current state to the new state plus
+  the events (`register`, `logIn`);
+- a repository (`UserRepository.ts`), used only inside the domain;
+- `UserCommands` and `UserQueries`, the services the rest of the backend
+  uses; every method goes through `Command.boundary` or `Query.boundary`;
+- event subscribers (`UserEventLog.ts`) and a layer that wires it all up
+  (`Users.ts`).
+
+To add a domain, create `src/domains/<domain>/` the same way, add its tables
+in a new migration, and add its layer to `DomainsLive` in
+`src/domains/Domains.ts`.
+
+### Users
+
+Every successful login runs `UserCommands.syncFromLogin`. On the first login
+it creates a row in `users` with our own UUID and the Keycloak `sub`
+(`UserRegistered`); later logins copy Keycloak's current profile
+(`preferred_username`, `name`, `email`, `email_verified`) and the login time
+(`UserProfileChanged` if the profile differs). Concurrent first logins of the
+same user end up with one row. Sessions still reference users by `sub`.
 
 ## Client IP and rate limiting
 

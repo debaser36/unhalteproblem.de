@@ -127,6 +127,11 @@ agents can read real library source instead of guessing or searching the web.
   `HttpApiClient`. Our own endpoints that take part in the protocol (login
   callback, back-channel logout) belong in `lib/api` and reuse its schemas.
 - New services are scaffolded with `/effect-service <name>`, never by hand.
+- Backend business logic lives in domains (`services/backend/src/domains/<domain>/`)
+  on the kernel in `src/cqrs/`: state changes go through a `…Commands`
+  service (`Command.boundary`, one transaction, events published after the
+  commit), reads through `…Queries` (`Query.boundary`). Copy the `users`
+  domain for a new one; see the backend README, section "Domains".
 - Database schema changes go through the `db-migration` agent. Committed
   migrations are immutable.
 
