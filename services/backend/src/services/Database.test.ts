@@ -128,6 +128,114 @@ describe("DatabaseTest", () => {
       }),
     );
 
+    it.effect("creates the users table with the expected columns", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const columns = yield* sql<{
+          readonly columnName: string;
+          readonly dataType: string;
+          readonly isNullable: "YES" | "NO";
+          readonly columnDefault: string | null;
+        }>`
+          SELECT column_name, data_type, is_nullable, column_default
+          FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'users'
+          ORDER BY ordinal_position
+        `;
+        assert.deepStrictEqual(
+          columns.map(
+            (c) =>
+              `users.${c.columnName} ${c.dataType}` +
+              (c.isNullable === "NO" ? " not null" : "") +
+              (c.columnDefault === null ? "" : ` default ${c.columnDefault}`),
+          ),
+          [
+            "users.id uuid not null",
+            "users.subject text not null",
+            "users.username text",
+            "users.name text",
+            "users.email text",
+            "users.email_verified boolean not null default false",
+            "users.created_at timestamp with time zone not null",
+            "users.updated_at timestamp with time zone not null",
+            "users.last_login_at timestamp with time zone not null",
+          ],
+        );
+
+        const constraints = yield* sql<{
+          readonly conname: string;
+          readonly definition: string;
+        }>`
+          SELECT conname, pg_get_constraintdef(oid) AS definition
+          FROM pg_constraint
+          WHERE conrelid = 'users'::regclass AND contype <> 'n'
+          ORDER BY conname
+        `;
+        assert.deepStrictEqual(
+          constraints.map((c) => `${c.conname}: ${c.definition}`),
+          [
+            "users_id_pkey: PRIMARY KEY (id)",
+            "users_subject_check: CHECK (((char_length(subject) >= 1) AND (char_length(subject) <= 255)))",
+            "users_subject_key: UNIQUE (subject)",
+          ],
+        );
+
+        // Only the indexes backing the primary key and the unique subject.
+        const indexes = yield* sql<{ readonly indexname: string }>`
+          SELECT indexname FROM pg_indexes
+          WHERE schemaname = 'public' AND tablename = 'users'
+          ORDER BY indexname
+        `;
+        assert.deepStrictEqual(
+          indexes.map((i) => i.indexname),
+          ["users_id_pkey", "users_subject_key"],
+        );
+      }),
+    );
+
+    it.effect("keeps one user per subject", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const insert = (subject: string) => sql<{ readonly id: string }>`
+          INSERT INTO users (id, subject, created_at, updated_at, last_login_at)
+          VALUES (gen_random_uuid(), ${subject}, now(), now(), now())
+          ON CONFLICT (subject) DO NOTHING
+          RETURNING id
+        `;
+        assert.strictEqual((yield* insert("unique-subject")).length, 1);
+        assert.strictEqual((yield* insert("unique-subject")).length, 0);
+
+        const error = yield* sql`
+          INSERT INTO users (id, subject, created_at, updated_at, last_login_at)
+          VALUES (gen_random_uuid(), 'unique-subject', now(), now(), now())
+        `.pipe(Effect.flip);
+        assert.strictEqual(error.reason._tag, "UniqueViolation");
+        if (error.reason._tag === "UniqueViolation") {
+          assert.strictEqual(error.reason.constraint, "users_subject_key");
+        }
+      }),
+    );
+
+    it.effect("rejects subjects that are empty or longer than 255", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const insert = (subject: string) => sql`
+          INSERT INTO users (id, subject, created_at, updated_at, last_login_at)
+          VALUES (gen_random_uuid(), ${subject}, now(), now(), now())
+        `;
+        for (const subject of ["", "s".repeat(256)]) {
+          const error = yield* insert(subject).pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "users_subject_check",
+          );
+        }
+        yield* insert("s".repeat(255));
+      }),
+    );
+
     it.effect("rejects id hashes that are not 32 bytes long", () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;

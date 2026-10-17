@@ -7,6 +7,7 @@ import { PgClient, PgMigrator } from "@effect/sql-pg";
 import { Config, Layer, String as Str } from "effect";
 import { DatabaseConfig } from "#Config";
 import createAuthTables from "#migrations/0001_create_auth_tables";
+import createUsers from "#migrations/0002_create_users";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -17,6 +18,7 @@ import createAuthTables from "#migrations/0001_create_auth_tables";
  */
 export const migrations = {
   "0001_create_auth_tables": createAuthTables,
+  "0002_create_users": createUsers,
 };
 
 /** Loads {@link migrations} in id order. */
