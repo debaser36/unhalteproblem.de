@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@unhalteproblem.de/oidc",
+  "description": "OpenID Connect and OAuth 2.0 protocol schemas and the HttpApi of the Keycloak OpenID Provider",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "#domain/*": "./src/domain/*.ts",
+    "#errors/*": "./src/errors/*.ts",
+    "#groups/*": "./src/groups/*.ts",
+    "#middleware/*": "./src/middleware/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit -p .",
+    "lint": "oxlint",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@unhalteproblem.de/tsconfig": "workspace:*",
+    "oxlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

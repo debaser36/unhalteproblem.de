@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@unhalteproblem.de/tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    /* Source-only package: consumers (Vite, Node, Vitest) load the .ts files
+       directly through the "exports" and "imports" maps, so nothing is emitted. */
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    /* Same-folder imports keep their .ts extension (e.g. "./Api.ts"). */
+    "allowImportingTsExtensions": true,
+    /* Keep the source runnable under Node's type stripping and other
+       per-file transpilers: type-only imports must be marked, no enums or
+       other non-erasable syntax. */
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true
+  }
+}
