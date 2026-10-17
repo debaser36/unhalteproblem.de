@@ -34,7 +34,9 @@ lib/api/
     └── Authorization.ts    # HttpApiMiddleware.Service definitions + HttpApiSecurity; definitions only
 ```
 
-**Dependency rule.** `lib/api` depends on `effect` only. No `node:*` imports,
+**Dependency rule.** `lib/api` depends on `effect` and on
+`@unhalteproblem.de/oidc` (pure OpenID Connect schemas, itself `effect`-only)
+and nothing else. No `node:*` imports,
 no `@effect/platform-*`, no SQL clients and no server logic, because the
 browser bundle of `services/web` imports this package. Middleware
 _implementations_ live in the services (server side) and in the web client
