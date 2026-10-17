@@ -6,7 +6,7 @@ import {
   IdToken,
   type TokenResponse,
 } from "@unhalteproblem.de/oidc";
-import { Effect, Layer, Redacted, Schema } from "effect";
+import { Effect, Layer, Option, Redacted, Schema } from "effect";
 import { HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import {
@@ -17,6 +17,8 @@ import {
   SignJWT,
 } from "jose";
 import { pkceChallenge } from "#auth/Secrets";
+import { DomainsLive } from "#domains/Domains";
+import { UserQueries } from "#domains/users/UserQueries";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
 import { LoginRateLimit } from "#services/LoginRateLimit";
@@ -115,13 +117,22 @@ const makeProvider = (options: AppOptions) => {
   return provider;
 };
 
-/** The backend's HTTP app with a fresh in-memory database. */
-const makeApp = (options: AppOptions = {}) => {
-  const repositories = Layer.mergeAll(
-    LoginAttempts.layer,
-    Sessions.layer,
-    LogoutTokens.layer,
-  ).pipe(Layer.provideMerge(DatabaseTest));
+/**
+ * The backend's HTTP app with a fresh in-memory database, and the services
+ * behind it (database, repositories, domains) for checking stored state.
+ */
+const makeAppWithServices = Effect.fnUntraced(function* (
+  options: AppOptions = {},
+) {
+  const services = yield* Layer.build(
+    Layer.mergeAll(
+      LoginAttempts.layer,
+      Sessions.layer,
+      LogoutTokens.layer,
+      DomainsLive,
+    ).pipe(Layer.provideMerge(DatabaseTest)),
+  );
+  const repositories = Layer.succeedContext(services);
   const handlers = Layer.mergeAll(
     AuthHandlers,
     SystemHandlers,
@@ -153,17 +164,18 @@ const makeApp = (options: AppOptions = {}) => {
     Layer.provide(handlers),
     Layer.provide(HttpServer.layerServices),
   );
-  return Effect.acquireRelease(
+  const { handler } = yield* Effect.acquireRelease(
     Effect.sync(() => HttpRouter.toWebHandler(app, { disableLogger: true })),
     ({ dispose }) => Effect.promise(dispose),
-  ).pipe(
-    Effect.map(
-      ({ handler }) =>
-        (path: string, init?: RequestInit) =>
-          Effect.promise(() => handler(new Request(`${api}${path}`, init))),
-    ),
   );
-};
+  const request = (path: string, init?: RequestInit) =>
+    Effect.promise(() => handler(new Request(`${api}${path}`, init)));
+  return { request, services };
+});
+
+/** The backend's HTTP app with a fresh in-memory database. */
+const makeApp = (options: AppOptions = {}) =>
+  Effect.map(makeAppWithServices(options), ({ request }) => request);
 
 /** `name=value` of a `Set-Cookie` header, or undefined. */
 const setCookie = (response: Response, name: string) =>
@@ -297,6 +309,38 @@ describe("auth login flow", () => {
           emailVerified: true,
         },
       });
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("callback creates the user and updates it on later logins", () =>
+    Effect.gen(function* () {
+      const { request, services } = yield* makeAppWithServices();
+      const findUser = Effect.gen(function* () {
+        const queries = yield* UserQueries;
+        return yield* queries.findBySubject("user-1");
+      }).pipe(Effect.provide(services));
+      assert.isTrue(Option.isNone(yield* findUser));
+
+      const logIn = Effect.gen(function* () {
+        const { state, loginCookie } = yield* startLogin(request);
+        const response = yield* callback(
+          request,
+          { code: state, state, iss: issuer },
+          loginCookie,
+        );
+        assert.strictEqual(response.status, 302);
+      });
+
+      yield* logIn;
+      const user = Option.getOrThrow(yield* findUser);
+      assert.deepStrictEqual(user.username, Option.some("ada"));
+      assert.deepStrictEqual(user.email, Option.some("ada@example.org"));
+      assert.deepStrictEqual(user.name, Option.none());
+      assert.isTrue(user.emailVerified);
+
+      yield* logIn;
+      const again = Option.getOrThrow(yield* findUser);
+      assert.strictEqual(again.id, user.id);
     }).pipe(Effect.scoped),
   );
 

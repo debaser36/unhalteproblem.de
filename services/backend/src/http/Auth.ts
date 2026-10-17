@@ -25,6 +25,7 @@ import {
   secretsEqual,
 } from "#auth/Secrets";
 import { PublicUrlConfig, SessionConfig } from "#Config";
+import { UserCommands } from "#domains/users/UserCommands";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
 import { Sessions } from "#repositories/Sessions";
@@ -61,6 +62,7 @@ export const AuthHandlers = HttpApiBuilder.group(
     const sessions = yield* Sessions;
     const logoutTokens = yield* LogoutTokens;
     const loginRateLimit = yield* LoginRateLimit;
+    const userCommands = yield* UserCommands;
     const sql = yield* SqlClient.SqlClient;
     const { origin } = yield* PublicUrlConfig;
     const { maxAge } = yield* SessionConfig;
@@ -135,6 +137,18 @@ export const AuthHandlers = HttpApiBuilder.group(
       if (claims.sid === undefined) {
         return yield* fail("failed", "ID token without sid");
       }
+
+      // Our copy of the user, created on the first login. Fails the login
+      // (as a defect) if the database is unreachable, like the session.
+      yield* userCommands.syncFromLogin({
+        subject: claims.sub,
+        profile: {
+          username: Option.fromUndefinedOr(claims.preferred_username),
+          name: Option.fromUndefinedOr(claims.name),
+          email: Option.fromUndefinedOr(claims.email),
+          emailVerified: claims.email_verified ?? false,
+        },
+      });
 
       const sessionCookie = yield* randomSecret;
       const now = yield* DateTime.now;

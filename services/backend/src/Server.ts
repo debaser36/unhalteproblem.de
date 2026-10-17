@@ -5,6 +5,7 @@ import { HttpIncomingMessage, HttpRouter } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { createServer } from "node:http";
 import { LogFormat, ServerConfig } from "#Config";
+import { DomainsLive } from "#domains/Domains";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
 import { ContactHandlers } from "#http/Contact";
@@ -20,11 +21,13 @@ import { LoginRateLimit } from "#services/LoginRateLimit";
 import { OidcProvider } from "#services/OidcProvider";
 import { TokenVerifier } from "#services/TokenVerifier";
 
-// One database pool (and one migration run) shared by all repositories.
+// One database pool (and one migration run) shared by all repositories and
+// domains.
 const Repositories = Layer.mergeAll(
   LoginAttempts.layer,
   Sessions.layer,
   LogoutTokens.layer,
+  DomainsLive,
 ).pipe(Layer.provideMerge(DatabaseLive));
 
 const AuthServices = Layer.mergeAll(
