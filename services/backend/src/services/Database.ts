@@ -9,6 +9,7 @@ import { DatabaseConfig } from "#Config";
 import createAuthTables from "#migrations/0001_create_auth_tables";
 import createUsers from "#migrations/0002_create_users";
 import createUserRoles from "#migrations/0003_create_user_roles";
+import addUserModeration from "#migrations/0004_add_user_moderation";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -21,6 +22,7 @@ export const migrations = {
   "0001_create_auth_tables": createAuthTables,
   "0002_create_users": createUsers,
   "0003_create_user_roles": createUserRoles,
+  "0004_add_user_moderation": addUserModeration,
 };
 
 /** Loads {@link migrations} in id order. */

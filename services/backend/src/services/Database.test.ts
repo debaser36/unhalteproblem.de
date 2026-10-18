@@ -5,9 +5,74 @@ import { Effect, Exit, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 import { readdirSync } from "node:fs";
 import { DatabaseTest } from "#testing/Database";
-import { clientOptions, migrationLoader, migrations } from "./Database.ts";
+import { clientOptions, migrations } from "./Database.ts";
 
 const migrationsDirectory = new URL("../migrations/", import.meta.url);
+
+/** Loads the migrations with ids up to `id`. */
+const loaderUpTo = (id: number) =>
+  PgliteMigrator.fromRecord(
+    Object.fromEntries(
+      Object.entries(migrations).filter(
+        ([key]) => Number(key.slice(0, 4)) <= id,
+      ),
+    ),
+  );
+
+/** A fresh database with the migrations up to `id` applied. */
+const databaseUpTo = (id: number) =>
+  PgliteMigrator.layer({ loader: loaderUpTo(id) }).pipe(
+    Layer.provideMerge(PgliteClient.layer(clientOptions)),
+  );
+
+/** `<table>.<column> <type>[ not null][ default …][ generated … as identity]`. */
+const describeColumns = (sql: SqlClient.SqlClient, table: string) =>
+  sql<{
+    readonly columnName: string;
+    readonly dataType: string;
+    readonly isNullable: "YES" | "NO";
+    readonly columnDefault: string | null;
+    readonly identityGeneration: string | null;
+  }>`
+    SELECT column_name, data_type, is_nullable, column_default,
+      identity_generation
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = ${table}
+    ORDER BY ordinal_position
+  `.pipe(
+    Effect.map((columns) =>
+      columns.map(
+        (c) =>
+          `${table}.${c.columnName} ${c.dataType}` +
+          (c.isNullable === "NO" ? " not null" : "") +
+          (c.columnDefault === null ? "" : ` default ${c.columnDefault}`) +
+          (c.identityGeneration === null
+            ? ""
+            : ` generated ${c.identityGeneration.toLowerCase()} as identity`),
+      ),
+    ),
+  );
+
+/** `<name>: <definition>` of every constraint but NOT NULL, by name. */
+const describeConstraints = (sql: SqlClient.SqlClient, table: string) =>
+  sql<{ readonly conname: string; readonly definition: string }>`
+    SELECT conname, pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint
+    WHERE conrelid = ${table}::regclass AND contype <> 'n'
+    ORDER BY conname
+  `.pipe(
+    Effect.map((constraints) =>
+      constraints.map((c) => `${c.conname}: ${c.definition}`),
+    ),
+  );
+
+/** The definitions of all indexes of a table, by name. */
+const describeIndexes = (sql: SqlClient.SqlClient, table: string) =>
+  sql<{ readonly indexdef: string }>`
+    SELECT indexdef FROM pg_indexes
+    WHERE schemaname = 'public' AND tablename = ${table}
+    ORDER BY indexname
+  `.pipe(Effect.map((indexes) => indexes.map((i) => i.indexdef)));
 
 describe("migrations", () => {
   it("registers every file in src/migrations, numbered without gaps", () => {
@@ -274,6 +339,8 @@ describe("DatabaseTest", () => {
             "user_roles.user_id uuid not null",
             "user_roles.role text not null",
             "user_roles.granted_at timestamp with time zone not null default now()",
+            // Added by 0004.
+            "user_roles.granted_by uuid",
           ],
         );
 
@@ -289,6 +356,8 @@ describe("DatabaseTest", () => {
         assert.deepStrictEqual(
           constraints.map((c) => `${c.conname}: ${c.definition}`),
           [
+            // Added by 0004.
+            "user_roles_granted_by_fkey: FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL",
             // Derived from the contract: a role added there without a
             // migration fails here.
             `user_roles_role_check: CHECK ((role = ANY (ARRAY[${Role.literals
@@ -300,6 +369,7 @@ describe("DatabaseTest", () => {
         );
 
         // The primary key leads with user_id and serves the lookup by user.
+        // granted_by (0004) is deliberately not indexed.
         const indexes = yield* sql<{ readonly indexname: string }>`
           SELECT indexname FROM pg_indexes
           WHERE schemaname = 'public' AND tablename = 'user_roles'
@@ -392,18 +462,430 @@ describe("DatabaseTest", () => {
         );
       }),
     );
+
+    it.effect(
+      "creates the role log and restriction tables with the expected columns",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          assert.deepStrictEqual(
+            yield* describeColumns(sql, "user_role_changes"),
+            [
+              "user_role_changes.id bigint not null generated always as identity",
+              "user_role_changes.user_id uuid not null",
+              "user_role_changes.role text not null",
+              "user_role_changes.change text not null",
+              "user_role_changes.changed_by uuid",
+              "user_role_changes.changed_at timestamp with time zone not null",
+            ],
+          );
+          assert.deepStrictEqual(
+            yield* describeColumns(sql, "user_restrictions"),
+            [
+              "user_restrictions.id uuid not null",
+              "user_restrictions.user_id uuid not null",
+              "user_restrictions.note text not null",
+              "user_restrictions.restricted_by uuid",
+              "user_restrictions.restricted_at timestamp with time zone not null",
+              "user_restrictions.lifted_at timestamp with time zone",
+              "user_restrictions.lifted_by uuid",
+              "user_restrictions.lift_note text",
+            ],
+          );
+        }),
+    );
+
+    it.effect(
+      "constrains and indexes the role log and restriction tables",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          assert.deepStrictEqual(
+            yield* describeConstraints(sql, "user_role_changes"),
+            [
+              "user_role_changes_change_check: CHECK ((change = ANY (ARRAY['granted'::text, 'revoked'::text])))",
+              "user_role_changes_changed_by_fkey: FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL",
+              "user_role_changes_id_pkey: PRIMARY KEY (id)",
+              // Derived from the contract, like user_roles_role_check.
+              `user_role_changes_role_check: CHECK ((role = ANY (ARRAY[${Role.literals
+                .map((role) => `'${role}'::text`)
+                .join(", ")}])))`,
+              "user_role_changes_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+            ],
+          );
+          assert.deepStrictEqual(
+            yield* describeConstraints(sql, "user_restrictions"),
+            [
+              "user_restrictions_id_pkey: PRIMARY KEY (id)",
+              "user_restrictions_lift_note_check: CHECK (((char_length(lift_note) >= 1) AND (char_length(lift_note) <= 2000)))",
+              "user_restrictions_lifted_by_fkey: FOREIGN KEY (lifted_by) REFERENCES users(id) ON DELETE SET NULL",
+              "user_restrictions_lifted_check: CHECK ((((lifted_at IS NOT NULL) OR ((lifted_by IS NULL) AND (lift_note IS NULL))) AND ((lifted_at IS NULL) OR (lifted_at >= restricted_at))))",
+              "user_restrictions_note_check: CHECK (((char_length(note) >= 1) AND (char_length(note) <= 2000)))",
+              "user_restrictions_restricted_by_fkey: FOREIGN KEY (restricted_by) REFERENCES users(id) ON DELETE SET NULL",
+              "user_restrictions_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+            ],
+          );
+
+          // The actor columns are deliberately not indexed.
+          assert.deepStrictEqual(
+            yield* describeIndexes(sql, "user_role_changes"),
+            [
+              "CREATE UNIQUE INDEX user_role_changes_id_pkey ON public.user_role_changes USING btree (id)",
+              "CREATE INDEX user_role_changes_user_id_changed_at_idx ON public.user_role_changes USING btree (user_id, changed_at)",
+            ],
+          );
+          assert.deepStrictEqual(
+            yield* describeIndexes(sql, "user_restrictions"),
+            [
+              "CREATE UNIQUE INDEX user_restrictions_active_key ON public.user_restrictions USING btree (user_id) WHERE (lifted_at IS NULL)",
+              "CREATE UNIQUE INDEX user_restrictions_id_pkey ON public.user_restrictions USING btree (id)",
+              "CREATE INDEX user_restrictions_user_id_restricted_at_idx ON public.user_restrictions USING btree (user_id, restricted_at)",
+            ],
+          );
+        }),
+    );
+
+    it.effect("logs the known roles as granted or revoked, nothing else", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const userId = yield* insertUser(sql, "role-changes-check");
+        const log = (role: string, change: string) => sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${userId}, ${role}, ${change}, now())
+        `;
+        for (const role of Role.literals) {
+          yield* log(role, "granted");
+          yield* log(role, "revoked");
+        }
+        for (const role of ["moderator", "Admin", ""]) {
+          const error = yield* log(role, "granted").pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "user_role_changes_role_check",
+          );
+        }
+        for (const change of ["grant", "Granted", "deleted", ""]) {
+          const error = yield* log("admin", change).pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "user_role_changes_change_check",
+          );
+        }
+
+        // The log numbers its entries itself.
+        const exit = yield* sql`
+          INSERT INTO user_role_changes (id, user_id, role, change, changed_at)
+          VALUES (1000000, ${userId}, 'admin', 'granted', now())
+        `.pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(exit));
+      }),
+    );
+
+    it.effect("keeps at most one active restriction per user", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const userId = yield* insertUser(sql, "restrictions-active");
+        const other = yield* insertUser(sql, "restrictions-active-other");
+        const restrict = (user: string) => sql<{ readonly id: string }>`
+          INSERT INTO user_restrictions (id, user_id, note, restricted_at)
+          VALUES (gen_random_uuid(), ${user}, 'spam', now())
+          RETURNING id
+        `;
+        const [first] = yield* restrict(userId);
+
+        const error = yield* restrict(userId).pipe(Effect.flip);
+        assert.strictEqual(error.reason._tag, "UniqueViolation");
+        if (error.reason._tag === "UniqueViolation") {
+          assert.strictEqual(
+            error.reason.constraint,
+            "user_restrictions_active_key",
+          );
+        }
+        // Other users are restricted independently.
+        yield* restrict(other);
+
+        yield* sql`
+          UPDATE user_restrictions SET lifted_at = now() WHERE id = ${first.id}
+        `;
+        yield* restrict(userId);
+
+        const rows = yield* sql<{ readonly active: boolean }>`
+          SELECT lifted_at IS NULL AS active FROM user_restrictions
+          WHERE user_id = ${userId}
+          ORDER BY active
+        `;
+        assert.deepStrictEqual(rows, [{ active: false }, { active: true }]);
+      }),
+    );
+
+    it.effect(
+      "rejects details of a lift without a lift, or before the restriction",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const userId = yield* insertUser(sql, "restrictions-lifted");
+          const actor = yield* insertUser(sql, "restrictions-lifted-actor");
+          const insert = (
+            liftedAt: string | null,
+            liftedBy: string | null,
+            liftNote: string | null,
+          ) => sql`
+          INSERT INTO user_restrictions
+            (id, user_id, note, restricted_by, restricted_at, lifted_at, lifted_by, lift_note)
+          VALUES (
+            gen_random_uuid(), ${userId}, 'note', ${actor},
+            '2026-05-01T00:00:00Z', ${liftedAt}, ${liftedBy}, ${liftNote}
+          )
+        `;
+
+          const rejected: ReadonlyArray<Parameters<typeof insert>> = [
+            [null, actor, null],
+            [null, null, "lifted"],
+            [null, actor, "lifted"],
+            ["2026-04-30T23:59:59Z", actor, "lifted"],
+          ];
+          for (const args of rejected) {
+            const error = yield* insert(...args).pipe(Effect.flip);
+            assert.strictEqual(error.reason._tag, "ConstraintError");
+            assert.propertyVal(
+              error.reason.cause,
+              "constraint",
+              "user_restrictions_lifted_check",
+            );
+          }
+
+          // Lifted at the moment of the restriction, by a since deleted actor
+          // without a note, and still active.
+          yield* insert("2026-05-01T00:00:00Z", actor, "lifted");
+          yield* insert("2026-05-02T00:00:00Z", null, null);
+          yield* insert(null, null, null);
+        }),
+    );
+
+    it.effect("limits notes to 1 to 2000 characters", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const userId = yield* insertUser(sql, "restrictions-notes");
+        // Lifted, so the one-active rule doesn't get in the way.
+        const insert = (note: string, liftNote: string | null) => sql`
+          INSERT INTO user_restrictions
+            (id, user_id, note, restricted_at, lifted_at, lift_note)
+          VALUES (gen_random_uuid(), ${userId}, ${note}, now(), now(), ${liftNote})
+        `;
+        for (const note of ["", "n".repeat(2001)]) {
+          const error = yield* insert(note, null).pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "user_restrictions_note_check",
+          );
+        }
+        for (const liftNote of ["", "n".repeat(2001)]) {
+          const error = yield* insert("note", liftNote).pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "user_restrictions_lift_note_check",
+          );
+        }
+        // Characters, not bytes.
+        yield* insert("n", "n");
+        yield* insert("€".repeat(2000), "€".repeat(2000));
+      }),
+    );
+
+    it.effect("rejects moderation rows that refer to unknown users", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const userId = yield* insertUser(sql, "moderation-unknown");
+        const cases = [
+          [
+            sql`
+              UPDATE user_roles SET granted_by = gen_random_uuid()
+              WHERE user_id = ${userId}
+            `,
+            "user_roles_granted_by_fkey",
+          ],
+          [
+            sql`
+              INSERT INTO user_role_changes (user_id, role, change, changed_at)
+              VALUES (gen_random_uuid(), 'admin', 'granted', now())
+            `,
+            "user_role_changes_user_id_fkey",
+          ],
+          [
+            sql`
+              INSERT INTO user_role_changes
+                (user_id, role, change, changed_by, changed_at)
+              VALUES (${userId}, 'admin', 'granted', gen_random_uuid(), now())
+            `,
+            "user_role_changes_changed_by_fkey",
+          ],
+          [
+            sql`
+              INSERT INTO user_restrictions (id, user_id, note, restricted_at)
+              VALUES (gen_random_uuid(), gen_random_uuid(), 'note', now())
+            `,
+            "user_restrictions_user_id_fkey",
+          ],
+          [
+            sql`
+              INSERT INTO user_restrictions
+                (id, user_id, note, restricted_by, restricted_at)
+              VALUES (gen_random_uuid(), ${userId}, 'note', gen_random_uuid(), now())
+            `,
+            "user_restrictions_restricted_by_fkey",
+          ],
+          [
+            sql`
+              INSERT INTO user_restrictions
+                (id, user_id, note, restricted_at, lifted_at, lifted_by)
+              VALUES (
+                gen_random_uuid(), ${userId}, 'note', now(), now(), gen_random_uuid()
+              )
+            `,
+            "user_restrictions_lifted_by_fkey",
+          ],
+        ] as const;
+        yield* sql`
+          INSERT INTO user_roles (user_id, role) VALUES (${userId}, 'normalUser')
+        `;
+        for (const [statement, constraint] of cases) {
+          const error = yield* statement.pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(error.reason.cause, "constraint", constraint);
+        }
+      }),
+    );
+
+    it.effect("keeps the moderation history when the actor is deleted", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const target = yield* insertUser(sql, "moderation-actor-target");
+        const actor = yield* insertUser(sql, "moderation-actor");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role, granted_by) VALUES
+            (${target}, 'admin', ${actor}),
+            (${actor}, 'superAdmin', ${actor})
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes
+            (user_id, role, change, changed_by, changed_at)
+          VALUES
+            (${target}, 'admin', 'granted', ${actor}, now()),
+            (${actor}, 'superAdmin', 'granted', ${actor}, now())
+        `;
+        yield* sql`
+          INSERT INTO user_restrictions
+            (id, user_id, note, restricted_by, restricted_at, lifted_at, lifted_by)
+          VALUES
+            (gen_random_uuid(), ${target}, 'first', ${actor}, now(), now(), ${actor}),
+            (gen_random_uuid(), ${target}, 'second', ${actor}, now(), NULL, NULL),
+            (gen_random_uuid(), ${actor}, 'self', ${actor}, now(), NULL, NULL)
+        `;
+
+        yield* sql`DELETE FROM users WHERE id = ${actor}`;
+
+        // The actor's own rows go with them, even where they are also the
+        // actor; the target's rows stay without an actor.
+        const roles = yield* sql<{
+          readonly userId: string;
+          readonly grantedBy: string | null;
+        }>`
+          SELECT user_id, granted_by FROM user_roles
+          WHERE user_id IN (${target}, ${actor})
+        `;
+        assert.deepStrictEqual(roles, [{ userId: target, grantedBy: null }]);
+
+        const changes = yield* sql<{
+          readonly userId: string;
+          readonly changedBy: string | null;
+        }>`
+          SELECT user_id, changed_by FROM user_role_changes
+          WHERE user_id IN (${target}, ${actor})
+        `;
+        assert.deepStrictEqual(changes, [{ userId: target, changedBy: null }]);
+
+        const restrictions = yield* sql<{
+          readonly userId: string;
+          readonly note: string;
+          readonly restrictedBy: string | null;
+          readonly liftedBy: string | null;
+          readonly lifted: boolean;
+        }>`
+          SELECT user_id, note, restricted_by, lifted_by, lifted_at IS NOT NULL AS lifted
+          FROM user_restrictions
+          WHERE user_id IN (${target}, ${actor})
+          ORDER BY note
+        `;
+        assert.deepStrictEqual(restrictions, [
+          {
+            userId: target,
+            note: "first",
+            restrictedBy: null,
+            liftedBy: null,
+            lifted: true,
+          },
+          {
+            userId: target,
+            note: "second",
+            restrictedBy: null,
+            liftedBy: null,
+            lifted: false,
+          },
+        ]);
+      }),
+    );
+
+    it.effect("deletes a user's role log and restrictions with the user", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const deleted = yield* insertUser(sql, "moderation-cascade-deleted");
+        const kept = yield* insertUser(sql, "moderation-cascade-kept");
+        for (const user of [deleted, kept]) {
+          yield* sql`
+            INSERT INTO user_role_changes (user_id, role, change, changed_at)
+            VALUES (${user}, 'admin', 'granted', now())
+          `;
+          yield* sql`
+            INSERT INTO user_restrictions (id, user_id, note, restricted_at)
+            VALUES (gen_random_uuid(), ${user}, 'note', now())
+          `;
+        }
+
+        yield* sql`DELETE FROM users WHERE id = ${deleted}`;
+
+        const changes = yield* sql<{ readonly userId: string }>`
+          SELECT user_id FROM user_role_changes
+          WHERE user_id IN (${deleted}, ${kept})
+        `;
+        assert.deepStrictEqual(
+          changes.map((row) => row.userId),
+          [kept],
+        );
+        const restrictions = yield* sql<{ readonly userId: string }>`
+          SELECT user_id FROM user_restrictions
+          WHERE user_id IN (${deleted}, ${kept})
+        `;
+        assert.deepStrictEqual(
+          restrictions.map((row) => row.userId),
+          [kept],
+        );
+      }),
+    );
   });
 });
 
 describe("0003_create_user_roles", () => {
   // Runs the migrations before 0003 first, so users can exist before
   // user_roles does.
-  const before = Object.fromEntries(
-    Object.entries(migrations).filter(([key]) => Number(key.slice(0, 4)) < 3),
-  );
-  const DatabaseBefore0003 = PgliteMigrator.layer({
-    loader: PgliteMigrator.fromRecord(before),
-  }).pipe(Layer.provideMerge(PgliteClient.layer(clientOptions)));
+  const DatabaseBefore0003 = databaseUpTo(2);
 
   it.effect(
     "gives users who registered earlier the normalUser role",
@@ -417,7 +899,7 @@ describe("0003_create_user_roles", () => {
           WHERE id = ${alice}
         `;
 
-        const applied = yield* PgliteMigrator.run({ loader: migrationLoader });
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(3) });
         assert.deepStrictEqual(applied, [[3, "create_user_roles"]]);
 
         const roles = yield* sql<{
@@ -443,6 +925,68 @@ describe("0003_create_user_roles", () => {
           },
         ]);
       }).pipe(Effect.provide(DatabaseBefore0003)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0004_add_user_moderation", () => {
+  // Runs the migrations before 0004 first, so roles can exist before
+  // user_role_changes does.
+  const DatabaseBefore0004 = databaseUpTo(3);
+
+  it.effect(
+    "starts the role log with the roles granted so far",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "log-backfill-alice");
+        const bob = yield* insertUser(sql, "log-backfill-bob");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role, granted_at) VALUES
+            (${bob}, 'normalUser', '2026-03-04T05:06:07Z'),
+            (${alice}, 'superAdmin', '2026-02-03T04:05:06Z'),
+            (${alice}, 'normalUser', '2026-01-02T03:04:05Z')
+        `;
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(4) });
+        assert.deepStrictEqual(applied, [[4, "add_user_moderation"]]);
+
+        // One granted entry per role, by the system, in the order granted.
+        const log = yield* sql<{
+          readonly subject: string;
+          readonly role: string;
+          readonly change: string;
+          readonly changedBy: string | null;
+          readonly matchesGrantedAt: boolean;
+        }>`
+          SELECT u.subject, c.role, c.change, c.changed_by,
+            c.changed_at = r.granted_at AS matches_granted_at
+          FROM user_role_changes c
+          JOIN users u ON u.id = c.user_id
+          JOIN user_roles r ON r.user_id = c.user_id AND r.role = c.role
+          WHERE c.user_id IN (${alice}, ${bob})
+          ORDER BY c.id
+        `;
+        const granted = (subject: string, role: string) => ({
+          subject,
+          role,
+          change: "granted",
+          changedBy: null,
+          matchesGrantedAt: true,
+        });
+        assert.deepStrictEqual(log, [
+          granted("log-backfill-alice", "normalUser"),
+          granted("log-backfill-alice", "superAdmin"),
+          granted("log-backfill-bob", "normalUser"),
+        ]);
+
+        // Existing grants have no granter.
+        const granters = yield* sql<{ readonly grantedBy: string | null }>`
+          SELECT DISTINCT granted_by FROM user_roles
+          WHERE user_id IN (${alice}, ${bob})
+        `;
+        assert.deepStrictEqual(granters, [{ grantedBy: null }]);
+      }).pipe(Effect.provide(DatabaseBefore0004)),
     { timeout: 30_000 },
   );
 });
