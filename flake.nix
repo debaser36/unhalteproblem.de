@@ -107,13 +107,17 @@
 
         packages.backend = backend;
 
-        # The backend's OCI image: Node and the bundle, nothing else (no shell,
-        # no package manager). It runs as an unprivileged user and needs no
-        # writable filesystem. The tag is derived from the contents, so every
-        # change produces a new image. Load it with `docker load < result` or
-        # let the NixOS module below do it.
+        # The backend's OCI image: Node, the bundle and CA certificates, nothing
+        # else (no shell, no package manager). It runs as an unprivileged user
+        # and needs no writable filesystem. The tag is derived from the
+        # contents, so every change produces a new image. Load it with
+        # `docker load < result` or let the NixOS module below do it.
         packages.backend-image = pkgs.dockerTools.buildLayeredImage {
           name = "unhalteproblem-backend";
+          # Node from nixpkgs verifies TLS against the system store in
+          # /etc/ssl/certs, not its bundled roots; without it every HTTPS call
+          # (Keycloak) fails with "unable to get local issuer certificate".
+          contents = [ pkgs.dockerTools.caCertificates ];
           config = {
             Cmd = [
               "${pkgs.nodejs-slim_26}/bin/node"
