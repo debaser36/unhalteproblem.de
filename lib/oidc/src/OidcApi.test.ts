@@ -139,6 +139,15 @@ describe("browser URLs", () => {
     );
   });
 
+  it("sends prompt as a space-delimited list, e.g. create", () => {
+    const url = new URL(
+      urls.browser.authorize({ query: { ...request, prompt: ["create"] } }),
+    );
+    assert.strictEqual(url.searchParams.get("prompt"), "create");
+    const plain = new URL(urls.browser.authorize({ query: request }));
+    assert.isFalse(plain.searchParams.has("prompt"));
+  });
+
   it("refuses an authorization request without the openid scope", () => {
     assert.throws(() =>
       urls.browser.authorize({ query: { ...request, scope: ["email"] } }),
