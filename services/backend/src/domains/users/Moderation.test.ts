@@ -205,7 +205,6 @@ const addSession = (user: Member) =>
         idHash: hashSecret(crypto.randomUUID()),
         userId: user.subject,
         providerSessionId: Option.some(crypto.randomUUID()),
-        idToken: "id-token",
         claims: {},
         expiresAt: DateTime.add(now, { days: 1 }),
       })

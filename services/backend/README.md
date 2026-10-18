@@ -250,6 +250,9 @@ Keycloak client settings (`OIDC_CLIENT_ID`):
   flow, no direct access grants), PKCE method `S256`.
 - Valid redirect URI: `<PUBLIC_API_URL>/auth/callback`.
 - Valid post logout redirect URI: `<PUBLIC_ORIGIN>/`.
+- Logout: the backend keeps no ID token (a credential at rest), so its
+  redirect to Keycloak carries no `id_token_hint`, and Keycloak asks the
+  user to confirm before it ends its session and returns to the website.
 - Back-channel logout URL: `<PUBLIC_API_URL>/auth/backchannel-logout`, with
   "Backchannel logout session required" on.
 - Web origins: none needed (the browser never calls Keycloak with `fetch`).

@@ -844,7 +844,6 @@ describe("restricted users", () => {
             idHash: hashSecret(cookie),
             userId: subject,
             providerSessionId: Option.some("kc-session-survivor"),
-            idToken: "id-token",
             claims: {},
             // The app checks expiry against the real clock, not the test's.
             expiresAt: DateTime.makeUnsafe(Date.now() + 60 * 60 * 1000),

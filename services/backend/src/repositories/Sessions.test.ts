@@ -1,5 +1,5 @@
 import { assert, describe, it, layer } from "@effect/vitest";
-import { DateTime, Effect, Layer, Option, Redacted } from "effect";
+import { DateTime, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { DatabaseTest } from "#testing/Database";
@@ -18,7 +18,6 @@ const newSession = Effect.fnUntraced(function* (
     idHash: randomHash(),
     userId: randomId(),
     providerSessionId: Option.some(randomId()),
-    idToken: "eyJhbGciOiJSUzI1NiJ9.payload.signature",
     claims: {
       preferred_username: "ada",
       name: "Ada Lovelace",
@@ -45,12 +44,8 @@ describe("Sessions", () => {
           session.providerSessionId,
           input.providerSessionId,
         );
-        assert.strictEqual(Redacted.value(session.idToken), input.idToken);
         assert.deepStrictEqual(session.claims, input.claims);
         assert.isTrue(DateTime.Equivalence(session.expiresAt, input.expiresAt));
-        // The ID token stays out of logs.
-        assert.notInclude(String(session.idToken), input.idToken);
-        assert.notInclude(JSON.stringify(session), input.idToken);
       }),
     );
 
@@ -75,9 +70,9 @@ describe("Sessions", () => {
         const sql = yield* SqlClient.SqlClient;
         const idHash = randomHash();
         yield* sql`
-          INSERT INTO auth_sessions (id_hash, user_id, id_token, claims, expires_at)
+          INSERT INTO auth_sessions (id_hash, user_id, claims, expires_at)
           VALUES (
-            ${idHash}, ${randomId()}, 'token',
+            ${idHash}, ${randomId()},
             ${JSON.stringify({ email: "ada@example.org", groups: ["admin"] })},
             ${DateTime.toDateUtc(DateTime.add(yield* DateTime.now, { hours: 1 }))}
           )
@@ -119,7 +114,7 @@ describe("Sessions", () => {
         yield* TestClock.adjust("9 hours");
 
         const deleted = Option.getOrThrow(yield* sessions.delete(input.idHash));
-        assert.strictEqual(Redacted.value(deleted.idToken), input.idToken);
+        assert.strictEqual(deleted.userId, input.userId);
         assert.isTrue(Option.isNone(yield* sessions.delete(input.idHash)));
       }),
     );

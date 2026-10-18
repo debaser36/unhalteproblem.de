@@ -141,7 +141,6 @@ describe("DatabaseTest", () => {
           "auth_sessions.id_hash bytea not null",
           "auth_sessions.user_id text not null",
           "auth_sessions.provider_session_id text",
-          "auth_sessions.id_token text not null",
           "auth_sessions.claims jsonb not null",
           "auth_sessions.created_at timestamp with time zone not null default now()",
           "auth_sessions.expires_at timestamp with time zone not null",
@@ -307,8 +306,8 @@ describe("DatabaseTest", () => {
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
         const exit = yield* sql`
-          INSERT INTO auth_sessions (id_hash, user_id, id_token, claims, expires_at)
-          VALUES (${new Uint8Array(31)}, 'user', 'token', '{}', now())
+          INSERT INTO auth_sessions (id_hash, user_id, claims, expires_at)
+          VALUES (${new Uint8Array(31)}, 'user', '{}', now())
         `.pipe(Effect.exit);
         assert.isTrue(Exit.isFailure(exit));
       }),
@@ -1357,6 +1356,43 @@ describe("0004_add_user_moderation", () => {
         `;
         assert.deepStrictEqual(granters, [{ grantedBy: null }]);
       }).pipe(Effect.provide(DatabaseBefore0004)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0007_drop_session_id_token", () => {
+  // Runs the migrations before 0007 first, so a session can still have an
+  // id_token before the column is dropped.
+  const DatabaseBefore0007 = databaseUpTo(6);
+
+  it.effect(
+    "drops id_token and keeps the sessions",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO auth_sessions (id_hash, user_id, id_token, claims, expires_at)
+          VALUES (${new Uint8Array(32)}, 'drop-token-user', 'token', '{"a":1}', '2030-01-01T00:00:00Z')
+        `;
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(7) });
+        assert.deepStrictEqual(applied, [[7, "drop_session_id_token"]]);
+
+        const columns = yield* describeColumns(sql, "auth_sessions");
+        assert.isFalse(
+          columns.some((c) => c.startsWith("auth_sessions.id_token")),
+        );
+        const sessions = yield* sql<{
+          readonly userId: string;
+          readonly claims: unknown;
+        }>`
+          SELECT user_id, claims FROM auth_sessions
+          WHERE user_id = 'drop-token-user'
+        `;
+        assert.deepStrictEqual(sessions, [
+          { userId: "drop-token-user", claims: { a: 1 } },
+        ]);
+      }).pipe(Effect.provide(DatabaseBefore0007)),
     { timeout: 30_000 },
   );
 });

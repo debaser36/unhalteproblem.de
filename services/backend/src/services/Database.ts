@@ -12,6 +12,7 @@ import createUserRoles from "#migrations/0003_create_user_roles";
 import addUserModeration from "#migrations/0004_add_user_moderation";
 import createOutbox from "#migrations/0005_create_outbox";
 import createContactMessages from "#migrations/0006_create_contact_messages";
+import dropSessionIdToken from "#migrations/0007_drop_session_id_token";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -27,6 +28,7 @@ export const migrations = {
   "0004_add_user_moderation": addUserModeration,
   "0005_create_outbox": createOutbox,
   "0006_create_contact_messages": createContactMessages,
+  "0007_drop_session_id_token": dropSessionIdToken,
 };
 
 /** Loads {@link migrations} in id order. */

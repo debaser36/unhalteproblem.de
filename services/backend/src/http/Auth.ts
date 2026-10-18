@@ -11,7 +11,6 @@ import {
 import {
   type AuthorizationCallback,
   CodeVerifier,
-  IdToken,
   OAuthBadRequest,
   type PromptValue,
 } from "@unhalteproblem.de/oidc";
@@ -219,7 +218,6 @@ export const AuthHandlers = HttpApiBuilder.group(
           idHash: hashSecret(sessionCookie),
           userId: claims.sub,
           providerSessionId: Option.some(claims.sid),
-          idToken: Redacted.value(tokens.id_token),
           claims: {
             ...(claims.preferred_username === undefined
               ? {}
@@ -323,18 +321,12 @@ export const AuthHandlers = HttpApiBuilder.group(
               return yield* new Forbidden();
             }
             const cookie = request.cookies[SessionCookie];
-            const session =
-              cookie === undefined || cookie === ""
-                ? Option.none()
-                : yield* sessions.delete(hashSecret(cookie)).pipe(Effect.orDie);
-            // With the ID token as a hint Keycloak ends its session without
-            // asking; without one it shows a confirmation page.
-            const idToken = Option.isNone(session)
-              ? undefined
-              : yield* Schema.decodeEffect(IdToken)(
-                  Redacted.value(session.value.idToken),
-                ).pipe(Effect.orDie);
-            const url = yield* oidc.endSessionUrl(idToken);
+            if (cookie !== undefined && cookie !== "") {
+              yield* sessions.delete(hashSecret(cookie)).pipe(Effect.orDie);
+            }
+            // No `id_token_hint` (we keep no ID token), so Keycloak asks the
+            // user to confirm before it ends its own session.
+            const url = yield* oidc.endSessionUrl;
             return HttpServerResponse.redirect(url, { status: 303 }).pipe(
               noStore,
               HttpServerResponse.expireCookieUnsafe(

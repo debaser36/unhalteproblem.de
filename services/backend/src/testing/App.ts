@@ -141,10 +141,7 @@ const makeProvider = (options: AppOptions) => {
         };
         return response;
       }),
-    endSessionUrl: (idToken) =>
-      Effect.succeed(
-        `${issuer}/logout?hint=${idToken === undefined ? "none" : "id_token"}`,
-      ),
+    endSessionUrl: Effect.succeed(`${issuer}/logout`),
   });
   return provider;
 };

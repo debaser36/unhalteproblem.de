@@ -1,12 +1,4 @@
-import {
-  Context,
-  DateTime,
-  Effect,
-  Layer,
-  type Option,
-  Redacted,
-  Schema,
-} from "effect";
+import { Context, DateTime, Effect, Layer, type Option, Schema } from "effect";
 import { Model } from "effect/schema";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
 import { countDeleted, deleteExpiredRows, dieOnSchemaError } from "./Sql.ts";
@@ -33,11 +25,6 @@ export class Session extends Model.Class<Session>("Session")({
   userId: Schema.String,
   /** Keycloak's `sid`, matched by back-channel logout. */
   providerSessionId: Schema.OptionFromNullOr(Schema.String),
-  /**
-   * Only for `id_token_hint` at logout. A credential: redacted so it never
-   * shows up in logs.
-   */
-  idToken: Model.Sensitive(Schema.RedactedFromValue(Schema.String)),
   // jsonb comes back parsed; it's written as JSON text, which Postgres
   // converts to jsonb on insert.
   claims: Model.Field({
@@ -54,7 +41,6 @@ export interface NewSession {
   readonly idHash: Uint8Array;
   readonly userId: string;
   readonly providerSessionId: Option.Option<string>;
-  readonly idToken: string;
   readonly claims: SessionClaims;
   readonly expiresAt: DateTime.Utc;
 }
@@ -91,12 +77,7 @@ const make = Effect.gen(function* () {
 
   return Sessions.of({
     create: Effect.fn("Sessions.create")(function* (session: NewSession) {
-      yield* insert(
-        Session.insert.make({
-          ...session,
-          idToken: Redacted.make(session.idToken),
-        }),
-      ).pipe(dieOnSchemaError);
+      yield* insert(Session.insert.make(session)).pipe(dieOnSchemaError);
     }),
 
     find: Effect.fn("Sessions.find")(function* (idHash: Uint8Array) {
@@ -143,10 +124,7 @@ export class Sessions extends Context.Service<
     readonly find: (
       idHash: Uint8Array,
     ) => Effect.Effect<Option.Option<Session>, SqlError.SqlError>;
-    /**
-     * Removes the session and returns it, expired or not, so logout can
-     * still send its ID token as `id_token_hint`.
-     */
+    /** Removes the session and returns it, expired or not. */
     readonly delete: (
       idHash: Uint8Array,
     ) => Effect.Effect<Option.Option<Session>, SqlError.SqlError>;

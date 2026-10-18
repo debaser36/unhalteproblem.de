@@ -412,27 +412,25 @@ describe("auth logout", () => {
         headers: { origin: site, cookie: `__Host-session=${sessionCookie}` },
       });
       assert.strictEqual(response.status, 303);
-      assert.strictEqual(
-        response.headers.get("location"),
-        `${issuer}/logout?hint=id_token`,
-      );
+      assert.strictEqual(response.headers.get("location"), `${issuer}/logout`);
       assert.include(setCookie(response, "__Host-session") ?? "", "Max-Age=0");
       assert.strictEqual((yield* session(request, sessionCookie)).status, 401);
     }).pipe(Effect.scoped),
   );
 
-  it.effect("works without a session", () =>
+  it.effect.each<readonly [string, Record<string, string>]>([
+    ["no session cookie", {}],
+    ["a session cookie nobody knows", { cookie: "__Host-session=unknown" }],
+  ])("works with %s and still clears the cookie", ([, headers]) =>
     Effect.gen(function* () {
       const request = yield* makeApp();
       const response = yield* request("/auth/logout", {
         method: "POST",
-        headers: { origin: site },
+        headers: { origin: site, ...headers },
       });
       assert.strictEqual(response.status, 303);
-      assert.strictEqual(
-        response.headers.get("location"),
-        `${issuer}/logout?hint=none`,
-      );
+      assert.strictEqual(response.headers.get("location"), `${issuer}/logout`);
+      assert.include(setCookie(response, "__Host-session") ?? "", "Max-Age=0");
     }).pipe(Effect.scoped),
   );
 

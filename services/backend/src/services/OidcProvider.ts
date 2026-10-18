@@ -1,7 +1,6 @@
 import {
   type AuthorizationCode,
   type CodeVerifier,
-  type IdToken,
   layerClientSecretBasic,
   OidcApi,
   type PromptValue,
@@ -51,10 +50,12 @@ export class OidcProvider extends Context.Service<
       readonly code: AuthorizationCode;
       readonly codeVerifier: CodeVerifier;
     }) => Effect.Effect<TokenResponse, CodeExchangeFailed>;
-    /** RP-initiated logout; Keycloak sends the browser back to the website. */
-    readonly endSessionUrl: (
-      idToken: IdToken | undefined,
-    ) => Effect.Effect<string>;
+    /**
+     * RP-initiated logout; Keycloak sends the browser back to the website.
+     * Without an `id_token_hint` (no ID token is kept) Keycloak shows a
+     * confirmation page first.
+     */
+    readonly endSessionUrl: Effect.Effect<string>;
   }
 >()("@unhalteproblem.de/backend/OidcProvider") {
   static readonly layer = Layer.effect(
@@ -148,16 +149,14 @@ export class OidcProvider extends Context.Service<
               }),
               Effect.withSpan("OidcProvider.exchangeCode"),
             ),
-        endSessionUrl: (idToken) =>
-          Effect.sync(() =>
-            urls.browser.endSession({
-              query: {
-                client_id: clientId,
-                post_logout_redirect_uri: postLogoutRedirectUri,
-                ...(idToken === undefined ? {} : { id_token_hint: idToken }),
-              },
-            }),
-          ),
+        endSessionUrl: Effect.sync(() =>
+          urls.browser.endSession({
+            query: {
+              client_id: clientId,
+              post_logout_redirect_uri: postLogoutRedirectUri,
+            },
+          }),
+        ),
       });
     }),
   ).pipe(Layer.provide(FetchHttpClient.layer));
