@@ -1,46 +1,17 @@
 import { assert, describe, it, layer } from "@effect/vitest";
-import { DateTime, Effect, Layer, Option, PubSub } from "effect";
+import { DateTime, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
-import { DomainEvents } from "#cqrs/DomainEvent";
-import { Transaction } from "#cqrs/Transaction";
-import { DatabaseTest } from "#testing/Database";
+import { Sessions } from "#repositories/Sessions";
+import { KernelTest, login, published, UsersTest } from "#testing/Users";
 import { UserProfileChanged, UserRegistered } from "./User.ts";
-import { type Login, UserCommands } from "./UserCommands.ts";
+import { UserCommands } from "./UserCommands.ts";
+import { ModerationRepository } from "./ModerationRepository.ts";
 import { UserQueries } from "./UserQueries.ts";
 import { UserRepository } from "./UserRepository.ts";
 
-const Kernel = Transaction.layer.pipe(
-  Layer.provideMerge(DomainEvents.layer),
-  Layer.provideMerge(DatabaseTest),
-);
-
-const TestLayer = Layer.mergeAll(UserCommands.layer, UserQueries.layer).pipe(
-  Layer.provideMerge(UserRepository.layer),
-  Layer.provideMerge(Kernel),
-);
-
-const login = (subject: string, overrides: Partial<Login["profile"]> = {}) =>
-  ({
-    subject,
-    profile: {
-      username: Option.some("ada"),
-      name: Option.some("Ada Lovelace"),
-      email: Option.some("ada@example.org"),
-      emailVerified: true,
-      ...overrides,
-    },
-  }) satisfies Login;
-
-/** Subscribes now; `take` returns what was published since. */
-const published = Effect.gen(function* () {
-  const domainEvents = yield* DomainEvents;
-  const subscription = yield* domainEvents.subscribe;
-  return { take: PubSub.takeUpTo(subscription, 100) };
-});
-
 describe("UserCommands.syncFromLogin", () => {
-  layer(TestLayer, { timeout: "30 seconds" })((it) => {
+  layer(UsersTest, { timeout: "30 seconds" })((it) => {
     it.effect("creates the user on the first login", () =>
       Effect.gen(function* () {
         const commands = yield* UserCommands;
@@ -68,10 +39,12 @@ describe("UserCommands.syncFromLogin", () => {
         const queries = yield* UserQueries;
         const sql = yield* SqlClient.SqlClient;
         const subject = crypto.randomUUID();
-        assert.deepStrictEqual(yield* queries.rolesOf(subject), []);
+        assert.deepStrictEqual((yield* queries.accessOf(subject)).roles, []);
 
         const user = yield* commands.syncFromLogin(login(subject));
-        assert.deepStrictEqual(yield* queries.rolesOf(subject), ["normalUser"]);
+        assert.deepStrictEqual((yield* queries.accessOf(subject)).roles, [
+          "normalUser",
+        ]);
 
         // An operator grants admin; later logins neither duplicate
         // normalUser nor drop the granted role.
@@ -79,7 +52,7 @@ describe("UserCommands.syncFromLogin", () => {
           INSERT INTO user_roles (user_id, role) VALUES (${user.id}, 'admin')
         `;
         yield* commands.syncFromLogin(login(subject));
-        assert.deepStrictEqual(yield* queries.rolesOf(subject), [
+        assert.deepStrictEqual((yield* queries.accessOf(subject)).roles, [
           "admin",
           "normalUser",
         ]);
@@ -184,7 +157,8 @@ describe("UserCommands.syncFromLogin", () => {
                 }),
               ).pipe(Layer.provide(UserRepository.layer)),
             ),
-            Layer.provideMerge(Kernel),
+            Layer.provide([ModerationRepository.layer, Sessions.layer]),
+            Layer.provideMerge(KernelTest),
           ),
         ),
       ),

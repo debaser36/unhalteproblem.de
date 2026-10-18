@@ -1,250 +1,24 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Api } from "@unhalteproblem.de/api";
-import {
-  AccessToken,
-  BackchannelLogoutEvent,
-  IdToken,
-  type TokenResponse,
-} from "@unhalteproblem.de/oidc";
-import { Effect, Layer, Option, Redacted, Schema } from "effect";
-import { HttpRouter, HttpServer } from "effect/http";
-import { HttpApiBuilder } from "effect/http-api";
-import { SqlClient } from "effect/sql";
-import {
-  createLocalJWKSet,
-  exportJWK,
-  generateKeyPair,
-  type JWTPayload,
-  SignJWT,
-} from "jose";
-import { pkceChallenge } from "#auth/Secrets";
-import { DomainsLive } from "#domains/Domains";
+import { BackchannelLogoutEvent } from "@unhalteproblem.de/oidc";
+import { Effect, Option } from "effect";
+import type { JWTPayload } from "jose";
 import { UserQueries } from "#domains/users/UserQueries";
-import { LoginAttempts } from "#repositories/LoginAttempts";
-import { LogoutTokens } from "#repositories/LogoutTokens";
-import { LoginRateLimit } from "#services/LoginRateLimit";
-import { Sessions } from "#repositories/Sessions";
-import { ContactDelivery } from "#services/ContactDelivery";
-import { ContactRateLimit } from "#services/ContactRateLimit";
-import { CodeExchangeFailed, OidcProvider } from "#services/OidcProvider";
-import { TokenVerifier } from "#services/TokenVerifier";
-import { DatabaseTest } from "#testing/Database";
-import { AuthHandlers } from "./Auth.ts";
-import { AuthenticationLive } from "./Authentication.ts";
-import { ContactHandlers } from "./Contact.ts";
-import { SystemHandlers } from "./System.ts";
-
-// The defaults of PUBLIC_ORIGIN and the API URL, which the handlers use.
-const site = "https://unhalteproblem.de";
-const api = "http://backend.test";
-
-const issuer = "https://auth.example.org/realms/test";
-const clientId = "backend";
-
-const key = await generateKeyPair("RS256");
-const jwk = { ...(await exportJWK(key.publicKey)), kid: "k1", alg: "RS256" };
-
-const now = () => Math.floor(Date.now() / 1000);
-const sign = (payload: JWTPayload) =>
-  new SignJWT(payload)
-    .setProtectedHeader({ alg: "RS256", kid: "k1" })
-    .sign(key.privateKey);
-
-interface AppOptions {
-  /** Changes the nonce the provider puts into the ID token. */
-  readonly nonce?: (nonce: string) => string;
-  /** The ID token's `sid`; `null` leaves it out. */
-  readonly sid?: string | null;
-  /** Login starts allowed per client. */
-  readonly loginLimit?: number;
-}
-
-/**
- * Stands in for Keycloak: records the authentication requests and, on code
- * exchange, checks PKCE and issues an ID token for the login's nonce.
- */
-const makeProvider = (options: AppOptions) => {
-  const logins = new Map<string, { nonce: string; codeChallenge: string }>();
-  const provider = OidcProvider.of({
-    issuer,
-    redirectUri: `${api}/auth/callback`,
-    authorizationUrl: ({ state, nonce, codeChallenge, prompt }) =>
-      Effect.sync(() => {
-        logins.set(state, { nonce, codeChallenge });
-        const query = new URLSearchParams({ state });
-        if (prompt !== undefined) query.set("prompt", prompt);
-        return `${issuer}/auth?${query}`;
-      }),
-    exchangeCode: ({ code, codeVerifier }) =>
-      Effect.gen(function* () {
-        // The test uses the login's state as the code.
-        const login = logins.get(Redacted.value(code));
-        if (
-          login === undefined ||
-          pkceChallenge(Redacted.value(codeVerifier)) !== login.codeChallenge
-        ) {
-          return yield* new CodeExchangeFailed({ reason: "invalid_grant" });
-        }
-        const idToken = yield* Effect.promise(() =>
-          sign({
-            iss: issuer,
-            sub: "user-1",
-            aud: clientId,
-            iat: now(),
-            exp: now() + 300,
-            nonce: options.nonce?.(login.nonce) ?? login.nonce,
-            ...(options.sid === null
-              ? {}
-              : { sid: options.sid ?? "kc-session-1" }),
-            preferred_username: "ada",
-            email: "ada@example.org",
-            email_verified: true,
-          }),
-        );
-        const response: TokenResponse = {
-          access_token: yield* Schema.decodeEffect(AccessToken)("at").pipe(
-            Effect.orDie,
-          ),
-          token_type: "Bearer",
-          id_token: yield* Schema.decodeEffect(IdToken)(idToken).pipe(
-            Effect.orDie,
-          ),
-        };
-        return response;
-      }),
-    endSessionUrl: (idToken) =>
-      Effect.succeed(
-        `${issuer}/logout?hint=${idToken === undefined ? "none" : "id_token"}`,
-      ),
-  });
-  return provider;
-};
-
-/**
- * The backend's HTTP app with a fresh in-memory database, and the services
- * behind it (database, repositories, domains) for checking stored state.
- */
-const makeAppWithServices = Effect.fnUntraced(function* (
-  options: AppOptions = {},
-) {
-  const services = yield* Layer.build(
-    Layer.mergeAll(
-      LoginAttempts.layer,
-      Sessions.layer,
-      LogoutTokens.layer,
-      DomainsLive,
-    ).pipe(Layer.provideMerge(DatabaseTest)),
-  );
-  const repositories = Layer.succeedContext(services);
-  const handlers = Layer.mergeAll(
-    AuthHandlers,
-    SystemHandlers,
-    ContactHandlers,
-  ).pipe(
-    Layer.provide([
-      Layer.succeed(OidcProvider, makeProvider(options)),
-      TokenVerifier.layerWith({
-        issuer,
-        clientId,
-        keys: createLocalJWKSet({ keys: [jwk] }),
-      }),
-      LoginRateLimit.layerWith({
-        limit: options.loginLimit ?? 100,
-        globalLimit: 1000,
-        window: "1 hour",
-      }),
-      ContactDelivery.layerLog,
-      ContactRateLimit.layerWith({
-        limit: 5,
-        globalLimit: 5,
-        window: "1 hour",
-      }),
-    ]),
-    Layer.provideMerge(AuthenticationLive),
-    Layer.provideMerge(repositories),
-  );
-  const app = HttpApiBuilder.layer(Api).pipe(
-    Layer.provide(handlers),
-    Layer.provide(HttpServer.layerServices),
-  );
-  const { handler } = yield* Effect.acquireRelease(
-    Effect.sync(() => HttpRouter.toWebHandler(app, { disableLogger: true })),
-    ({ dispose }) => Effect.promise(dispose),
-  );
-  const request = (path: string, init?: RequestInit) =>
-    Effect.promise(() => handler(new Request(`${api}${path}`, init)));
-  return { request, services };
-});
-
-/** The backend's HTTP app with a fresh in-memory database. */
-const makeApp = (options: AppOptions = {}) =>
-  Effect.map(makeAppWithServices(options), ({ request }) => request);
-
-/** `name=value` of a `Set-Cookie` header, or undefined. */
-const setCookie = (response: Response, name: string) =>
-  response.headers
-    .getSetCookie()
-    .find((cookie) => cookie.startsWith(`${name}=`));
-
-const cookieValue = (response: Response, name: string) =>
-  setCookie(response, name)
-    ?.split(";")[0]
-    ?.slice(name.length + 1);
-
-/**
- * Runs `/auth/login` (or `/auth/register`) and returns the login cookie and
- * the state.
- */
-const startLogin = (
-  request: (path: string, init?: RequestInit) => Effect.Effect<Response>,
-  returnTo = "/blog/post?x=1",
-  endpoint: "login" | "register" = "login",
-) =>
-  Effect.gen(function* () {
-    const response = yield* request(
-      `/auth/${endpoint}?returnTo=${encodeURIComponent(returnTo)}`,
-    );
-    assert.strictEqual(response.status, 302);
-    const location = new URL(response.headers.get("location") ?? "");
-    const state = location.searchParams.get("state") ?? "";
-    const loginCookie = cookieValue(response, "__Host-login") ?? "";
-    return { response, state, loginCookie };
-  });
-
-const callback = (
-  request: (path: string, init?: RequestInit) => Effect.Effect<Response>,
-  query: Record<string, string>,
-  loginCookie: string | undefined,
-) =>
-  request(`/auth/callback?${new URLSearchParams(query)}`, {
-    headers:
-      loginCookie === undefined
-        ? {}
-        : { cookie: `__Host-login=${loginCookie}` },
-  });
-
-/** A complete login; returns the session cookie value. */
-const login = (
-  request: (path: string, init?: RequestInit) => Effect.Effect<Response>,
-) =>
-  Effect.gen(function* () {
-    const { state, loginCookie } = yield* startLogin(request);
-    const response = yield* callback(
-      request,
-      { code: state, state, iss: issuer },
-      loginCookie,
-    );
-    assert.strictEqual(response.status, 302);
-    return cookieValue(response, "__Host-session") ?? "";
-  });
-
-const session = (
-  request: (path: string, init?: RequestInit) => Effect.Effect<Response>,
-  sessionCookie: string,
-) =>
-  request("/auth/session", {
-    headers: { cookie: `__Host-session=${sessionCookie}` },
-  });
+import {
+  type AppRequest,
+  callback,
+  clientId,
+  cookieValue,
+  issuer,
+  login,
+  makeApp,
+  makeAppWithServices,
+  now,
+  session,
+  setCookie,
+  sign,
+  site,
+  startLogin,
+} from "#testing/App";
 
 describe("auth login flow", () => {
   it.effect("login redirects to the provider and sets the login cookie", () =>
@@ -605,22 +379,13 @@ describe("auth session", () => {
 
   it.effect("reads the roles on every request", () =>
     Effect.gen(function* () {
-      const { request, services } = yield* makeAppWithServices();
+      const { request, sql } = yield* makeAppWithServices();
       const sessionCookie = yield* login(request);
       const roles = Effect.gen(function* () {
         const info = yield* session(request, sessionCookie);
         const body = yield* Effect.promise(() => info.json());
         return body.user.roles;
       });
-      const sql = (
-        statement: (
-          sql: SqlClient.SqlClient,
-        ) => Effect.Effect<unknown, unknown>,
-      ) =>
-        Effect.flatMap(SqlClient.SqlClient, statement).pipe(
-          Effect.orDie,
-          Effect.provide(services),
-        );
       assert.deepStrictEqual(yield* roles, ["normalUser"]);
 
       // An operator grants and revokes; no new login needed.
@@ -703,10 +468,7 @@ describe("auth back-channel logout", () => {
       }),
     );
 
-  const post = (
-    request: (path: string, init?: RequestInit) => Effect.Effect<Response>,
-    token: string,
-  ) =>
+  const post = (request: AppRequest, token: string) =>
     request("/auth/backchannel-logout", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },

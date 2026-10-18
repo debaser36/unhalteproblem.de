@@ -3,7 +3,7 @@ import { Api } from "@unhalteproblem.de/api";
 import { Effect, Layer } from "effect";
 import { HttpServer } from "effect/http";
 import { HttpApiTest } from "effect/http-api";
-import { AuthenticationRejectAll } from "#testing/Authentication";
+import { MiddlewaresRejectAll } from "#testing/Authentication";
 import { SystemHandlers } from "./System.ts";
 
 const makeClient = HttpApiTest.groups(Api, ["system"]);
@@ -18,7 +18,7 @@ describe("system", () => {
         Layer.mergeAll(
           SystemHandlers,
           HttpServer.layerServices,
-          AuthenticationRejectAll,
+          MiddlewaresRejectAll,
         ),
       ),
     ),

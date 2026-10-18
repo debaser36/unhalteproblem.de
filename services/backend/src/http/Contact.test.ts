@@ -5,7 +5,7 @@ import { HttpServer } from "effect/http";
 import { HttpApiTest } from "effect/http-api";
 import { ContactDelivery } from "#services/ContactDelivery";
 import { ContactRateLimit } from "#services/ContactRateLimit";
-import { AuthenticationRejectAll } from "#testing/Authentication";
+import { MiddlewaresRejectAll } from "#testing/Authentication";
 import { ContactHandlers } from "./Contact.ts";
 
 const makeClient = HttpApiTest.groups(Api, ["contact"]);
@@ -36,7 +36,7 @@ const setup = (limit: number) => {
       ContactRateLimit.layerWith({ limit, globalLimit: 100, window: "1 hour" }),
     ]),
     Layer.merge(HttpServer.layerServices),
-    Layer.merge(AuthenticationRejectAll),
+    Layer.merge(MiddlewaresRejectAll),
   );
   return { delivered, layer };
 };
