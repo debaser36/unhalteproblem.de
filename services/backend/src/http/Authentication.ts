@@ -40,8 +40,9 @@ export const toSessionInfo = (
  * Resolves the `__Host-session` cookie to an unexpired session and provides
  * it as `CurrentUser`; anything else is `Unauthorized`.
  *
- * The roles are read on every request, not stored in the session, so a
- * granted or revoked role counts from the user's next request on.
+ * The roles and the restriction are read on every request, not stored in
+ * the session, so a granted or revoked role counts from the user's next
+ * request on, and a restricted user is refused at once.
  */
 export const AuthenticationLive = Layer.effect(
   Authentication,
@@ -59,11 +60,14 @@ export const AuthenticationLive = Layer.effect(
             // An unreachable database must not look like "logged out".
             .pipe(Effect.orDie);
           if (Option.isNone(session)) return yield* new Unauthorized();
-          const roles = yield* users.rolesOf(session.value.userId);
+          const access = yield* users.accessOf(session.value.userId);
+          // Restricting ends the sessions; this also covers one that
+          // was created concurrently or survived for any other reason.
+          if (access.restricted) return yield* new Unauthorized();
           return yield* Effect.provideService(
             httpEffect,
             CurrentUser,
-            toSessionInfo(session.value, roles),
+            toSessionInfo(session.value, access.roles),
           );
         }),
     });

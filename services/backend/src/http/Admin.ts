@@ -1,0 +1,111 @@
+import {
+  type AdminUser,
+  type AdminUserDetails,
+  Api,
+  type Restriction as RestrictionDto,
+  type RoleChange as RoleChangeDto,
+} from "@unhalteproblem.de/api";
+import { Effect, Option } from "effect";
+import { HttpEffect, HttpServerResponse } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
+import type { Restriction, RoleChange } from "#domains/users/Moderation";
+import { UserCommands } from "#domains/users/UserCommands";
+import {
+  type UserDetails,
+  type UserOverview,
+  UserQueries,
+} from "#domains/users/UserQueries";
+
+/** Personal data of other users: no cache may keep the response. */
+const noStore = <A, E, R>(self: Effect.Effect<A, E, R>) =>
+  HttpEffect.appendPreResponseHandler((_request, response) =>
+    Effect.succeed(
+      HttpServerResponse.setHeader(response, "cache-control", "no-store"),
+    ),
+  ).pipe(Effect.andThen(self));
+
+const toRestriction = (restriction: Restriction): RestrictionDto => ({
+  id: restriction.id,
+  note: restriction.note,
+  restrictedBy: Option.getOrNull(restriction.restrictedBy),
+  restrictedAt: restriction.restrictedAt,
+  liftedAt: Option.getOrNull(restriction.liftedAt),
+  liftedBy: Option.getOrNull(restriction.liftedBy),
+  liftNote: Option.getOrNull(restriction.liftNote),
+});
+
+const toRoleChange = (change: RoleChange): RoleChangeDto => ({
+  role: change.role,
+  change: change.change,
+  changedBy: Option.getOrNull(change.changedBy),
+  changedAt: change.changedAt,
+});
+
+const toAdminUser = ({
+  user,
+  roles,
+  restriction,
+}: UserOverview): AdminUser => ({
+  id: user.id,
+  subject: user.subject,
+  username: Option.getOrNull(user.username),
+  name: Option.getOrNull(user.name),
+  email: Option.getOrNull(user.email),
+  emailVerified: user.emailVerified,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+  lastLoginAt: user.lastLoginAt,
+  roles,
+  restriction: Option.getOrNull(Option.map(restriction, toRestriction)),
+});
+
+const toAdminUserDetails = (details: UserDetails): AdminUserDetails => ({
+  ...toAdminUser(details),
+  restrictions: details.restrictions.map(toRestriction),
+  roleChanges: details.roleChanges.map(toRoleChange),
+});
+
+/**
+ * The admin API. Each endpoint's `RequireRoles` middleware provides the
+ * proof its command or query requires, so the handlers only translate
+ * between the domain and the contract.
+ */
+export const AdminHandlers = HttpApiBuilder.group(
+  Api,
+  "admin",
+  Effect.fn(function* (handlers) {
+    const commands = yield* UserCommands;
+    const queries = yield* UserQueries;
+    return handlers
+      .handle("listUsers", ({ query }) =>
+        queries.listUsers(query).pipe(
+          noStore,
+          Effect.map(({ users, total }) => ({
+            users: users.map(toAdminUser),
+            total,
+          })),
+        ),
+      )
+      .handle("getUser", ({ params }) =>
+        queries
+          .getDetails(params.userId)
+          .pipe(Effect.map(toAdminUserDetails), noStore),
+      )
+      .handle("restrictUser", ({ params, payload }) =>
+        commands
+          .restrict(params.userId, payload.note)
+          .pipe(Effect.map(toRestriction)),
+      )
+      .handle("liftRestriction", ({ params, payload }) =>
+        commands
+          .liftRestriction(params.userId, Option.fromUndefinedOr(payload.note))
+          .pipe(Effect.map(toRestriction)),
+      )
+      .handle("grantRole", ({ params }) =>
+        commands.grantRole(params.userId, params.role),
+      )
+      .handle("revokeRole", ({ params }) =>
+        commands.revokeRole(params.userId, params.role),
+      );
+  }),
+);

@@ -3,7 +3,7 @@ import {
   CurrentUser,
   Forbidden,
   LoginErrorParam,
-  type LoginErrorReason,
+  LoginErrorReason,
   type LoginQuery,
   RateLimited,
   SessionCookie,
@@ -32,6 +32,7 @@ import {
 } from "#auth/Secrets";
 import { PublicUrlConfig, SessionConfig } from "#Config";
 import { UserCommands } from "#domains/users/UserCommands";
+import { UserQueries } from "#domains/users/UserQueries";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
 import { Sessions } from "#repositories/Sessions";
@@ -48,7 +49,7 @@ class LoginFailed extends Schema.TaggedError<
   LoginFailed,
   { readonly brand: unique symbol }
 >()("LoginFailed", {
-  reason: Schema.Literals(["cancelled", "expired", "failed"]),
+  reason: LoginErrorReason,
   detail: Schema.String,
 }) {}
 
@@ -69,6 +70,7 @@ export const AuthHandlers = HttpApiBuilder.group(
     const logoutTokens = yield* LogoutTokens;
     const loginRateLimit = yield* LoginRateLimit;
     const userCommands = yield* UserCommands;
+    const userQueries = yield* UserQueries;
     const sql = yield* SqlClient.SqlClient;
     const { origin } = yield* PublicUrlConfig;
     const { maxAge } = yield* SessionConfig;
@@ -189,6 +191,13 @@ export const AuthHandlers = HttpApiBuilder.group(
       // session without one could never be ended from Keycloak.
       if (claims.sid === undefined) {
         return yield* fail("failed", "ID token without sid");
+      }
+
+      // Keycloak still lets a restricted user log in; we don't. Checked
+      // before the sync, so a refused attempt isn't recorded as a login (a
+      // restricted user has always logged in before).
+      if ((yield* userQueries.accessOf(claims.sub)).restricted) {
+        return yield* fail("restricted", "account is restricted");
       }
 
       // Our copy of the user, created on the first login. Fails the login

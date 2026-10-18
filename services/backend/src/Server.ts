@@ -1,14 +1,17 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { Api } from "@unhalteproblem.de/api";
+import { Api, RequireAdmin, RequireSuperAdmin } from "@unhalteproblem.de/api";
 import { ByteSize, Effect, Layer, Logger } from "effect";
 import { HttpIncomingMessage, HttpRouter } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { createServer } from "node:http";
+import * as Authorization from "#auth/Authorization";
 import { LogFormat, ServerConfig } from "#Config";
 import { DomainsLive } from "#domains/Domains";
+import { AdminHandlers } from "#http/Admin";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
 import { ContactHandlers } from "#http/Contact";
+import { SameOriginLive } from "#http/SameOrigin";
 import { SystemHandlers } from "#http/System";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
@@ -22,16 +25,18 @@ import { OidcProvider } from "#services/OidcProvider";
 import { TokenVerifier } from "#services/TokenVerifier";
 
 // One database pool (and one migration run) shared by all repositories and
-// domains.
+// domains. The users domain ends sessions when it restricts a user.
 const Repositories = Layer.mergeAll(
   LoginAttempts.layer,
-  Sessions.layer,
   LogoutTokens.layer,
-  DomainsLive,
+  DomainsLive.pipe(Layer.provideMerge(Sessions.layer)),
 ).pipe(Layer.provideMerge(DatabaseLive));
 
 const AuthServices = Layer.mergeAll(
   AuthenticationLive,
+  SameOriginLive,
+  Authorization.middleware(RequireAdmin),
+  Authorization.middleware(RequireSuperAdmin),
   OidcProvider.layer,
   TokenVerifier.layer,
   AuthCleanup,
@@ -42,6 +47,7 @@ const Handlers = Layer.mergeAll(
   SystemHandlers,
   ContactHandlers,
   AuthHandlers,
+  AdminHandlers,
 ).pipe(
   Layer.provide([ContactDelivery.layerLog, ContactRateLimit.layer]),
   Layer.provideMerge(AuthServices),
