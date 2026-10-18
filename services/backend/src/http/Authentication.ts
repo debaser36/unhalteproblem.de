@@ -7,15 +7,14 @@ import {
 } from "@unhalteproblem.de/api";
 import { Effect, Layer, Option, Redacted } from "effect";
 import { hashSecret } from "#auth/Secrets";
-import { UserQueries } from "#domains/users/UserQueries";
-import { type Session, Sessions } from "#repositories/Sessions";
+import { type AuthenticatedSession, SessionAccess } from "#auth/SessionAccess";
 
 /**
  * What the website learns about a session (`GET /auth/session`): the
  * profile from the login, and the roles as they are now.
  */
 export const toSessionInfo = (
-  session: Session,
+  session: Pick<AuthenticatedSession, "userId" | "claims" | "expiresAt">,
   roles: ReadonlyArray<Role>,
 ): SessionInfo => {
   const { preferred_username, name, email, email_verified } = session.claims;
@@ -47,29 +46,27 @@ export const toSessionInfo = (
 export const AuthenticationLive = Layer.effect(
   Authentication,
   Effect.gen(function* () {
-    const sessions = yield* Sessions;
-    const users = yield* UserQueries;
+    const sessionAccess = yield* SessionAccess;
     return Authentication.of({
       session: (httpEffect, { credential }) =>
         Effect.gen(function* () {
           // A missing cookie arrives as an empty credential.
           const value = Redacted.value(credential);
           if (value === "") return yield* new Unauthorized();
-          const session = yield* sessions
+          const session = yield* sessionAccess
             .find(hashSecret(value))
             // An unreachable database must not look like "logged out".
             .pipe(Effect.orDie);
           if (Option.isNone(session)) return yield* new Unauthorized();
-          const access = yield* users.accessOf(session.value.userId);
           // Restricting ends the sessions; this also covers one that
           // was created concurrently or survived for any other reason.
-          if (access.restricted) return yield* new Unauthorized();
+          if (session.value.restricted) return yield* new Unauthorized();
           return yield* Effect.provideService(
             httpEffect,
             CurrentUser,
-            toSessionInfo(session.value, access.roles),
+            toSessionInfo(session.value, session.value.roles),
           );
         }),
     });
   }),
-);
+).pipe(Layer.provide(SessionAccess.layer));

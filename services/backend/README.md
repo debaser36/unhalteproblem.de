@@ -272,7 +272,8 @@ based on it unless `emailVerified` is true.
 Users have roles: `normalUser`, `admin` and `superAdmin` (`Role` in
 `@unhalteproblem.de/api`). They are flat, so no role includes another, and a
 user can hold several. Every user gets `normalUser` at registration. They are
-stored in `user_roles` and read on every authenticated request (into
+stored in `user_roles` and read on every authenticated request, in the same
+query as the session (`#auth/SessionAccess`; into
 `CurrentUser` and `GET /auth/session`), so a granted or revoked role counts
 from the user's next request.
 
