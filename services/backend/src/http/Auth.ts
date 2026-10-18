@@ -4,6 +4,7 @@ import {
   Forbidden,
   LoginErrorParam,
   type LoginErrorReason,
+  type LoginQuery,
   RateLimited,
   SessionCookie,
 } from "@unhalteproblem.de/api";
@@ -12,9 +13,14 @@ import {
   CodeVerifier,
   IdToken,
   OAuthBadRequest,
+  type PromptValue,
 } from "@unhalteproblem.de/oidc";
 import { DateTime, Effect, Option, Redacted, Schema } from "effect";
-import { HttpEffect, HttpServerResponse } from "effect/http";
+import {
+  HttpEffect,
+  type HttpServerRequest,
+  HttpServerResponse,
+} from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 import { cookieOptions, LoginCookie, LoginTimeout } from "#auth/Cookies";
@@ -66,6 +72,53 @@ export const AuthHandlers = HttpApiBuilder.group(
     const sql = yield* SqlClient.SqlClient;
     const { origin } = yield* PublicUrlConfig;
     const { maxAge } = yield* SessionConfig;
+
+    /**
+     * Starts the authorization code flow: stores the login attempt, sets the
+     * login cookie and redirects to the provider, which shows the login form
+     * or, with `prompt: "create"`, the registration form.
+     */
+    const startLogin = Effect.fn("auth.startLogin")(function* (
+      query: LoginQuery,
+      request: HttpServerRequest.HttpServerRequest,
+      prompt?: PromptValue,
+    ) {
+      yield* loginRateLimit
+        .consume(clientKey(request))
+        .pipe(
+          Effect.catchTag("LoginRateLimitExceeded", () =>
+            Effect.fail(new RateLimited()),
+          ),
+        );
+      const loginCookie = yield* randomSecret;
+      const state = yield* randomSecret;
+      const nonce = yield* randomSecret;
+      const codeVerifier = yield* randomSecret;
+      const now = yield* DateTime.now;
+      yield* loginAttempts
+        .create({
+          idHash: hashSecret(loginCookie),
+          state,
+          nonce,
+          codeVerifier,
+          returnTo: query.returnTo ?? "/",
+          expiresAt: DateTime.addDuration(now, LoginTimeout),
+        })
+        .pipe(Effect.orDie);
+      const url = yield* oidc.authorizationUrl({
+        state,
+        nonce,
+        codeChallenge: pkceChallenge(codeVerifier),
+        ...(prompt === undefined ? {} : { prompt }),
+      });
+      return HttpServerResponse.redirect(url, { status: 302 }).pipe(
+        noStore,
+        HttpServerResponse.setCookieUnsafe(LoginCookie, loginCookie, {
+          ...cookieOptions,
+          maxAge: LoginTimeout,
+        }),
+      );
+    });
 
     /**
      * Steps 1 to 4 of the callback: match it to the login attempt of this
@@ -177,195 +230,174 @@ export const AuthHandlers = HttpApiBuilder.group(
       return { sessionCookie, returnTo };
     });
 
-    return handlers
-      .handle("session", () =>
-        // Personal data that depends on the cookie: never cached.
-        HttpEffect.appendPreResponseHandler((_request, response) =>
-          Effect.succeed(noStore(response)),
-        ).pipe(Effect.andThen(Effect.service(CurrentUser))),
-      )
-
-      .handle("login", ({ query, request }) =>
-        Effect.gen(function* () {
-          yield* loginRateLimit
-            .consume(clientKey(request))
-            .pipe(
-              Effect.catchTag("LoginRateLimitExceeded", () =>
-                Effect.fail(new RateLimited()),
-              ),
-            );
-          const loginCookie = yield* randomSecret;
-          const state = yield* randomSecret;
-          const nonce = yield* randomSecret;
-          const codeVerifier = yield* randomSecret;
-          const now = yield* DateTime.now;
-          yield* loginAttempts
-            .create({
-              idHash: hashSecret(loginCookie),
-              state,
-              nonce,
-              codeVerifier,
-              returnTo: query.returnTo ?? "/",
-              expiresAt: DateTime.addDuration(now, LoginTimeout),
-            })
-            .pipe(Effect.orDie);
-          const url = yield* oidc.authorizationUrl({
-            state,
-            nonce,
-            codeChallenge: pkceChallenge(codeVerifier),
-          });
-          return HttpServerResponse.redirect(url, { status: 302 }).pipe(
-            noStore,
-            HttpServerResponse.setCookieUnsafe(LoginCookie, loginCookie, {
-              ...cookieOptions,
-              maxAge: LoginTimeout,
-            }),
-          );
-        }),
-      )
-
-      .handle("callback", ({ query, request }) =>
-        completeLogin(query, request.cookies[LoginCookie]).pipe(
-          Effect.flatMap(({ sessionCookie, returnTo }) =>
-            Effect.gen(function* () {
-              // A new session id on every login (no session fixation); the
-              // browser's previous session, if any, ends here.
-              const previous = request.cookies[SessionCookie];
-              if (previous !== undefined && previous !== "") {
-                yield* sessions.delete(hashSecret(previous)).pipe(Effect.orDie);
-              }
-              return HttpServerResponse.redirect(`${origin}${returnTo}`, {
-                status: 302,
-              }).pipe(
-                HttpServerResponse.setCookieUnsafe(
-                  SessionCookie,
-                  sessionCookie,
-                  { ...cookieOptions, maxAge },
-                ),
-              );
-            }),
-          ),
-          Effect.catchTag("LoginFailed", ({ reason, detail }) =>
-            Effect.logWarning("Login failed").pipe(
-              Effect.annotateLogs({ reason, detail }),
-              Effect.as(
-                HttpServerResponse.redirect(
-                  `${origin}/?${LoginErrorParam}=${reason}`,
-                  { status: 302 },
-                ),
-              ),
-            ),
-          ),
-          // The user is in the middle of a page navigation: an unexpected
-          // failure (e.g. the database) also ends on the website, not on a
-          // bare error page. The attempt is consumed either way.
-          Effect.catchDefect((defect) =>
-            Effect.logError("Login callback failed", defect).pipe(
-              Effect.as(
-                HttpServerResponse.redirect(
-                  `${origin}/?${LoginErrorParam}=failed`,
-                  { status: 302 },
-                ),
-              ),
-            ),
-          ),
-          Effect.map((response) =>
-            response.pipe(
-              noStore,
-              HttpServerResponse.expireCookieUnsafe(LoginCookie, cookieOptions),
-            ),
-          ),
-        ),
-      )
-
-      .handle("logout", ({ request }) =>
-        Effect.gen(function* () {
-          // CSRF: only the website itself may log the user out. Browsers
-          // send `Origin` on every POST; a missing one is refused too.
-          if (request.headers["origin"] !== origin) {
-            return yield* new Forbidden();
-          }
-          const cookie = request.cookies[SessionCookie];
-          const session =
-            cookie === undefined || cookie === ""
-              ? Option.none()
-              : yield* sessions.delete(hashSecret(cookie)).pipe(Effect.orDie);
-          // With the ID token as a hint Keycloak ends its session without
-          // asking; without one it shows a confirmation page.
-          const idToken = Option.isNone(session)
-            ? undefined
-            : yield* Schema.decodeEffect(IdToken)(
-                Redacted.value(session.value.idToken),
-              ).pipe(Effect.orDie);
-          const url = yield* oidc.endSessionUrl(idToken);
-          return HttpServerResponse.redirect(url, { status: 303 }).pipe(
-            noStore,
-            HttpServerResponse.expireCookieUnsafe(SessionCookie, cookieOptions),
-          );
-        }),
-      )
-
-      .handle("backchannelLogout", ({ payload }) =>
-        Effect.gen(function* () {
-          // Back-Channel Logout 1.0 §2.8, for success and error responses.
-          yield* HttpEffect.appendPreResponseHandler((_request, response) =>
+    return (
+      handlers
+        .handle("session", () =>
+          // Personal data that depends on the cookie: never cached.
+          HttpEffect.appendPreResponseHandler((_request, response) =>
             Effect.succeed(noStore(response)),
-          );
-          const claims = yield* verifier
-            .verifyLogoutToken(payload.logout_token)
-            .pipe(
-              Effect.catchTag("InvalidToken", (e) =>
-                Effect.logWarning("Rejected back-channel logout").pipe(
-                  Effect.annotateLogs({ detail: e.reason }),
-                  Effect.andThen(
-                    Effect.fail(
-                      new OAuthBadRequest({
-                        error: "invalid_request",
-                        error_description: "Invalid logout token",
-                      }),
-                    ),
+          ).pipe(Effect.andThen(Effect.service(CurrentUser))),
+        )
+
+        .handle("login", ({ query, request }) => startLogin(query, request))
+
+        // The same flow; Keycloak shows its registration form first and then
+        // returns to the callback like after a login.
+        .handle("register", ({ query, request }) =>
+          startLogin(query, request, "create"),
+        )
+
+        .handle("callback", ({ query, request }) =>
+          completeLogin(query, request.cookies[LoginCookie]).pipe(
+            Effect.flatMap(({ sessionCookie, returnTo }) =>
+              Effect.gen(function* () {
+                // A new session id on every login (no session fixation); the
+                // browser's previous session, if any, ends here.
+                const previous = request.cookies[SessionCookie];
+                if (previous !== undefined && previous !== "") {
+                  yield* sessions
+                    .delete(hashSecret(previous))
+                    .pipe(Effect.orDie);
+                }
+                return HttpServerResponse.redirect(`${origin}${returnTo}`, {
+                  status: 302,
+                }).pipe(
+                  HttpServerResponse.setCookieUnsafe(
+                    SessionCookie,
+                    sessionCookie,
+                    { ...cookieOptions, maxAge },
+                  ),
+                );
+              }),
+            ),
+            Effect.catchTag("LoginFailed", ({ reason, detail }) =>
+              Effect.logWarning("Login failed").pipe(
+                Effect.annotateLogs({ reason, detail }),
+                Effect.as(
+                  HttpServerResponse.redirect(
+                    `${origin}/?${LoginErrorParam}=${reason}`,
+                    { status: 302 },
                   ),
                 ),
               ),
+            ),
+            // The user is in the middle of a page navigation: an unexpected
+            // failure (e.g. the database) also ends on the website, not on a
+            // bare error page. The attempt is consumed either way.
+            Effect.catchDefect((defect) =>
+              Effect.logError("Login callback failed", defect).pipe(
+                Effect.as(
+                  HttpServerResponse.redirect(
+                    `${origin}/?${LoginErrorParam}=failed`,
+                    { status: 302 },
+                  ),
+                ),
+              ),
+            ),
+            Effect.map((response) =>
+              response.pipe(
+                noStore,
+                HttpServerResponse.expireCookieUnsafe(
+                  LoginCookie,
+                  cookieOptions,
+                ),
+              ),
+            ),
+          ),
+        )
+
+        .handle("logout", ({ request }) =>
+          Effect.gen(function* () {
+            // CSRF: only the website itself may log the user out. Browsers
+            // send `Origin` on every POST; a missing one is refused too.
+            if (request.headers["origin"] !== origin) {
+              return yield* new Forbidden();
+            }
+            const cookie = request.cookies[SessionCookie];
+            const session =
+              cookie === undefined || cookie === ""
+                ? Option.none()
+                : yield* sessions.delete(hashSecret(cookie)).pipe(Effect.orDie);
+            // With the ID token as a hint Keycloak ends its session without
+            // asking; without one it shows a confirmation page.
+            const idToken = Option.isNone(session)
+              ? undefined
+              : yield* Schema.decodeEffect(IdToken)(
+                  Redacted.value(session.value.idToken),
+                ).pipe(Effect.orDie);
+            const url = yield* oidc.endSessionUrl(idToken);
+            return HttpServerResponse.redirect(url, { status: 303 }).pipe(
+              noStore,
+              HttpServerResponse.expireCookieUnsafe(
+                SessionCookie,
+                cookieOptions,
+              ),
             );
-          // A replayed token is acknowledged but changes nothing: its
-          // sessions are already gone, and a `sub`-only token must not end
-          // sessions started after the original logout. The jti is kept as
-          // long as the verifier would still accept the token. Remembering
-          // and deleting are one transaction, so a failed delete does not
-          // leave the token marked as used (Keycloak can redeliver it).
-          const ended = yield* sql.withTransaction(
-            Effect.gen(function* () {
-              const fresh = yield* logoutTokens.remember(
-                claims.jti,
-                DateTime.makeUnsafe(
-                  (claims.exp + clockToleranceSeconds) * 1000,
+          }),
+        )
+
+        .handle("backchannelLogout", ({ payload }) =>
+          Effect.gen(function* () {
+            // Back-Channel Logout 1.0 §2.8, for success and error responses.
+            yield* HttpEffect.appendPreResponseHandler((_request, response) =>
+              Effect.succeed(noStore(response)),
+            );
+            const claims = yield* verifier
+              .verifyLogoutToken(payload.logout_token)
+              .pipe(
+                Effect.catchTag("InvalidToken", (e) =>
+                  Effect.logWarning("Rejected back-channel logout").pipe(
+                    Effect.annotateLogs({ detail: e.reason }),
+                    Effect.andThen(
+                      Effect.fail(
+                        new OAuthBadRequest({
+                          error: "invalid_request",
+                          error_description: "Invalid logout token",
+                        }),
+                      ),
+                    ),
+                  ),
                 ),
               );
-              if (!fresh) return Option.none<number>();
-              return Option.some(
-                claims.sid !== undefined
-                  ? yield* sessions.deleteByProviderSession(claims.sid)
-                  : claims.sub !== undefined
-                    ? yield* sessions.deleteByUser(claims.sub)
-                    : 0,
-              );
+            // A replayed token is acknowledged but changes nothing: its
+            // sessions are already gone, and a `sub`-only token must not end
+            // sessions started after the original logout. The jti is kept as
+            // long as the verifier would still accept the token. Remembering
+            // and deleting are one transaction, so a failed delete does not
+            // leave the token marked as used (Keycloak can redeliver it).
+            const ended = yield* sql.withTransaction(
+              Effect.gen(function* () {
+                const fresh = yield* logoutTokens.remember(
+                  claims.jti,
+                  DateTime.makeUnsafe(
+                    (claims.exp + clockToleranceSeconds) * 1000,
+                  ),
+                );
+                if (!fresh) return Option.none<number>();
+                return Option.some(
+                  claims.sid !== undefined
+                    ? yield* sessions.deleteByProviderSession(claims.sid)
+                    : claims.sub !== undefined
+                      ? yield* sessions.deleteByUser(claims.sub)
+                      : 0,
+                );
+              }),
+            );
+            if (Option.isNone(ended)) {
+              return yield* Effect.logWarning("Replayed logout token ignored");
+            }
+            yield* Effect.logInfo("Back-channel logout").pipe(
+              Effect.annotateLogs({ sessionsEnded: ended.value }),
+            );
+          }).pipe(
+            // Operational failures are 500s and errors in the log; only a
+            // rejected token is the provider's problem (400).
+            Effect.catchTags({
+              SqlError: Effect.die,
+              KeysUnavailable: Effect.die,
             }),
-          );
-          if (Option.isNone(ended)) {
-            return yield* Effect.logWarning("Replayed logout token ignored");
-          }
-          yield* Effect.logInfo("Back-channel logout").pipe(
-            Effect.annotateLogs({ sessionsEnded: ended.value }),
-          );
-        }).pipe(
-          // Operational failures are 500s and errors in the log; only a
-          // rejected token is the provider's problem (400).
-          Effect.catchTags({
-            SqlError: Effect.die,
-            KeysUnavailable: Effect.die,
-          }),
-        ),
-      );
+          ),
+        )
+    );
   }),
 );

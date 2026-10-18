@@ -67,10 +67,12 @@ const makeProvider = (options: AppOptions) => {
   const provider = OidcProvider.of({
     issuer,
     redirectUri: `${api}/auth/callback`,
-    authorizationUrl: ({ state, nonce, codeChallenge }) =>
+    authorizationUrl: ({ state, nonce, codeChallenge, prompt }) =>
       Effect.sync(() => {
         logins.set(state, { nonce, codeChallenge });
-        return `${issuer}/auth?state=${state}`;
+        const query = new URLSearchParams({ state });
+        if (prompt !== undefined) query.set("prompt", prompt);
+        return `${issuer}/auth?${query}`;
       }),
     exchangeCode: ({ code, codeVerifier }) =>
       Effect.gen(function* () {
@@ -188,14 +190,18 @@ const cookieValue = (response: Response, name: string) =>
     ?.split(";")[0]
     ?.slice(name.length + 1);
 
-/** Runs `/auth/login` and returns the login cookie and the state. */
+/**
+ * Runs `/auth/login` (or `/auth/register`) and returns the login cookie and
+ * the state.
+ */
 const startLogin = (
   request: (path: string, init?: RequestInit) => Effect.Effect<Response>,
   returnTo = "/blog/post?x=1",
+  endpoint: "login" | "register" = "login",
 ) =>
   Effect.gen(function* () {
     const response = yield* request(
-      `/auth/login?returnTo=${encodeURIComponent(returnTo)}`,
+      `/auth/${endpoint}?returnTo=${encodeURIComponent(returnTo)}`,
     );
     assert.strictEqual(response.status, 302);
     const location = new URL(response.headers.get("location") ?? "");
@@ -430,6 +436,80 @@ describe("auth login flow", () => {
         `${site}/?login_error=failed`,
       );
       assert.isUndefined(setCookie(response, "__Host-session"));
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("auth registration", () => {
+  it.effect("register asks the provider for its registration form", () =>
+    Effect.gen(function* () {
+      const request = yield* makeApp();
+      const { response, loginCookie } = yield* startLogin(
+        request,
+        "/",
+        "register",
+      );
+      const location = new URL(response.headers.get("location") ?? "");
+      assert.strictEqual(location.searchParams.get("prompt"), "create");
+      assert.isAbove(loginCookie.length, 40);
+      assert.strictEqual(response.headers.get("cache-control"), "no-store");
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("login does not ask for the registration form", () =>
+    Effect.gen(function* () {
+      const request = yield* makeApp();
+      const { response } = yield* startLogin(request);
+      const location = new URL(response.headers.get("location") ?? "");
+      assert.isNull(location.searchParams.get("prompt"));
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("a registration ends in a session like a login", () =>
+    Effect.gen(function* () {
+      const { request, services } = yield* makeAppWithServices();
+      const { state, loginCookie } = yield* startLogin(
+        request,
+        "/welcome",
+        "register",
+      );
+      const response = yield* callback(
+        request,
+        { code: state, state, iss: issuer },
+        loginCookie,
+      );
+      assert.strictEqual(response.headers.get("location"), `${site}/welcome`);
+      const info = yield* session(
+        request,
+        cookieValue(response, "__Host-session") ?? "",
+      );
+      assert.strictEqual(info.status, 200);
+      const user = yield* Effect.gen(function* () {
+        const queries = yield* UserQueries;
+        return yield* queries.findBySubject("user-1");
+      }).pipe(Effect.provide(services));
+      assert.isTrue(Option.isSome(user));
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("rejects an open redirect as returnTo", () =>
+    Effect.gen(function* () {
+      const request = yield* makeApp();
+      const response = yield* request(
+        `/auth/register?returnTo=${encodeURIComponent("//evil.example")}`,
+      );
+      assert.strictEqual(response.status, 400);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("shares the rate limit with login", () =>
+    Effect.gen(function* () {
+      const request = yield* makeApp({ loginLimit: 1 });
+      assert.strictEqual((yield* request("/auth/login")).status, 302);
+      const limited = yield* request("/auth/register");
+      assert.strictEqual(limited.status, 429);
+      // Refused before anything is stored or handed out.
+      assert.isUndefined(setCookie(limited, "__Host-login"));
     }).pipe(Effect.scoped),
   );
 });

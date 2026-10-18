@@ -4,6 +4,7 @@ import {
   type IdToken,
   layerClientSecretBasic,
   OidcApi,
+  type PromptValue,
   type TokenResponse,
 } from "@unhalteproblem.de/oidc";
 import { Context, Effect, Layer, Schema } from "effect";
@@ -34,11 +35,16 @@ export class OidcProvider extends Context.Service<
     readonly issuer: string;
     /** Where Keycloak sends the browser back to: `<api>/auth/callback`. */
     readonly redirectUri: string;
-    /** The authentication request URL for a new login attempt. */
+    /**
+     * The authentication request URL for a new login attempt. `prompt:
+     * "create"` opens the provider's registration form instead of the login
+     * form; the flow continues the same way afterwards.
+     */
     readonly authorizationUrl: (request: {
       readonly state: string;
       readonly nonce: string;
       readonly codeChallenge: string;
+      readonly prompt?: PromptValue;
     }) => Effect.Effect<string>;
     /** Redeems an authorization code with this client's credentials. */
     readonly exchangeCode: (request: {
@@ -95,7 +101,7 @@ export class OidcProvider extends Context.Service<
         redirectUri,
         // The query schemas are checked when encoding, which only fails for
         // values this code never produces; such a failure is a defect.
-        authorizationUrl: ({ state, nonce, codeChallenge }) =>
+        authorizationUrl: ({ state, nonce, codeChallenge, prompt }) =>
           Effect.sync(() =>
             urls.browser.authorize({
               query: {
@@ -107,6 +113,7 @@ export class OidcProvider extends Context.Service<
                 nonce,
                 code_challenge: codeChallenge,
                 code_challenge_method: "S256",
+                ...(prompt === undefined ? {} : { prompt: [prompt] }),
               },
             }),
           ),
