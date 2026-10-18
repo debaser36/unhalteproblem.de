@@ -41,37 +41,47 @@ export const CurrentUnitOfWork = Context.Reference<UnitOfWork | undefined>(
 );
 
 /**
- * Records events in the current transaction. They are published once the
- * outermost transaction has committed, and dropped if it (or the savepoint
- * they were recorded in) rolls back.
+ * The unit of work the caller is running in, for things that must happen
+ * in the same transaction as a command (`record`, `Outbox.enqueue`).
  *
- * Recording where the events could get lost or outlive a rollback is a bug,
- * so it dies: outside a `Transaction.run` (a command that forgot its
- * boundary), after the run ended (a fiber that outlived its command), or
- * inside a `sql.withTransaction` that `Transaction` didn't open.
+ * Doing them anywhere else is a bug, so it dies: outside a
+ * `Transaction.run` (a command that forgot its boundary), after the run
+ * ended (a fiber that outlived its command), or inside a
+ * `sql.withTransaction` that `Transaction` didn't open, where the work could
+ * get lost or outlive a rollback.
+ *
+ * `action` starts the error message, e.g. "Recording domain events".
  */
-export const record = Effect.fnUntraced(function* (
-  ...events: ReadonlyArray<DomainEvent>
-) {
+export const requireUnitOfWork = Effect.fnUntraced(function* (action: string) {
   const unit = yield* CurrentUnitOfWork;
   if (unit === undefined) {
     return yield* Effect.die(
-      new Error("Domain events can only be recorded inside a transaction"),
+      new Error(`${action} is only possible inside a transaction`),
     );
   }
   if (!unit.open) {
     return yield* Effect.die(
-      new Error("Domain events recorded after their transaction ended"),
+      new Error(`${action} after their transaction ended`),
     );
   }
   const depth = yield* unit.currentDepth;
   if (depth._tag === "None" || depth.value !== unit.depth) {
     return yield* Effect.die(
-      new Error(
-        "Domain events recorded inside a sql.withTransaction; use Transaction.run",
-      ),
+      new Error(`${action} inside a sql.withTransaction; use Transaction.run`),
     );
   }
+  return unit;
+});
+
+/**
+ * Records events in the current transaction. They are published once the
+ * outermost transaction has committed, and dropped if it (or the savepoint
+ * they were recorded in) rolls back. Dies where `requireUnitOfWork` does.
+ */
+export const record = Effect.fnUntraced(function* (
+  ...events: ReadonlyArray<DomainEvent>
+) {
+  const unit = yield* requireUnitOfWork("Recording domain events");
   unit.events.push(...events);
 });
 
