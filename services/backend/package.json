@@ -30,7 +30,8 @@
     "@unhalteproblem.de/api": "workspace:*",
     "@unhalteproblem.de/oidc": "workspace:*",
     "effect": "catalog:",
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "nodemailer": "^10.1.2"
   },
   "devDependencies": {
     "@effect/sql-pglite": "catalog:",
@@ -38,6 +39,7 @@
     "@effect/vitest": "catalog:",
     "@types/emscripten": "^1.41.6",
     "@types/node": "catalog:",
+    "@types/nodemailer": "^8.0.2",
     "@unhalteproblem.de/tsconfig": "workspace:*",
     "oxlint": "catalog:",
     "rolldown": "^1.2.13",
