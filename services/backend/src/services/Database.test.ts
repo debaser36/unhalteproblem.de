@@ -246,7 +246,8 @@ describe("DatabaseTest", () => {
           ],
         );
 
-        // Only the indexes backing the primary key and the unique subject.
+        // The indexes backing the primary key and the unique subject, and
+        // the one for the admin user list (see the next tests).
         const indexes = yield* sql<{ readonly indexname: string }>`
           SELECT indexname FROM pg_indexes
           WHERE schemaname = 'public' AND tablename = 'users'
@@ -254,8 +255,45 @@ describe("DatabaseTest", () => {
         `;
         assert.deepStrictEqual(
           indexes.map((i) => i.indexname),
-          ["users_id_pkey", "users_subject_key"],
+          ["users_created_at_id_idx", "users_id_pkey", "users_subject_key"],
         );
+      }),
+    );
+
+    it.effect("indexes users by created_at and id for the admin list", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        assert.deepStrictEqual(yield* describeIndexes(sql, "users"), [
+          "CREATE INDEX users_created_at_id_idx ON public.users USING btree (created_at, id)",
+          "CREATE UNIQUE INDEX users_id_pkey ON public.users USING btree (id)",
+          "CREATE UNIQUE INDEX users_subject_key ON public.users USING btree (subject)",
+        ]);
+      }),
+    );
+
+    it.effect("uses the users index to page by keyset", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // The table is tiny, so the planner would prefer a sequential scan.
+        const plan = yield* sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`SET LOCAL enable_seqscan = off`;
+            return yield* sql<Record<string, string>>`
+              EXPLAIN
+              SELECT * FROM users
+              WHERE (created_at, id) > (
+                ${"2026-01-01T00:00:00Z"}::timestamptz,
+                ${"00000000-0000-4000-8000-000000000000"}::uuid
+              )
+              ORDER BY created_at, id
+              LIMIT 10
+            `;
+          }),
+        );
+        const text = plan.flatMap((row) => Object.values(row)).join("\n");
+        assert.include(text, "users_created_at_id_idx");
+        // The index delivers the order: no separate sort step.
+        assert.notInclude(text, "Sort");
       }),
     );
 
