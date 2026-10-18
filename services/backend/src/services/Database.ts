@@ -4,7 +4,7 @@ import {
   NodePath,
 } from "@effect/platform-node";
 import { PgClient, PgMigrator } from "@effect/sql-pg";
-import { Config, Layer, String as Str } from "effect";
+import { Config, Duration, Layer, String as Str } from "effect";
 import { DatabaseConfig } from "#Config";
 import createAuthTables from "#migrations/0001_create_auth_tables";
 import createUsers from "#migrations/0002_create_users";
@@ -44,10 +44,17 @@ export const clientOptions = {
 
 const PgLive = PgClient.layerConfig(
   DatabaseConfig.pipe(
-    Config.map((config) => ({
+    Config.map(({ statementTimeout, ...config }) => ({
       ...config,
       ...clientOptions,
       applicationName: "unhalteproblem-backend",
+      // Session defaults, sent when a connection is opened. A transaction
+      // left open (a stuck fiber, a lost client) would otherwise hold its
+      // locks and its pooled connection until Postgres notices the socket.
+      startupParameters: {
+        statement_timeout: String(Duration.toMillis(statementTimeout)),
+        idle_in_transaction_session_timeout: "60000",
+      },
     })),
   ),
 );

@@ -16,27 +16,33 @@ Contact messages are only logged for now.
 
 ## Environment
 
-| Variable                    | Default                                                     | Meaning                                                                                                 |
-| --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `PORT`                      | `3000`                                                      | Port to listen on                                                                                       |
-| `HOST`                      | `127.0.0.1`                                                 | Interface to bind; the container sets `0.0.0.0`                                                         |
-| `LOG_FORMAT`                | `pretty`                                                    | `pretty` or `json`; the container sets `json`                                                           |
-| `CONTACT_RATE_LIMIT`        | `5`                                                         | Contact messages per client and window (must be > 0)                                                    |
-| `CONTACT_RATE_LIMIT_GLOBAL` | `100`                                                       | Contact messages from all clients together per window (must be > 0)                                     |
-| `CONTACT_RATE_LIMIT_WINDOW` | `1 hour`                                                    | Length of that window as an Effect duration, e.g. `10 minutes` (must be > 0)                            |
-| `POSTGRES_HOST`             | `localhost`                                                 | Postgres host                                                                                           |
-| `POSTGRES_PORT`             | `5432`                                                      | Postgres port                                                                                           |
-| `POSTGRES_DB`               | `unhalteproblem`                                            | Database name (must exist)                                                                              |
-| `POSTGRES_USER`             | `unhalteproblem`                                            | Database user                                                                                           |
-| `POSTGRES_PASSWORD`         | unset                                                       | Database password; set it through an environment file, never in the Nix store                           |
-| `OIDC_ISSUER`               | `https://auth.unhalteproblem.de/realms/unhalteproblem-main` | Keycloak realm URL, exactly as Keycloak reports it as `issuer`                                          |
-| `OIDC_CLIENT_ID`            | `unhalteproblem-backend`                                    | This backend's client id in that realm                                                                  |
-| `OIDC_CLIENT_SECRET`        | required                                                    | The client's secret; set it through an environment file, never in the Nix store                         |
-| `PUBLIC_ORIGIN`             | `https://unhalteproblem.de`                                 | Origin of the website: login return target, post-logout target, allowed `Origin` of `POST /auth/logout` |
-| `PUBLIC_API_URL`            | `<PUBLIC_ORIGIN>/api`                                       | Public URL of this backend; the login callback is `<PUBLIC_API_URL>/auth/callback`                      |
-| `SESSION_MAX_AGE`           | `8 hours`                                                   | How long a login lasts, as an Effect duration (must be > 0)                                             |
+| Variable                     | Default                                                     | Meaning                                                                                                 |
+| ---------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `PORT`                       | `3000`                                                      | Port to listen on                                                                                       |
+| `HOST`                       | `127.0.0.1`                                                 | Interface to bind; the container sets `0.0.0.0`                                                         |
+| `LOG_FORMAT`                 | `pretty`                                                    | `pretty` or `json`; the container sets `json`                                                           |
+| `CONTACT_RATE_LIMIT`         | `5`                                                         | Contact messages per client and window (must be > 0)                                                    |
+| `CONTACT_RATE_LIMIT_GLOBAL`  | `100`                                                       | Contact messages from all clients together per window (must be > 0)                                     |
+| `CONTACT_RATE_LIMIT_WINDOW`  | `1 hour`                                                    | Length of that window as an Effect duration, e.g. `10 minutes` (must be > 0)                            |
+| `POSTGRES_HOST`              | `localhost`                                                 | Postgres host                                                                                           |
+| `POSTGRES_PORT`              | `5432`                                                      | Postgres port                                                                                           |
+| `POSTGRES_DB`                | `unhalteproblem`                                            | Database name (must exist)                                                                              |
+| `POSTGRES_USER`              | `unhalteproblem`                                            | Database user                                                                                           |
+| `POSTGRES_PASSWORD`          | unset                                                       | Database password; set it through an environment file, never in the Nix store                           |
+| `POSTGRES_MAX_CONNECTIONS`   | `10`                                                        | Size of the connection pool (must be > 0)                                                               |
+| `POSTGRES_CONNECT_TIMEOUT`   | `5 seconds`                                                 | How long opening a connection may take, as an Effect duration (must be > 0)                             |
+| `POSTGRES_STATEMENT_TIMEOUT` | `30 seconds`                                                | Postgres cancels any statement that runs longer, migrations included (must be > 0)                      |
+| `OIDC_ISSUER`                | `https://auth.unhalteproblem.de/realms/unhalteproblem-main` | Keycloak realm URL, exactly as Keycloak reports it as `issuer`                                          |
+| `OIDC_CLIENT_ID`             | `unhalteproblem-backend`                                    | This backend's client id in that realm                                                                  |
+| `OIDC_CLIENT_SECRET`         | required                                                    | The client's secret; set it through an environment file, never in the Nix store                         |
+| `PUBLIC_ORIGIN`              | `https://unhalteproblem.de`                                 | Origin of the website: login return target, post-logout target, allowed `Origin` of `POST /auth/logout` |
+| `PUBLIC_API_URL`             | `<PUBLIC_ORIGIN>/api`                                       | Public URL of this backend; the login callback is `<PUBLIC_API_URL>/auth/callback`                      |
+| `SESSION_MAX_AGE`            | `8 hours`                                                   | How long a login lasts, as an Effect duration (must be > 0)                                             |
 
 Invalid values stop the service at startup instead of being ignored.
+
+Every connection also gets `idle_in_transaction_session_timeout = 60s`, so a
+transaction that is left open releases its locks and its pooled connection.
 
 ## Database
 

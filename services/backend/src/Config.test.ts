@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Exit } from "effect";
-import { OidcConfig, PublicUrlConfig } from "./Config.ts";
+import { ConfigProvider, Duration, Effect, Exit } from "effect";
+import { DatabaseConfig, OidcConfig, PublicUrlConfig } from "./Config.ts";
 
 const load = <A, E>(config: Effect.Effect<A, E>, env: Record<string, string>) =>
   config.pipe(
@@ -75,6 +75,34 @@ describe("PublicUrlConfig", () => {
         PUBLIC_ORIGIN: "https://unhalteproblem.de/blog",
       });
       assert.isTrue(Exit.isFailure(exit));
+    }),
+  );
+});
+
+describe("DatabaseConfig", () => {
+  it.effect("has working defaults", () =>
+    Effect.gen(function* () {
+      const exit = yield* load(DatabaseConfig, {});
+      assert.isTrue(Exit.isSuccess(exit));
+      if (Exit.isSuccess(exit)) {
+        assert.strictEqual(exit.value.maxConnections, 10);
+        assert.strictEqual(
+          Duration.toMillis(exit.value.statementTimeout),
+          30_000,
+        );
+        assert.strictEqual(Duration.toMillis(exit.value.connectTimeout), 5_000);
+      }
+    }),
+  );
+
+  it.effect.each([
+    { POSTGRES_MAX_CONNECTIONS: "0" },
+    { POSTGRES_MAX_CONNECTIONS: "many" },
+    { POSTGRES_STATEMENT_TIMEOUT: "0 seconds" },
+    { POSTGRES_CONNECT_TIMEOUT: "soon" },
+  ])("rejects %o", (env) =>
+    Effect.gen(function* () {
+      assert.isTrue(Exit.isFailure(yield* load(DatabaseConfig, env)));
     }),
   );
 });

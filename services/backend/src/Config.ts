@@ -44,7 +44,7 @@ export const ContactRateLimitConfig = Config.all({
 });
 
 /**
- * The Postgres database (sessions and login state). Set
+ * The Postgres database (sessions, users and the outbox). Set
  * `POSTGRES_PASSWORD` through an environment file, never in the Nix store.
  */
 export const DatabaseConfig = Config.all({
@@ -61,6 +61,20 @@ export const DatabaseConfig = Config.all({
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
+  maxConnections: Config.schema(PositiveInt, "POSTGRES_MAX_CONNECTIONS").pipe(
+    Config.withDefault(10),
+  ),
+  connectTimeout: Config.schema(
+    PositiveDuration,
+    "POSTGRES_CONNECT_TIMEOUT",
+  ).pipe(Config.withDefault(Duration.seconds(5))),
+  // Enforced by Postgres for every statement of this service, so a runaway
+  // query can't hold a pooled connection forever. It applies to migrations
+  // too: raise it for a deploy that runs a slow one.
+  statementTimeout: Config.schema(
+    PositiveDuration,
+    "POSTGRES_STATEMENT_TIMEOUT",
+  ).pipe(Config.withDefault(Duration.seconds(30))),
 });
 
 // Absolute http(s) URL without query or fragment, kept as a string because
