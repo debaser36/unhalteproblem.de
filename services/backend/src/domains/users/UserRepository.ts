@@ -1,5 +1,15 @@
+import { Role } from "@unhalteproblem.de/api";
 import type { Subject } from "@unhalteproblem.de/oidc";
-import { Cause, Context, Effect, Layer, Option, Schema } from "effect";
+import {
+  Array as Arr,
+  Cause,
+  Context,
+  type DateTime,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+} from "effect";
 import { SqlClient, type SqlError, SqlModel, SqlSchema } from "effect/sql";
 import { dieOnSchemaError } from "#repositories/Sql";
 import { User, type UserId } from "./User.ts";
@@ -28,6 +38,30 @@ const make = Effect.gen(function* () {
       INSERT INTO users ${sql.insert(row)}
       ON CONFLICT (subject) DO NOTHING
       RETURNING id
+    `,
+  });
+
+  const rolesOf = SqlSchema.findAll({
+    Request: Schema.Struct({ subject: Schema.String }),
+    Result: Schema.Struct({ role: Role }),
+    execute: ({ subject }) => sql`
+      SELECT r.role FROM users u
+      JOIN user_roles r ON r.user_id = u.id
+      WHERE u.subject = ${subject}
+      ORDER BY r.role
+    `,
+  });
+
+  const grantRoles = SqlSchema.void({
+    Request: Schema.Struct({
+      userId: Schema.String,
+      roles: Schema.NonEmptyArray(Role),
+      grantedAt: Schema.DateTimeUtcFromDate,
+    }),
+    execute: ({ userId, roles, grantedAt }) => sql`
+      INSERT INTO user_roles
+      ${sql.insert(roles.map((role) => ({ userId, role, grantedAt })))}
+      ON CONFLICT (user_id, role) DO NOTHING
     `,
   });
 
@@ -60,6 +94,21 @@ const make = Effect.gen(function* () {
 
     update: (user) =>
       repository.updateVoid(User.update.make(user)).pipe(dieOnSchemaError),
+
+    rolesOf: (subject) =>
+      rolesOf({ subject }).pipe(
+        Effect.map(Arr.map(({ role }) => role)),
+        dieOnSchemaError,
+        Effect.withSpan("UserRepository.rolesOf"),
+      ),
+
+    grantRoles: (userId, roles, grantedAt) =>
+      Arr.isReadonlyArrayNonEmpty(roles)
+        ? grantRoles({ userId, roles, grantedAt }).pipe(
+            dieOnSchemaError,
+            Effect.withSpan("UserRepository.grantRoles"),
+          )
+        : Effect.void,
   });
 });
 
@@ -95,6 +144,19 @@ export class UserRepository extends Context.Service<
     ) => Effect.Effect<boolean, SqlError.SqlError>;
     /** Stores the user's changeable fields (all but subject and createdAt). */
     readonly update: (user: User) => Effect.Effect<void, SqlError.SqlError>;
+    /**
+     * The roles of the user with this subject, sorted; empty for an unknown
+     * subject.
+     */
+    readonly rolesOf: (
+      subject: typeof Subject.Type,
+    ) => Effect.Effect<ReadonlyArray<Role>, SqlError.SqlError>;
+    /** Grants the roles; ones the user already has are left as they are. */
+    readonly grantRoles: (
+      userId: UserId,
+      roles: ReadonlyArray<Role>,
+      grantedAt: DateTime.Utc,
+    ) => Effect.Effect<void, SqlError.SqlError>;
   }
 >()("@unhalteproblem.de/backend/domains/users/UserRepository") {
   /** Needs a migrated `SqlClient`. */

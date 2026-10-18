@@ -62,6 +62,30 @@ describe("UserCommands.syncFromLogin", () => {
       }),
     );
 
+    it.effect("grants normalUser at registration and keeps granted roles", () =>
+      Effect.gen(function* () {
+        const commands = yield* UserCommands;
+        const queries = yield* UserQueries;
+        const sql = yield* SqlClient.SqlClient;
+        const subject = crypto.randomUUID();
+        assert.deepStrictEqual(yield* queries.rolesOf(subject), []);
+
+        const user = yield* commands.syncFromLogin(login(subject));
+        assert.deepStrictEqual(yield* queries.rolesOf(subject), ["normalUser"]);
+
+        // An operator grants admin; later logins neither duplicate
+        // normalUser nor drop the granted role.
+        yield* sql`
+          INSERT INTO user_roles (user_id, role) VALUES (${user.id}, 'admin')
+        `;
+        yield* commands.syncFromLogin(login(subject));
+        assert.deepStrictEqual(yield* queries.rolesOf(subject), [
+          "admin",
+          "normalUser",
+        ]);
+      }),
+    );
+
     it.effect("updates the profile and last login on later logins", () =>
       Effect.gen(function* () {
         const commands = yield* UserCommands;

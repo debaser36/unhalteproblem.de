@@ -9,6 +9,7 @@ import {
 import { Effect, Layer, Option, Redacted, Schema } from "effect";
 import { HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
+import { SqlClient } from "effect/sql";
 import {
   createLocalJWKSet,
   exportJWK,
@@ -313,6 +314,7 @@ describe("auth login flow", () => {
           username: "ada",
           email: "ada@example.org",
           emailVerified: true,
+          roles: ["normalUser"],
         },
       });
     }).pipe(Effect.scoped),
@@ -599,6 +601,39 @@ describe("auth session", () => {
         });
         assert.strictEqual(response.status, 401);
       }).pipe(Effect.scoped),
+  );
+
+  it.effect("reads the roles on every request", () =>
+    Effect.gen(function* () {
+      const { request, services } = yield* makeAppWithServices();
+      const sessionCookie = yield* login(request);
+      const roles = Effect.gen(function* () {
+        const info = yield* session(request, sessionCookie);
+        const body = yield* Effect.promise(() => info.json());
+        return body.user.roles;
+      });
+      const sql = (
+        statement: (
+          sql: SqlClient.SqlClient,
+        ) => Effect.Effect<unknown, unknown>,
+      ) =>
+        Effect.flatMap(SqlClient.SqlClient, statement).pipe(
+          Effect.orDie,
+          Effect.provide(services),
+        );
+      assert.deepStrictEqual(yield* roles, ["normalUser"]);
+
+      // An operator grants and revokes; no new login needed.
+      yield* sql(
+        (sql) => sql`
+          INSERT INTO user_roles (user_id, role)
+          SELECT id, 'admin' FROM users WHERE subject = 'user-1'
+        `,
+      );
+      assert.deepStrictEqual(yield* roles, ["admin", "normalUser"]);
+      yield* sql((sql) => sql`DELETE FROM user_roles WHERE role = 'admin'`);
+      assert.deepStrictEqual(yield* roles, ["normalUser"]);
+    }).pipe(Effect.scoped),
   );
 });
 

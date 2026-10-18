@@ -24,12 +24,13 @@ const registered = register({ id, subject: "kc-1", profile, now: t0 }).user;
 
 describe("User", () => {
   it("registers a user with the profile and the time of the first login", () => {
-    const { user, events } = register({
+    const { user, roles, events } = register({
       id,
       subject: "kc-1",
       profile,
       now: t0,
     });
+    assert.deepStrictEqual(roles, ["normalUser"]);
     assert.strictEqual(user.id, id);
     assert.strictEqual(user.subject, "kc-1");
     assert.deepStrictEqual(user.username, Option.some("ada"));

@@ -1,3 +1,4 @@
+import type { Role } from "@unhalteproblem.de/api";
 import { Subject } from "@unhalteproblem.de/oidc";
 import {
   Array as Arr,
@@ -82,13 +83,23 @@ export class UserNotFound extends Schema.TaggedError<
 // Rules. Pure functions from the current state to the new state and the
 // events describing the change; the commands load, apply and store.
 
+/**
+ * The roles every user gets at registration. More are granted by an
+ * operator (see the backend README, section "Authorization").
+ */
+export const initialRoles: ReadonlyArray<Role> = ["normalUser"];
+
 /** The user for a subject that logs in for the first time. */
 export const register = (input: {
   readonly id: UserId;
   readonly subject: typeof Subject.Type;
   readonly profile: UserProfile;
   readonly now: DateTime.Utc;
-}): { readonly user: User; readonly events: ReadonlyArray<UserEvent> } => ({
+}): {
+  readonly user: User;
+  readonly roles: ReadonlyArray<Role>;
+  readonly events: ReadonlyArray<UserEvent>;
+} => ({
   user: new User({
     id: input.id,
     subject: input.subject,
@@ -97,6 +108,7 @@ export const register = (input: {
     updatedAt: input.now,
     lastLoginAt: input.now,
   }),
+  roles: initialRoles,
   events: [new UserRegistered({ userId: input.id })],
 });
 

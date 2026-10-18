@@ -30,6 +30,7 @@ const make = Effect.gen(function* () {
           now,
         });
         if (yield* users.insertIfAbsent(registered.user)) {
+          yield* users.grantRoles(registered.user.id, registered.roles, now);
           yield* DomainEvent.record(...registered.events);
           return registered.user;
         }
@@ -55,9 +56,10 @@ export class UserCommands extends Context.Service<
   UserCommands,
   {
     /**
-     * Creates the user on their first login and refreshes their profile and
-     * last login time on every later one. Records `UserRegistered` or, if
-     * the profile changed, `UserProfileChanged`.
+     * Creates the user on their first login, with the initial roles
+     * (`normalUser`), and refreshes their profile and last login time on
+     * every later one. Records `UserRegistered` or, if the profile changed,
+     * `UserProfileChanged`.
      */
     readonly syncFromLogin: (login: Login) => Effect.Effect<User.User>;
   }
