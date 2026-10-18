@@ -8,6 +8,7 @@ import { Config, Layer, String as Str } from "effect";
 import { DatabaseConfig } from "#Config";
 import createAuthTables from "#migrations/0001_create_auth_tables";
 import createUsers from "#migrations/0002_create_users";
+import createUserRoles from "#migrations/0003_create_user_roles";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -19,6 +20,7 @@ import createUsers from "#migrations/0002_create_users";
 export const migrations = {
   "0001_create_auth_tables": createAuthTables,
   "0002_create_users": createUsers,
+  "0003_create_user_roles": createUserRoles,
 };
 
 /** Loads {@link migrations} in id order. */
