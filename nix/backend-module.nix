@@ -62,6 +62,13 @@ let
   # Variables that must never be written to the world-readable Nix store.
   secretVariables = [ "OIDC_CLIENT_SECRET" "POSTGRES_PASSWORD" "SMTP_PASSWORD" ];
 
+  # Restores a dump into a scratch database and checks it (nix/verify-backup.sh).
+  verifyBackup = pkgs.writeShellApplication {
+    name = "unhalteproblem-verify-backup";
+    runtimeInputs = [ config.services.postgresql.package pkgs.coreutils ];
+    text = builtins.readFile ./verify-backup.sh;
+  };
+
   backendUrl = path: "http://127.0.0.1:${toString cfg.port}${path}";
 
   proxyConfig = ''
@@ -162,6 +169,46 @@ in
         root) is configured elsewhere. null leaves nginx alone.
       '';
     };
+
+    backup = {
+      enable = lib.mkEnableOption ''
+        regular dumps of the backend's database, each restored into a scratch
+        database right away to prove it works. Needs
+        `services.postgresql` on this host. The dumps stay on this machine:
+        copy them elsewhere too (a disk failure takes both the database and
+        its backups), e.g. with restic or rsync from {option}`backup.location`
+      '';
+
+      database = lib.mkOption {
+        type = lib.types.str;
+        default = cfg.environment.POSTGRES_DB or "unhalteproblem";
+        defaultText = lib.literalExpression ''environment.POSTGRES_DB or "unhalteproblem"'';
+        description = "Name of the database to dump.";
+      };
+
+      location = lib.mkOption {
+        type = lib.types.path;
+        default = "/var/backup/unhalteproblem";
+        description = ''
+          Directory for the dumps (`<database>-<date>.dump`, pg_dump custom
+          format), owned by the postgres user and not readable by others:
+          they contain everything in the database, including personal data.
+        '';
+      };
+
+      startAt = lib.mkOption {
+        type = lib.types.str;
+        default = "03:15";
+        example = "hourly";
+        description = "When to dump, as a systemd calendar expression.";
+      };
+
+      keepDays = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 14;
+        description = "Dumps older than this many days are deleted after a successful run.";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable (lib.mkMerge [
@@ -225,6 +272,50 @@ in
         };
         "= /api/auth/login" = authRateLimited "/auth/login";
         "= /api/auth/callback" = authRateLimited "/auth/callback";
+      };
+    })
+
+    (lib.mkIf cfg.backup.enable {
+      assertions = [
+        {
+          assertion = config.services.postgresql.enable;
+          message = ''
+            services.unhalteproblem-backend.backup needs services.postgresql
+            on this host (it dumps as the postgres user over the local socket).
+          '';
+        }
+      ];
+
+      systemd.tmpfiles.rules = [
+        "d ${cfg.backup.location} 0700 postgres postgres -"
+      ];
+
+      # Dump, then restore the dump into a scratch database and check it.
+      # Only after that succeeded are old dumps deleted, so a run that fails
+      # (the unit shows up as failed in `systemctl --failed`) never costs a
+      # working backup.
+      systemd.services.unhalteproblem-backup = {
+        description = "Dump and verify the unhalteproblem database";
+        startAt = cfg.backup.startAt;
+        path = [ config.services.postgresql.package pkgs.coreutils pkgs.findutils ];
+        serviceConfig = {
+          Type = "oneshot";
+          User = "postgres";
+          UMask = "0077";
+        };
+        script = ''
+          dir=${lib.escapeShellArg cfg.backup.location}
+          db=${lib.escapeShellArg cfg.backup.database}
+          stamp=$(date +%Y-%m-%d-%H%M%S)
+          partial="$dir/.$db-$stamp.partial"
+          trap 'rm -f "$partial"' EXIT
+
+          pg_dump --format=custom --file="$partial" "$db"
+          mv "$partial" "$dir/$db-$stamp.dump"
+          ${verifyBackup}/bin/unhalteproblem-verify-backup "$dir/$db-$stamp.dump"
+
+          find "$dir" -maxdepth 1 -name '*.dump' -mtime +${toString cfg.backup.keepDays} -delete
+        '';
       };
     })
   ]);

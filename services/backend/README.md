@@ -58,6 +58,44 @@ service runs as a single bundled file. Committed migrations are never edited;
 changes go into a new, numbered migration. Tests run all migrations on an
 in-memory PGlite database (`#testing/Database`).
 
+### Backups
+
+The NixOS module can dump the database regularly
+(`services.unhalteproblem-backend.backup.enable = true;`, needs
+`services.postgresql` on the same host). `unhalteproblem-backup.service` runs
+daily (`backup.startAt`) as the postgres user:
+
+1. `pg_dump --format=custom` into `backup.location`
+   (`/var/backup/unhalteproblem/<db>-<date>.dump`, mode 0700 directory).
+2. **Restores that dump into a scratch database** and checks that it holds
+   applied migrations (`nix/verify-backup.sh`), then drops the scratch
+   database. A dump that cannot be restored fails the unit instead of
+   sitting unnoticed until the day it is needed: watch `systemctl --failed`.
+3. Only then deletes dumps older than `backup.keepDays` (14).
+
+The dumps contain everything, personal data included, and live on the same
+machine as the database. Copy them to another place (restic, rsync, a
+provider's object storage) from `backup.location`; that part is not
+automated here. Check a dump from anywhere with
+`PGUSER=… bash nix/verify-backup.sh <dump>` (a Postgres of the same version
+as the server).
+
+To restore after losing the database:
+
+```sh
+systemctl stop podman-unhalteproblem-backend   # the container (docker-… with docker)
+sudo -u postgres dropdb --if-exists unhalteproblem
+sudo -u postgres createdb --owner unhalteproblem unhalteproblem
+sudo -u postgres pg_restore --role unhalteproblem --no-owner \
+  --exit-on-error --dbname unhalteproblem /var/backup/unhalteproblem/<dump>
+systemctl start podman-unhalteproblem-backend
+```
+
+`--role` makes the backend's user own the restored tables. The dump includes
+`effect_sql_migrations`, so the backend finds the schema up to date (or
+applies the migrations that are newer than the dump). Sessions in the dump
+are restored too; those that expired meanwhile are cleaned up as usual.
+
 ## Domains
 
 Business logic lives in domains under `src/domains/<domain>/`, built on a
