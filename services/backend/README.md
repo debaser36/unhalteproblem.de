@@ -58,6 +58,46 @@ service runs as a single bundled file. Committed migrations are never edited;
 changes go into a new, numbered migration. Tests run all migrations on an
 in-memory PGlite database (`#testing/Database`).
 
+### Long-running migrations
+
+Pending migrations run at startup, all in one transaction, before the
+service listens. That is simple and safe for the small tables here, and it
+has consequences once a migration takes a while:
+
+- **The deploy waits.** Until the migrations commit, the new container
+  serves nothing, and the healthcheck (`/ready`) has its start period of 20
+  seconds. A migration that needs minutes makes the unit look unhealthy and
+  can be restarted in the middle, which rolls the whole transaction back and
+  starts over. Run slow ones by hand first (below).
+- **`POSTGRES_STATEMENT_TIMEOUT` (30 seconds) applies to migrations too.**
+  A statement that runs longer is cancelled and the service doesn't start.
+  For a deploy with a known-slow migration, raise it for that one start and
+  remove it afterwards.
+- **Locks.** `ALTER TABLE` and plain `CREATE INDEX` take locks that block
+  writes (or everything) on the table while they run, and wait behind
+  running transactions. On a big, busy table that stalls requests. Prefer
+  the steps that don't: add nullable columns without a default, add
+  constraints as `NOT VALID` and `VALIDATE CONSTRAINT` in a later migration,
+  and split a risky change into expand (add, backfill) and contract (remove
+  the old) over two deploys, so the old and the new version both work
+  against the intermediate schema.
+- **`CREATE INDEX CONCURRENTLY` can't run in a transaction**, so it can't be
+  a migration. Create the index by hand beforehand, then write the migration
+  with `CREATE INDEX IF NOT EXISTS` (a no-op there, and the real thing for a
+  fresh database such as the tests):
+
+  ```sh
+  sudo -u postgres psql unhalteproblem \
+    -c 'CREATE INDEX CONCURRENTLY IF NOT EXISTS users_x_idx ON users (x)'
+  ```
+
+- **Backfills** of many rows belong in batches, outside the migration
+  (a script, or an outbox job), not in one statement.
+
+Take a backup before a risky migration (`systemctl start
+unhalteproblem-backup`, see "Backups"): migrations are irreversible by
+design, so a restore is the way back.
+
 ### Backups
 
 The NixOS module can dump the database regularly
