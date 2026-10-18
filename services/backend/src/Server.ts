@@ -18,10 +18,10 @@ import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
 import { Sessions } from "#repositories/Sessions";
 import { AuthCleanup } from "#services/AuthCleanup";
-import { ContactDelivery } from "#services/ContactDelivery";
 import { ContactRateLimit } from "#services/ContactRateLimit";
 import { DatabaseLive } from "#services/Database";
 import { LoginRateLimit } from "#services/LoginRateLimit";
+import { Mailer } from "#services/Mailer";
 import { OidcProvider } from "#services/OidcProvider";
 import { Readiness } from "#services/Readiness";
 import { TokenVerifier } from "#services/TokenVerifier";
@@ -31,7 +31,10 @@ import { TokenVerifier } from "#services/TokenVerifier";
 const Repositories = Layer.mergeAll(
   LoginAttempts.layer,
   LogoutTokens.layer,
-  DomainsLive.pipe(Layer.provideMerge(Sessions.layer)),
+  DomainsLive.pipe(
+    Layer.provide(Mailer.layer),
+    Layer.provideMerge(Sessions.layer),
+  ),
 ).pipe(Layer.provideMerge(DatabaseLive));
 
 const AuthServices = Layer.mergeAll(
@@ -51,11 +54,7 @@ const Handlers = Layer.mergeAll(
   AuthHandlers,
   AdminHandlers,
 ).pipe(
-  Layer.provide([
-    ContactDelivery.layerLog,
-    ContactRateLimit.layer,
-    Readiness.layer,
-  ]),
+  Layer.provide([ContactRateLimit.layer, Readiness.layer]),
   Layer.provideMerge(AuthServices),
 );
 

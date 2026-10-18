@@ -3,7 +3,7 @@ import { Api, type ContactMessage, RateLimited } from "@unhalteproblem.de/api";
 import { Effect, Layer } from "effect";
 import { HttpServer } from "effect/http";
 import { HttpApiTest } from "effect/http-api";
-import { ContactDelivery } from "#services/ContactDelivery";
+import { ContactCommands } from "#domains/contact/ContactCommands";
 import { ContactRateLimit } from "#services/ContactRateLimit";
 import { MiddlewaresRejectAll } from "#testing/Authentication";
 import { ContactHandlers } from "./Contact.ts";
@@ -17,7 +17,7 @@ const message: ContactMessage = {
 };
 
 /**
- * The contact handlers with a recording delivery and a fresh in-memory rate
+ * The contact handlers with a recording command and a fresh in-memory rate
  * limiter. The test client sends no `X-Real-IP`, so all calls share one key.
  */
 const setup = (limit: number) => {
@@ -25,12 +25,13 @@ const setup = (limit: number) => {
   const layer = ContactHandlers.pipe(
     Layer.provide([
       Layer.succeed(
-        ContactDelivery,
-        ContactDelivery.of({
-          deliver: (message) =>
+        ContactCommands,
+        ContactCommands.of({
+          submit: (message) =>
             Effect.sync(() => {
               delivered.push(message);
             }),
+          purgeOlderThan: () => Effect.succeed(0),
         }),
       ),
       ContactRateLimit.layerWith({ limit, globalLimit: 100, window: "1 hour" }),

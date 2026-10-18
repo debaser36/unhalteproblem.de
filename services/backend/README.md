@@ -6,7 +6,8 @@ the browser login under `/auth/*`. `GET /health` says the process is up;
 `GET /ready` also runs `SELECT 1` (2 second timeout) and answers 503 without a
 body when the database does not answer. The container image probes `/ready`
 every 30 seconds as its healthcheck.
-Contact messages are only logged for now.
+Contact messages are stored in Postgres and mailed to the owner (see "Contact"
+below).
 
 ## Running
 
@@ -60,7 +61,7 @@ in-memory PGlite database (`#testing/Database`).
 ## Domains
 
 Business logic lives in domains under `src/domains/<domain>/`, built on a
-small kernel in `src/cqrs/`. For now there is one domain, `users`.
+small kernel in `src/cqrs/`. There are two domains, `users` and `contact`.
 
 | Kernel (`#cqrs/*`) | Purpose                                                                                                                                                                                                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -146,6 +147,22 @@ When a request ends, `RequestLogging` logs `Sent HTTP response` with method,
 path, status, duration and the client's rate-limit key (see below). The query is
 never logged, since it holds OIDC codes and state. `/health` and `/ready` are
 logged at debug level, 5xx responses at error level with their cause.
+
+## Contact
+
+`POST /contact` (rate limited, see below) runs `ContactCommands.submit` of the
+`contact` domain: in one transaction it stores the message in
+`contact_messages` and enqueues a `contact.send-mail` outbox message. A
+consumer then mails the owner (`CONTACT_MAIL_TO`) with the visitor's address
+as `Reply-To`, so answering the mail answers them. If the SMTP server is down
+the mail is retried with backoff (see "Outbox"); a mail may rarely arrive
+twice, which is why it carries a stable `Message-ID`. Without `SMTP_HOST` the
+messages are stored only, and a warning without content is logged for each.
+
+The table holds names, addresses and free text. Nothing logs them (not even
+the outbox: its payload is the message id), and a job deletes messages older
+than `CONTACT_RETENTION` once an hour. Read the stored ones with
+`SELECT created_at, name, email, message FROM contact_messages ORDER BY created_at DESC`.
 
 ## Client IP and rate limiting
 

@@ -60,7 +60,7 @@ let
   image = self.packages.${pkgs.stdenv.hostPlatform.system}.backend-image;
 
   # Variables that must never be written to the world-readable Nix store.
-  secretVariables = [ "OIDC_CLIENT_SECRET" "POSTGRES_PASSWORD" ];
+  secretVariables = [ "OIDC_CLIENT_SECRET" "POSTGRES_PASSWORD" "SMTP_PASSWORD" ];
 
   backendUrl = path: "http://127.0.0.1:${toString cfg.port}${path}";
 
@@ -113,6 +113,10 @@ in
         SESSION_MAX_AGE = "8 hours";
         CONTACT_RATE_LIMIT = "5";
         CONTACT_RATE_LIMIT_WINDOW = "1 hour";
+        # Mail about contact messages; SMTP_PASSWORD belongs in environmentFiles.
+        # SMTP_HOST = "mail.example.org";
+        # SMTP_FROM = "Website <noreply@unhalteproblem.de>";
+        # CONTACT_MAIL_TO = "me@example.org";
       };
       description = ''
         Extra, non-secret environment variables for the backend (see

@@ -1,6 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
-import { ConfigProvider, Duration, Effect, Exit } from "effect";
-import { DatabaseConfig, OidcConfig, PublicUrlConfig } from "./Config.ts";
+import { ConfigProvider, Duration, Effect, Exit, Option } from "effect";
+import {
+  ContactRetentionConfig,
+  DatabaseConfig,
+  MailConfig,
+  OidcConfig,
+  PublicUrlConfig,
+} from "./Config.ts";
 
 const load = <A, E>(config: Effect.Effect<A, E>, env: Record<string, string>) =>
   config.pipe(
@@ -103,6 +109,98 @@ describe("DatabaseConfig", () => {
   ])("rejects %o", (env) =>
     Effect.gen(function* () {
       assert.isTrue(Exit.isFailure(yield* load(DatabaseConfig, env)));
+    }),
+  );
+});
+
+describe("MailConfig", () => {
+  const smtp = {
+    SMTP_HOST: "mail.example.org",
+    SMTP_FROM: "noreply@example.org",
+    CONTACT_MAIL_TO: "me@example.org",
+  };
+
+  it.effect("is off without SMTP_HOST", () =>
+    Effect.gen(function* () {
+      const exit = yield* load(MailConfig, {});
+      assert.isTrue(Exit.isSuccess(exit) && Option.isNone(exit.value));
+    }),
+  );
+
+  it.effect("defaults to STARTTLS on 587 without credentials", () =>
+    Effect.gen(function* () {
+      const exit = yield* load(MailConfig, smtp);
+      assert.isTrue(Exit.isSuccess(exit));
+      if (Exit.isSuccess(exit) && Option.isSome(exit.value)) {
+        assert.strictEqual(exit.value.value.port, 587);
+        assert.strictEqual(exit.value.value.security, "starttls");
+        assert.isTrue(Option.isNone(exit.value.value.auth));
+      }
+    }),
+  );
+
+  it.effect("uses port 465 for implicit TLS", () =>
+    Effect.gen(function* () {
+      const exit = yield* load(MailConfig, { ...smtp, SMTP_SECURITY: "tls" });
+      assert.isTrue(
+        Exit.isSuccess(exit) &&
+          Option.isSome(exit.value) &&
+          exit.value.value.port === 465,
+      );
+    }),
+  );
+
+  it.effect.each([
+    { SMTP_HOST: "mail.example.org", CONTACT_MAIL_TO: "me@example.org" },
+    { SMTP_HOST: "mail.example.org", SMTP_FROM: "noreply@example.org" },
+    { ...smtp, SMTP_USER: "me" },
+    { ...smtp, SMTP_SECURITY: "plain" },
+  ])("rejects a half-finished setup %o", (env) =>
+    Effect.gen(function* () {
+      assert.isTrue(Exit.isFailure(yield* load(MailConfig, env)));
+    }),
+  );
+});
+
+describe("ContactRetentionConfig", () => {
+  it.effect("defaults to 90 days and must be positive", () =>
+    Effect.gen(function* () {
+      const exit = yield* load(ContactRetentionConfig, {});
+      assert.isTrue(
+        Exit.isSuccess(exit) &&
+          Duration.toMillis(exit.value) ===
+            Duration.toMillis(Duration.days(90)),
+      );
+      assert.isTrue(
+        Exit.isFailure(
+          yield* load(ContactRetentionConfig, {
+            CONTACT_RETENTION: "0 days",
+          }),
+        ),
+      );
+    }),
+  );
+});
+
+describe("MailConfig security", () => {
+  const base = {
+    SMTP_FROM: "noreply@example.org",
+    CONTACT_MAIL_TO: "me@example.org",
+    SMTP_SECURITY: "none",
+  };
+
+  it.effect("allows plain text only for a mail catcher on this machine", () =>
+    Effect.gen(function* () {
+      assert.isTrue(
+        Exit.isSuccess(
+          yield* load(MailConfig, { ...base, SMTP_HOST: "localhost" }),
+        ),
+      );
+      assert.isTrue(
+        Exit.isFailure(
+          yield* load(MailConfig, { ...base, SMTP_HOST: "mail.example.org" }),
+        ),
+      );
     }),
   );
 });

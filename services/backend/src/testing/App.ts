@@ -28,9 +28,9 @@ import { SystemHandlers } from "#http/System";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
 import { Sessions } from "#repositories/Sessions";
-import { ContactDelivery } from "#services/ContactDelivery";
 import { ContactRateLimit } from "#services/ContactRateLimit";
 import { LoginRateLimit } from "#services/LoginRateLimit";
+import { Mailer } from "#services/Mailer";
 import { CodeExchangeFailed, OidcProvider } from "#services/OidcProvider";
 import { Readiness } from "#services/Readiness";
 import { TokenVerifier } from "#services/TokenVerifier";
@@ -77,6 +77,8 @@ export interface AppOptions {
   readonly nonce?: (nonce: string) => string;
   /** The ID token's `sid`; `null` leaves it out. */
   readonly sid?: string | null;
+  /** Where the owner's mails go; by default nowhere (see `makeRecordingMailer`). */
+  readonly mailer?: Layer.Layer<Mailer>;
   /** Login starts allowed per client. */
   readonly loginLimit?: number;
 }
@@ -165,7 +167,10 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     Layer.mergeAll(
       LoginAttempts.layer,
       LogoutTokens.layer,
-      DomainsLive.pipe(Layer.provideMerge(Sessions.layer)),
+      DomainsLive.pipe(
+        Layer.provide(options.mailer ?? Mailer.layerDisabled),
+        Layer.provideMerge(Sessions.layer),
+      ),
     ).pipe(Layer.provideMerge(DatabaseTest)),
   );
   const repositories = Layer.succeedContext(services);
@@ -191,7 +196,6 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
         window: "1 hour",
       }),
       Readiness.layer,
-      ContactDelivery.layerLog,
       ContactRateLimit.layerWith({
         limit: 5,
         globalLimit: 5,

@@ -11,6 +11,7 @@ import createUsers from "#migrations/0002_create_users";
 import createUserRoles from "#migrations/0003_create_user_roles";
 import addUserModeration from "#migrations/0004_add_user_moderation";
 import createOutbox from "#migrations/0005_create_outbox";
+import createContactMessages from "#migrations/0006_create_contact_messages";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -25,6 +26,7 @@ export const migrations = {
   "0003_create_user_roles": createUserRoles,
   "0004_add_user_moderation": addUserModeration,
   "0005_create_outbox": createOutbox,
+  "0006_create_contact_messages": createContactMessages,
 };
 
 /** Loads {@link migrations} in id order. */

@@ -1,4 +1,12 @@
-import { Config, Duration, Option, Schema } from "effect";
+import {
+  Config,
+  ConfigProvider,
+  Duration,
+  Effect,
+  Option,
+  type Redacted,
+  Schema,
+} from "effect";
 
 /**
  * The HTTP listener. The default host only accepts local connections; the
@@ -142,3 +150,83 @@ export const SessionConfig = Config.all({
     Config.withDefault(Duration.hours(8)),
   ),
 });
+
+/** How long contact messages are kept before they are deleted. */
+export const ContactRetentionConfig = Config.schema(
+  PositiveDuration,
+  "CONTACT_RETENTION",
+).pipe(Config.withDefault(Duration.days(90)));
+
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+
+/** The SMTP server that sends the mails about contact messages. */
+export interface MailSettings {
+  readonly host: string;
+  readonly port: number;
+  /** `starttls` upgrades a plain connection (usually port 587); `tls` is TLS from the start (465); `none` is plain text and only for
+   * a mail catcher on the same machine (Mailpit, MailHog). */
+  readonly security: "starttls" | "tls" | "none";
+  readonly auth: Option.Option<{
+    readonly user: string;
+    readonly password: Redacted.Redacted;
+  }>;
+  /** The envelope and header sender, e.g. `Website <noreply@unhalteproblem.de>`. */
+  readonly from: string;
+  /** Who gets the mails about contact messages. */
+  readonly to: string;
+}
+
+/**
+ * Optional: without `SMTP_HOST` contact messages are stored but not mailed.
+ * With it, `SMTP_FROM` and `CONTACT_MAIL_TO` are required, and so is
+ * `SMTP_PASSWORD` once `SMTP_USER` is set, so a half-finished setup fails
+ * at startup instead of silently not mailing.
+ */
+export const MailConfig: Config.Config<Option.Option<MailSettings>> =
+  Config.option(Config.NonEmptyString("SMTP_HOST")).pipe(
+    Config.flatMap((host) =>
+      Option.isNone(host)
+        ? Config.succeed(Option.none<MailSettings>())
+        : Config.all({
+            host: Config.succeed(host.value),
+            security: Config.Literals(
+              ["starttls", "tls", "none"],
+              "SMTP_SECURITY",
+            ).pipe(Config.withDefault("starttls" as const)),
+            auth: Config.option(Config.NonEmptyString("SMTP_USER")).pipe(
+              Config.flatMap((user) =>
+                Option.isNone(user)
+                  ? Config.succeed(Option.none())
+                  : Config.Redacted("SMTP_PASSWORD").pipe(
+                      Config.map((password) =>
+                        Option.some({ user: user.value, password }),
+                      ),
+                    ),
+              ),
+            ),
+            from: Config.NonEmptyString("SMTP_FROM"),
+            to: Config.NonEmptyString("CONTACT_MAIL_TO"),
+          }).pipe(
+            Config.flatMap((settings) =>
+              Config.Port("SMTP_PORT").pipe(
+                Config.withDefault(settings.security === "tls" ? 465 : 587),
+                Config.mapEffect((port) =>
+                  settings.security === "none" &&
+                  !loopbackHosts.has(settings.host)
+                    ? Effect.fail(
+                        new Config.ConfigError(
+                          new ConfigProvider.SourceError({
+                            message:
+                              "SMTP_SECURITY=none is only allowed for a mail server on this machine (localhost)",
+                          }),
+                        ),
+                      )
+                    : Effect.succeed<Option.Option<MailSettings>>(
+                        Option.some({ ...settings, port }),
+                      ),
+                ),
+              ),
+            ),
+          ),
+    ),
+  );

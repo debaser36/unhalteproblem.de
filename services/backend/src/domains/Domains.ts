@@ -2,6 +2,7 @@ import { Layer } from "effect";
 import { DomainEvents } from "#cqrs/DomainEvent";
 import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
+import { ContactLive } from "./contact/Contacts.ts";
 import { UsersLive } from "./users/Users.ts";
 
 /**
@@ -13,10 +14,10 @@ import { UsersLive } from "./users/Users.ts";
  * `Outbox` stay internal, so nothing outside a transaction can publish
  * events or enqueue messages.
  *
- * Needs a migrated `SqlClient` (`DatabaseLive` or `DatabaseTest`) and
- * `Sessions` (restricting a user ends their sessions).
+ * Needs a migrated `SqlClient` (`DatabaseLive` or `DatabaseTest`),
+ * `Sessions` (restricting a user ends their sessions) and a `Mailer`.
  */
-export const DomainsLive = Layer.mergeAll(UsersLive).pipe(
+export const DomainsLive = Layer.mergeAll(UsersLive, ContactLive).pipe(
   Layer.provideMerge(Transaction.layer),
   Layer.provide([DomainEvents.layer, Outbox.layer]),
 );

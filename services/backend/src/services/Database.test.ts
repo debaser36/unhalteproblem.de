@@ -1105,6 +1105,150 @@ describe("DatabaseTest", () => {
         );
       }),
     );
+
+    it.effect(
+      "creates the contact_messages table with the expected columns",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          assert.deepStrictEqual(
+            yield* describeColumns(sql, "contact_messages"),
+            [
+              "contact_messages.id uuid not null",
+              "contact_messages.name text not null",
+              "contact_messages.email text not null",
+              "contact_messages.message text not null",
+              "contact_messages.created_at timestamp with time zone not null",
+            ],
+          );
+        }),
+    );
+
+    it.effect(
+      "constrains and indexes contact_messages for the retention job",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          // No foreign keys: senders need no account.
+          assert.deepStrictEqual(
+            yield* describeConstraints(sql, "contact_messages"),
+            [
+              "contact_messages_email_check: CHECK (((char_length(email) >= 1) AND (char_length(email) <= 254)))",
+              "contact_messages_id_pkey: PRIMARY KEY (id)",
+              "contact_messages_message_check: CHECK (((char_length(message) >= 1) AND (char_length(message) <= 5000)))",
+              "contact_messages_name_check: CHECK (((char_length(name) >= 1) AND (char_length(name) <= 100)))",
+            ],
+          );
+          assert.deepStrictEqual(
+            yield* describeIndexes(sql, "contact_messages"),
+            [
+              "CREATE INDEX contact_messages_created_at_idx ON public.contact_messages USING btree (created_at)",
+              "CREATE UNIQUE INDEX contact_messages_id_pkey ON public.contact_messages USING btree (id)",
+            ],
+          );
+        }),
+    );
+
+    it.effect(
+      "accepts contact messages at the limits and counts code points",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const insert = (name: string, email: string, message: string) =>
+            sql`
+            INSERT INTO contact_messages (id, name, email, message, created_at)
+            VALUES (gen_random_uuid(), ${name}, ${email}, ${message}, now())
+          `;
+          yield* insert("n", "e", "m");
+          yield* insert("n".repeat(100), "e".repeat(254), "m".repeat(5000));
+          // An emoji is two UTF-16 code units but one code point: the database
+          // never counts more than the API does.
+          yield* insert("😀".repeat(100), "e", "😀".repeat(5000));
+        }),
+    );
+
+    it.effect("rejects empty and too long contact message values", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const insert = (name: string, email: string, message: string) =>
+          sql`
+            INSERT INTO contact_messages (id, name, email, message, created_at)
+            VALUES (gen_random_uuid(), ${name}, ${email}, ${message}, now())
+          `.pipe(Effect.flip);
+        const cases = [
+          ["", "e", "m", "contact_messages_name_check"],
+          ["n".repeat(101), "e", "m", "contact_messages_name_check"],
+          ["n", "", "m", "contact_messages_email_check"],
+          ["n", "e".repeat(255), "m", "contact_messages_email_check"],
+          ["n", "e", "", "contact_messages_message_check"],
+          ["n", "e", "m".repeat(5001), "contact_messages_message_check"],
+        ] as const;
+        for (const [name, email, message, constraint] of cases) {
+          const error = yield* insert(name, email, message);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(error.reason.cause, "constraint", constraint);
+        }
+
+        // The application sets id and created_at: there is no default.
+        for (const statement of [
+          sql`
+            INSERT INTO contact_messages (name, email, message, created_at)
+            VALUES ('n', 'e', 'm', now())
+          `,
+          sql`
+            INSERT INTO contact_messages (id, name, email, message)
+            VALUES (gen_random_uuid(), 'n', 'e', 'm')
+          `,
+        ]) {
+          // Fails: a NOT NULL violation, no default fills the gap.
+          yield* statement.pipe(Effect.flip);
+        }
+      }),
+    );
+
+    it.effect("uses the created_at index to find old contact messages", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // The table is tiny, so the planner would prefer a sequential scan.
+        const plan = yield* sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`SET LOCAL enable_seqscan = off`;
+            return yield* sql<Record<string, string>>`
+              EXPLAIN
+              DELETE FROM contact_messages
+              WHERE created_at < '2026-01-01T00:00:00Z'::timestamptz
+            `;
+          }),
+        );
+        assert.include(
+          plan.flatMap((row) => Object.values(row)).join("\n"),
+          "contact_messages_created_at_idx",
+        );
+      }),
+    );
+
+    it.effect("purges only contact messages older than the cutoff", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO contact_messages (id, name, email, message, created_at)
+          VALUES
+            (gen_random_uuid(), 'purge', 'e', 'old', '2025-12-31T23:59:59Z'),
+            (gen_random_uuid(), 'purge', 'e', 'new', '2026-01-01T00:00:00Z')
+        `;
+        yield* sql`
+          DELETE FROM contact_messages
+          WHERE created_at < ${"2026-01-01T00:00:00Z"}::timestamptz
+        `;
+        const rows = yield* sql<{ readonly message: string }>`
+          SELECT message FROM contact_messages WHERE name = 'purge'
+        `;
+        assert.deepStrictEqual(
+          rows.map((row) => row.message),
+          ["new"],
+        );
+      }),
+    );
   });
 });
 
