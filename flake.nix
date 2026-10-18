@@ -131,6 +131,22 @@
             ];
             ExposedPorts."3000/tcp" = { };
             User = "65534:65534";
+            # The image has no shell or curl, so the probe is Node itself.
+            # /ready also checks the database; with the module's restart
+            # policy an unhealthy container shows up in `podman ps` and
+            # `systemctl status`. Durations are in nanoseconds.
+            Healthcheck = {
+              Test = [
+                "CMD"
+                "${pkgs.nodejs-slim_26}/bin/node"
+                "-e"
+                "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+              ];
+              Interval = 30000000000;
+              Timeout = 5000000000;
+              StartPeriod = 20000000000;
+              Retries = 3;
+            };
           };
         };
       }
