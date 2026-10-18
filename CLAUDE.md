@@ -134,6 +134,12 @@ agents can read real library source instead of guessing or searching the web.
   domain for a new one; see the backend README, section "Domains".
 - Database schema changes go through the `db-migration` agent. Committed
   migrations are immutable.
+- Authorization is role-based and lives in the types: code that needs a role
+  requires `Authorized(...)` from `@unhalteproblem.de/api` (one call with
+  several roles = any of them; several calls = all of them). Only
+  `#auth/Authorization` in the backend provides these proofs, and endpoints
+  use `RequireRoles(...)` from the contract. See the backend README, section
+  "Authorization".
 
 ## Security
 

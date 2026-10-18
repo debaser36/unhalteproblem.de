@@ -95,7 +95,9 @@ it creates a row in `users` with our own UUID and the Keycloak `sub`
 (`UserRegistered`); later logins copy Keycloak's current profile
 (`preferred_username`, `name`, `email`, `email_verified`) and the login time
 (`UserProfileChanged` if the profile differs). Concurrent first logins of the
-same user end up with one row. Sessions still reference users by `sub`.
+same user end up with one row. The first login also grants
+`normalUser` (`user_roles`), in the same transaction. Sessions still
+reference users by `sub`.
 
 ## Client IP and rate limiting
 
@@ -120,8 +122,8 @@ restarts. Request bodies over 32 KiB are rejected before they are read.
 
 Browser login is OpenID Connect against Keycloak, with this backend as a
 confidential client (backend for frontend): tokens never reach the browser,
-which only gets an HttpOnly session cookie. Authorization (roles) is not
-implemented yet.
+which only gets an HttpOnly session cookie. Roles are described under
+"Authorization".
 
 | Route                            | Purpose                                                                                                                                                                                                                            |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -158,3 +160,64 @@ protection against bot sign-ups (verify email, a captcha in the
 registration flow, brute force detection) belongs in the realm. Until a
 user has verified it, `email` is whatever they typed: never grant anything
 based on it unless `emailVerified` is true.
+
+## Authorization
+
+Users have roles: `normalUser`, `admin` and `superAdmin` (`Role` in
+`@unhalteproblem.de/api`). They are flat, so no role includes another, and a
+user can hold several. Every user gets `normalUser` at registration. They are
+stored in `user_roles` and read on every authenticated request (into
+`CurrentUser` and `GET /auth/session`), so a granted or revoked role counts
+from the user's next request.
+
+Code says which roles it needs in its requirements, with `Authorized` from
+the contract, and can't run until someone has checked:
+
+```ts
+Effect.gen(function* () {
+  // needs admin: Effect<…, …, Authorized<"admin">>
+  yield* Authorized("admin");
+  // needs admin or superAdmin: Effect<…, …, Authorized<"admin" | "superAdmin">>
+  yield* Authorized("admin", "superAdmin");
+  // needs admin and superAdmin: require both proofs
+  yield* Authorized("admin");
+  yield* Authorized("superAdmin");
+});
+```
+
+A domain service method that does this carries the requirement in its type,
+and so does every caller up to the one that provides the proof. Only
+`#auth/Authorization` provides proofs; each checks the roles of
+`CurrentUser` and fails with `Forbidden` (403):
+
+| Where               | How                                                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An endpoint         | `RequireRoles("admin")` on the endpoint in the contract (before the group's `Authentication`); `Authorization.middleware(RequireAdmin)` provides its implementation |
+| Inside a handler    | `effect.pipe(Authorization.provide("admin"))`                                                                                                                       |
+| A per-request layer | `Authorization.layer("admin")`                                                                                                                                      |
+
+A proof satisfies exactly the requirement it was made for:
+`Authorized<"admin">` does not satisfy `Authorized<"admin" | "superAdmin">`,
+even though an admin would pass that check, so provide what the code asks
+for. Denied requests are logged as "Access denied" with the user and the
+required roles.
+
+There is no role management yet. Operators grant and revoke roles in `psql`;
+the user must have logged in once, so that their row in `users` exists:
+
+```sql
+\set subject 'the-keycloak-sub'
+
+-- grant superAdmin (INSERT 0 0: never logged in, or already has it)
+INSERT INTO user_roles (user_id, role)
+SELECT id, 'superAdmin' FROM users WHERE subject = :'subject'
+ON CONFLICT (user_id, role) DO NOTHING;
+
+-- revoke superAdmin
+DELETE FROM user_roles
+WHERE role = 'superAdmin'
+  AND user_id = (SELECT id FROM users WHERE subject = :'subject');
+```
+
+Don't revoke `normalUser`. A new role needs a migration that changes the
+`user_roles_role_check` constraint and the `Role` schema in the contract.
