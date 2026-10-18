@@ -34,10 +34,11 @@ const Redirect = (status: 302 | 303, description: string) =>
  * pattern: the backend runs the authorization code flow with PKCE and keeps
  * the tokens; the browser only holds the `__Host-session` cookie.
  *
- * `login`, `callback` and `logout` are top-level browser navigations, not
- * `fetch` calls: the website links to `GET /auth/login` and submits a form
- * to `POST /auth/logout`, because both end in a redirect to Keycloak. Build
- * their URLs with `HttpApiClient.urlBuilder` instead of calling them through
+ * `login`, `register`, `callback` and `logout` are top-level browser
+ * navigations, not `fetch` calls: the website links to `GET /auth/login` and
+ * `GET /auth/register` and submits a form to `POST /auth/logout`, because
+ * all of them end in a redirect to Keycloak. Build their URLs with
+ * `HttpApiClient.urlBuilder` instead of calling them through
  * `HttpApiClient`. Only `session` is meant for the website's client.
  */
 export class AuthGroup extends HttpApiGroup.make("auth")
@@ -82,6 +83,37 @@ export class AuthGroup extends HttpApiGroup.make("auth")
           "returns to `returnTo` (a path on this site) or the start page. " +
           "Answers 429 `RateLimited` when too many logins are started, " +
           "per client or in total. " +
+          "Navigate to it; do not call it with `fetch`.",
+      }),
+    ),
+    // Public on purpose: like `login`, it starts the login (for a new
+    // account), so there is no session yet.
+    HttpApiEndpoint.get("register", "/auth/register", {
+      // The same query as `login`, so `returnTo` is validated identically.
+      query: LoginQuery,
+      success: Redirect(
+        302,
+        "Redirect to Keycloak's registration form (its authorization " +
+          "endpoint with `prompt=create`). Sets the same short-lived login " +
+          "cookie as `login`, binding `state`, `nonce` and the PKCE " +
+          "verifier to this browser.",
+      ),
+      // An invalid `returnTo` is rejected by schema validation (400).
+      // `RateLimited` (429): shares the rate limit of `login`, because every
+      // start writes a row for the pending login as well.
+      error: RateLimited,
+    }).annotateMerge(
+      OpenApi.annotations({
+        summary: "Start the registration",
+        description:
+          "Starts the same OpenID Connect authorization code flow with PKCE " +
+          "as `login`, but asks Keycloak to open its registration page " +
+          "(`prompt=create`). After registering the user is logged in and " +
+          "the browser returns to `returnTo` (a path on this site) or the " +
+          "start page. Users who already have an account can switch to the " +
+          "login on Keycloak's page. Answers 429 `RateLimited` when too " +
+          "many logins are started, per client or in total; registrations " +
+          "count towards the same limit as `login`. " +
           "Navigate to it; do not call it with `fetch`.",
       }),
     ),

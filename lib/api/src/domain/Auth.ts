@@ -18,12 +18,13 @@ const RETURN_PATH_PATTERN = /^\/(?!\/)[\x21-\x5b\x5d-\x7e]*$/u;
  * Where to send the browser after the login, as a path on the website
  * itself, e.g. `/blog/post?x=1#y`.
  *
- * Only same-site relative paths are accepted, so `GET /auth/login` cannot be
- * abused as an open redirect: it starts with a single `/`, is 1 to 2048
- * characters long and consists of printable ASCII only, without spaces or
- * `\`. Callers percent-encode everything else, e.g. with `encodeURI`
- * (`/über` becomes `/%C3%BCber`); `location.pathname`, `.search` and
- * `.hash` are already encoded that way by browsers.
+ * Only same-site relative paths are accepted, so `GET /auth/login` and
+ * `GET /auth/register` cannot be abused as an open redirect: the path
+ * starts with a single `/`, is 1 to 2048 characters long and consists of
+ * printable ASCII only, without spaces or `\`. Callers percent-encode
+ * everything else, e.g. with `encodeURI` (`/über` becomes `/%C3%BCber`);
+ * `location.pathname`, `.search` and `.hash` are already encoded that way
+ * by browsers.
  */
 export const ReturnPath = Schema.String.check(
   Schema.isNonEmpty(),
@@ -44,7 +45,7 @@ export const ReturnPath = Schema.String.check(
 });
 export type ReturnPath = typeof ReturnPath.Type;
 
-/** Query parameters of `GET /auth/login`. */
+/** Query parameters of `GET /auth/login` and `GET /auth/register`. */
 export const LoginQuery = Schema.Struct({
   /** Where to return after the login; the website's start page if absent. */
   returnTo: Schema.optionalKey(ReturnPath),

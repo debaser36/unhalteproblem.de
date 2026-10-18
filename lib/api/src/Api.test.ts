@@ -31,6 +31,7 @@ describe("OpenAPI document", () => {
       "/auth/callback",
       "/auth/login",
       "/auth/logout",
+      "/auth/register",
       "/auth/session",
       "/contact",
       "/health",
@@ -52,6 +53,7 @@ describe("OpenAPI document", () => {
       "/contact": { post: "contact.submit" },
       "/auth/session": { get: "auth.session" },
       "/auth/login": { get: "auth.login" },
+      "/auth/register": { get: "auth.register" },
       "/auth/callback": { get: "auth.callback" },
       "/auth/logout": { post: "auth.logout" },
       "/auth/backchannel-logout": { post: "auth.backchannelLogout" },
@@ -65,6 +67,7 @@ describe("OpenAPI document", () => {
     assert.deepStrictEqual(statuses("/contact", "post"), ["202", "429"]);
     assert.deepStrictEqual(statuses("/auth/session", "get"), ["200", "401"]);
     assert.deepStrictEqual(statuses("/auth/login", "get"), ["302", "429"]);
+    assert.deepStrictEqual(statuses("/auth/register", "get"), ["302", "429"]);
     assert.deepStrictEqual(statuses("/auth/callback", "get"), ["302"]);
     assert.deepStrictEqual(statuses("/auth/logout", "post"), ["303", "403"]);
     assert.deepStrictEqual(statuses("/auth/backchannel-logout", "post"), [
@@ -76,6 +79,7 @@ describe("OpenAPI document", () => {
   it("documents the Location header of the redirects", () => {
     const redirects = [
       spec.paths["/auth/login"]?.get?.responses["302"],
+      spec.paths["/auth/register"]?.get?.responses["302"],
       spec.paths["/auth/callback"]?.get?.responses["302"],
       spec.paths["/auth/logout"]?.post?.responses["303"],
     ];
@@ -104,6 +108,7 @@ describe("OpenAPI document", () => {
     assert.deepStrictEqual(spec.paths["/health"]?.get?.security, []);
     assert.deepStrictEqual(spec.paths["/contact"]?.post?.security, []);
     assert.deepStrictEqual(spec.paths["/auth/login"]?.get?.security, []);
+    assert.deepStrictEqual(spec.paths["/auth/register"]?.get?.security, []);
     assert.deepStrictEqual(spec.paths["/auth/callback"]?.get?.security, []);
     assert.deepStrictEqual(spec.paths["/auth/logout"]?.post?.security, []);
     assert.deepStrictEqual(
@@ -113,14 +118,16 @@ describe("OpenAPI document", () => {
   });
 
   it("documents returnTo as an optional, constrained query parameter", () => {
-    assert.deepStrictEqual(spec.paths["/auth/login"]?.get?.parameters, [
-      {
-        name: "returnTo",
-        in: "query",
-        schema: { $ref: "#/components/schemas/ReturnPath" },
-        required: false,
-      },
-    ]);
+    for (const path of ["/auth/login", "/auth/register"]) {
+      assert.deepStrictEqual(spec.paths[path]?.get?.parameters, [
+        {
+          name: "returnTo",
+          in: "query",
+          schema: { $ref: "#/components/schemas/ReturnPath" },
+          required: false,
+        },
+      ]);
+    }
     const returnPath = spec.components.schemas["ReturnPath"] as {
       readonly pattern?: string;
       readonly maxLength?: number;
@@ -184,6 +191,15 @@ const AuthHandlers = HttpApiBuilder.group(Api, "auth", (handlers) =>
         : Effect.succeed(
             HttpServerResponse.redirect(
               `${keycloak}/protocol/openid-connect/auth?state=${encodeURIComponent(query.returnTo ?? "/")}`,
+            ),
+          ),
+    )
+    .handle("register", ({ query }) =>
+      query.returnTo === "/rate-limited"
+        ? Effect.fail(new RateLimited())
+        : Effect.succeed(
+            HttpServerResponse.redirect(
+              `${keycloak}/protocol/openid-connect/auth?prompt=create&state=${encodeURIComponent(query.returnTo ?? "/")}`,
             ),
           ),
     )
@@ -398,6 +414,61 @@ layer(Layer.mergeAll(HandlersLayer, HttpServer.layerServices))(
         );
         const exit = yield* client.auth
           .login({ query: { returnTo: "//evil.example" } })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(exit));
+      }),
+    );
+
+    it.effect("auth.register redirects with 302 and a Location header", () =>
+      Effect.gen(function* () {
+        const client = yield* makeClient;
+        const response = yield* client.auth.register({
+          query: { returnTo: "/blog/post?x=1#y" },
+          responseMode: "response-only",
+        });
+        assert.strictEqual(response.status, 302);
+        assert.strictEqual(
+          response.headers["location"],
+          `${keycloak}/protocol/openid-connect/auth?prompt=create&state=${encodeURIComponent("/blog/post?x=1#y")}`,
+        );
+
+        // Without a returnTo, too.
+        const plain = yield* client.auth.register({
+          query: {},
+          responseMode: "response-only",
+        });
+        assert.strictEqual(plain.status, 302);
+      }),
+    );
+
+    it.effect("auth.register surfaces RateLimited as a typed 429 error", () =>
+      Effect.gen(function* () {
+        const client = yield* makeClient;
+        const query = { returnTo: "/rate-limited" };
+        const response = yield* client.auth.register({
+          query,
+          responseMode: "response-only",
+        });
+        assert.strictEqual(response.status, 429);
+        const error = yield* client.auth.register({ query }).pipe(Effect.flip);
+        assert.instanceOf(error, RateLimited);
+      }),
+    );
+
+    it.effect("auth.register rejects an open-redirect returnTo", () =>
+      Effect.gen(function* () {
+        const client = yield* makeClient;
+        // The same call with a valid path succeeds, so the failure below
+        // comes from the `ReturnPath` schema.
+        const ok = yield* client.auth.register({
+          query: { returnTo: "/blog" },
+        });
+        assert.strictEqual(
+          ok.headers.location,
+          `${keycloak}/protocol/openid-connect/auth?prompt=create&state=%2Fblog`,
+        );
+        const exit = yield* client.auth
+          .register({ query: { returnTo: "//evil.example" } })
           .pipe(Effect.exit);
         assert.isTrue(Exit.isFailure(exit));
       }),
