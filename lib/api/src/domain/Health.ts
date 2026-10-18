@@ -13,3 +13,18 @@ export const HealthStatus = Schema.Struct({
   description: "The service is up and able to answer requests.",
 });
 export type HealthStatus = typeof HealthStatus.Type;
+
+/**
+ * Body of a successful `GET /ready` response.
+ *
+ * Unlike `HealthStatus` it is only sent while the service's dependencies
+ * (currently the database) answer. A service that is not ready does not send
+ * a different body; it fails with `ServiceUnavailable` (503).
+ */
+export const ReadyStatus = Schema.Struct({
+  status: Schema.Literal("ready"),
+}).annotate({
+  identifier: "ReadyStatus",
+  description: "The service and its dependencies are ready to handle requests.",
+});
+export type ReadyStatus = typeof ReadyStatus.Type;

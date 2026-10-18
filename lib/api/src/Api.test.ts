@@ -20,6 +20,7 @@ import {
   RequireAdmin,
   RequireSuperAdmin,
   SameOrigin,
+  ServiceUnavailable,
   SessionCookie,
   type SessionInfo,
   Unauthorized,
@@ -43,6 +44,7 @@ describe("OpenAPI document", () => {
       "/auth/session",
       "/contact",
       "/health",
+      "/ready",
     ]);
     const operations = Object.fromEntries(
       Object.entries(spec.paths).map(([path, item]) => [
@@ -58,6 +60,7 @@ describe("OpenAPI document", () => {
     // Operation ids follow the generated client's method names.
     assert.deepStrictEqual(operations, {
       "/health": { get: "health" },
+      "/ready": { get: "ready" },
       "/contact": { post: "contact.submit" },
       "/auth/session": { get: "auth.session" },
       "/auth/login": { get: "auth.login" },
@@ -82,6 +85,7 @@ describe("OpenAPI document", () => {
     const statuses = (path: string, method: "get" | "post") =>
       Object.keys(spec.paths[path]?.[method]?.responses ?? {}).sort();
     assert.deepStrictEqual(statuses("/health", "get"), ["200"]);
+    assert.deepStrictEqual(statuses("/ready", "get"), ["200", "503"]);
     assert.deepStrictEqual(statuses("/contact", "post"), ["202", "429"]);
     assert.deepStrictEqual(statuses("/auth/session", "get"), ["200", "401"]);
     assert.deepStrictEqual(statuses("/auth/login", "get"), ["302", "429"]);
@@ -125,6 +129,7 @@ describe("OpenAPI document", () => {
     ]);
     // Public on purpose, see the comments in the groups.
     assert.deepStrictEqual(spec.paths["/health"]?.get?.security, []);
+    assert.deepStrictEqual(spec.paths["/ready"]?.get?.security, []);
     assert.deepStrictEqual(spec.paths["/contact"]?.post?.security, []);
     assert.deepStrictEqual(spec.paths["/auth/login"]?.get?.security, []);
     assert.deepStrictEqual(spec.paths["/auth/register"]?.get?.security, []);
@@ -196,8 +201,17 @@ const validLogout = decodeLogoutRequest({
 });
 const invalidLogout = decodeLogoutRequest({ logout_token: "not-a-jwt" });
 
+// Flipped by a test to simulate a database that does not answer.
+let databaseUp = true;
+
 const SystemHandlers = HttpApiBuilder.group(Api, "system", (handlers) =>
-  handlers.handle("health", () => Effect.succeed({ status: "ok" as const })),
+  handlers
+    .handle("health", () => Effect.succeed({ status: "ok" as const }))
+    .handle("ready", () =>
+      databaseUp
+        ? Effect.succeed({ status: "ready" as const })
+        : Effect.fail(new ServiceUnavailable()),
+    ),
 );
 const ContactHandlers = HttpApiBuilder.group(Api, "contact", (handlers) =>
   handlers.handle("submit", ({ payload }) =>
@@ -307,6 +321,35 @@ layer(Layer.mergeAll(HandlersLayer, HttpServer.layerServices))(
         const client = yield* makeClient;
         assert.deepStrictEqual(yield* client.health(), { status: "ok" });
       }),
+    );
+
+    it.effect("ready returns ready while the database answers", () =>
+      Effect.gen(function* () {
+        const client = yield* makeClient;
+        assert.deepStrictEqual(yield* client.ready(), { status: "ready" });
+      }),
+    );
+
+    it.effect(
+      "ready surfaces ServiceUnavailable as a typed 503 without a body",
+      () =>
+        Effect.gen(function* () {
+          const client = yield* makeClient;
+          databaseUp = false;
+          const response = yield* client.ready({
+            responseMode: "response-only",
+          });
+          assert.strictEqual(response.status, 503);
+          assert.strictEqual(yield* response.text, "");
+          const error = yield* client.ready().pipe(Effect.flip);
+          assert.instanceOf(error, ServiceUnavailable);
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              databaseUp = true;
+            }),
+          ),
+        ),
     );
 
     it.effect("contact.submit answers 202 without a body", () =>

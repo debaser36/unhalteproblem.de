@@ -2,7 +2,10 @@
 
 The backend of unhalteproblem.de. It implements the HTTP contract from
 [`@unhalteproblem.de/api`](../../lib/api): `GET /health`, `POST /contact` and
-the browser login under `/auth/*`.
+the browser login under `/auth/*`. `GET /health` says the process is up;
+`GET /ready` also runs `SELECT 1` (2 second timeout) and answers 503 without a
+body when the database does not answer. The container image probes `/ready`
+every 30 seconds as its healthcheck.
 Contact messages are only logged for now.
 
 ## Running

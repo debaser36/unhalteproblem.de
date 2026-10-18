@@ -22,6 +22,7 @@ import { ContactRateLimit } from "#services/ContactRateLimit";
 import { DatabaseLive } from "#services/Database";
 import { LoginRateLimit } from "#services/LoginRateLimit";
 import { OidcProvider } from "#services/OidcProvider";
+import { Readiness } from "#services/Readiness";
 import { TokenVerifier } from "#services/TokenVerifier";
 
 // One database pool (and one migration run) shared by all repositories and
@@ -49,7 +50,11 @@ const Handlers = Layer.mergeAll(
   AuthHandlers,
   AdminHandlers,
 ).pipe(
-  Layer.provide([ContactDelivery.layerLog, ContactRateLimit.layer]),
+  Layer.provide([
+    ContactDelivery.layerLog,
+    ContactRateLimit.layer,
+    Readiness.layer,
+  ]),
   Layer.provideMerge(AuthServices),
 );
 

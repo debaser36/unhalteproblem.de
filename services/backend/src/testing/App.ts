@@ -32,6 +32,7 @@ import { ContactDelivery } from "#services/ContactDelivery";
 import { ContactRateLimit } from "#services/ContactRateLimit";
 import { LoginRateLimit } from "#services/LoginRateLimit";
 import { CodeExchangeFailed, OidcProvider } from "#services/OidcProvider";
+import { Readiness } from "#services/Readiness";
 import { TokenVerifier } from "#services/TokenVerifier";
 import { DatabaseTest } from "./Database.ts";
 
@@ -189,6 +190,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
         globalLimit: 1000,
         window: "1 hour",
       }),
+      Readiness.layer,
       ContactDelivery.layerLog,
       ContactRateLimit.layerWith({
         limit: 5,

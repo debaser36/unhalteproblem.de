@@ -49,7 +49,7 @@ export {
   ContactMessageLimits,
   ContactName,
 } from "#domain/ContactMessage";
-export { HealthStatus } from "#domain/Health";
+export { HealthStatus, ReadyStatus } from "#domain/Health";
 
 export { AlreadyRestricted } from "#errors/AlreadyRestricted";
 export { Forbidden } from "#errors/Forbidden";
@@ -57,5 +57,6 @@ export { NotRestricted } from "#errors/NotRestricted";
 export { RateLimited } from "#errors/RateLimited";
 export { RestrictionNotAllowed } from "#errors/RestrictionNotAllowed";
 export { RoleChangeNotAllowed } from "#errors/RoleChangeNotAllowed";
+export { ServiceUnavailable } from "#errors/ServiceUnavailable";
 export { Unauthorized } from "#errors/Unauthorized";
 export { UserNotFound } from "#errors/UserNotFound";
