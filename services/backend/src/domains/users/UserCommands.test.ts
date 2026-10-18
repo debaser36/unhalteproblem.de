@@ -6,9 +6,45 @@ import { Sessions } from "#repositories/Sessions";
 import { KernelTest, login, published, UsersTest } from "#testing/Users";
 import { UserProfileChanged, UserRegistered } from "./User.ts";
 import { UserCommands } from "./UserCommands.ts";
-import { ModerationRepository } from "./ModerationRepository.ts";
+import { ModerationCommands } from "#domains/moderation/ModerationCommands";
+import { ModerationQueries } from "#domains/moderation/ModerationQueries";
+import { ModerationRepository } from "#domains/moderation/ModerationRepository";
+import { UserDirectory } from "./UserDirectory.ts";
 import { UserQueries } from "./UserQueries.ts";
 import { UserRepository } from "./UserRepository.ts";
+
+let lookups = 0;
+
+// The users domain on a repository whose second lookup of the first login
+// misses the user another login has just inserted.
+const ConcurrentFirstLoginTest = Layer.mergeAll(
+  UserCommands.layer,
+  UserQueries.layer,
+).pipe(
+  Layer.provide(
+    Layer.mergeAll(ModerationCommands.layer, ModerationQueries.layer).pipe(
+      Layer.provide(UserDirectory.layer),
+      Layer.provide([ModerationRepository.layer, Sessions.layer]),
+    ),
+  ),
+  Layer.provide(
+    Layer.effect(
+      UserRepository,
+      Effect.gen(function* () {
+        const repository = yield* UserRepository;
+        return UserRepository.of({
+          ...repository,
+          // The second command's first lookup misses the user.
+          findBySubjectForUpdate: (subject) =>
+            ++lookups === 2
+              ? Effect.succeedNone
+              : repository.findBySubjectForUpdate(subject),
+        });
+      }),
+    ).pipe(Layer.provide(UserRepository.layer)),
+  ),
+  Layer.provideMerge(KernelTest),
+);
 
 describe("UserCommands.syncFromLogin", () => {
   layer(UsersTest, { timeout: "30 seconds" })((it) => {
@@ -36,13 +72,13 @@ describe("UserCommands.syncFromLogin", () => {
     it.effect("grants normalUser at registration and keeps granted roles", () =>
       Effect.gen(function* () {
         const commands = yield* UserCommands;
-        const queries = yield* UserQueries;
+        const moderation = yield* ModerationQueries;
         const sql = yield* SqlClient.SqlClient;
         const subject = crypto.randomUUID();
-        assert.deepStrictEqual((yield* queries.accessOf(subject)).roles, []);
+        assert.deepStrictEqual((yield* moderation.accessOf(subject)).roles, []);
 
         const user = yield* commands.syncFromLogin(login(subject));
-        assert.deepStrictEqual((yield* queries.accessOf(subject)).roles, [
+        assert.deepStrictEqual((yield* moderation.accessOf(subject)).roles, [
           "normalUser",
         ]);
 
@@ -52,7 +88,7 @@ describe("UserCommands.syncFromLogin", () => {
           INSERT INTO user_roles (user_id, role) VALUES (${user.id}, 'admin')
         `;
         yield* commands.syncFromLogin(login(subject));
-        assert.deepStrictEqual((yield* queries.accessOf(subject)).roles, [
+        assert.deepStrictEqual((yield* moderation.accessOf(subject)).roles, [
           "admin",
           "normalUser",
         ]);
@@ -115,7 +151,6 @@ describe("UserCommands.syncFromLogin", () => {
     );
   });
 
-  let lookups = 0;
   it.effect(
     "continues as a repeated login when a concurrent first login won",
     () =>
@@ -137,31 +172,7 @@ describe("UserCommands.syncFromLogin", () => {
           (yield* queries.getById(winner.id)).username,
           Option.some("ada2"),
         );
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(UserCommands.layer, UserQueries.layer).pipe(
-            Layer.provide(
-              Layer.effect(
-                UserRepository,
-                Effect.gen(function* () {
-                  const repository = yield* UserRepository;
-
-                  return UserRepository.of({
-                    ...repository,
-                    // The second command's first lookup misses the user.
-                    findBySubjectForUpdate: (subject) =>
-                      ++lookups === 2
-                        ? Effect.succeedNone
-                        : repository.findBySubjectForUpdate(subject),
-                  });
-                }),
-              ).pipe(Layer.provide(UserRepository.layer)),
-            ),
-            Layer.provide([ModerationRepository.layer, Sessions.layer]),
-            Layer.provideMerge(KernelTest),
-          ),
-        ),
-      ),
+      }).pipe(Effect.provide(ConcurrentFirstLoginTest)),
     { timeout: 30_000 },
   );
 });

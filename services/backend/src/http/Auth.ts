@@ -31,7 +31,7 @@ import {
 } from "#auth/Secrets";
 import { PublicUrlConfig, SessionConfig } from "#Config";
 import { UserCommands } from "#domains/users/UserCommands";
-import { UserQueries } from "#domains/users/UserQueries";
+import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
 import { Sessions } from "#repositories/Sessions";
@@ -69,7 +69,7 @@ export const AuthHandlers = HttpApiBuilder.group(
     const logoutTokens = yield* LogoutTokens;
     const loginRateLimit = yield* LoginRateLimit;
     const userCommands = yield* UserCommands;
-    const userQueries = yield* UserQueries;
+    const moderation = yield* ModerationQueries;
     const sql = yield* SqlClient.SqlClient;
     const { origin } = yield* PublicUrlConfig;
     const { maxAge } = yield* SessionConfig;
@@ -195,7 +195,7 @@ export const AuthHandlers = HttpApiBuilder.group(
       // Keycloak still lets a restricted user log in; we don't. Checked
       // before the sync, so a refused attempt isn't recorded as a login (a
       // restricted user has always logged in before).
-      if ((yield* userQueries.accessOf(claims.sub)).restricted) {
+      if ((yield* moderation.accessOf(claims.sub)).restricted) {
         return yield* fail("restricted", "account is restricted");
       }
 

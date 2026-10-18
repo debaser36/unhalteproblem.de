@@ -17,7 +17,7 @@ import {
   RoleChange,
   RoleChangeKind,
 } from "./Moderation.ts";
-import { UserId } from "./User.ts";
+import { UserId } from "#domains/users/User";
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -283,7 +283,7 @@ export interface Access {
 
 /**
  * Storage of roles, the role change log and restrictions. Used only by the
- * commands and queries of the users domain.
+ * commands and queries of the moderation domain.
  */
 export class ModerationRepository extends Context.Service<
   ModerationRepository,
@@ -360,7 +360,7 @@ export class ModerationRepository extends Context.Service<
       subject: typeof Subject.Type,
     ) => Effect.Effect<Access, SqlError.SqlError>;
   }
->()("@unhalteproblem.de/backend/domains/users/ModerationRepository") {
+>()("@unhalteproblem.de/backend/domains/moderation/ModerationRepository") {
   /** Needs a migrated `SqlClient`. */
   static readonly layer = Layer.effect(ModerationRepository, make);
 }

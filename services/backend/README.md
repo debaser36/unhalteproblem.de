@@ -99,7 +99,8 @@ are restored too; those that expired meanwhile are cleaned up as usual.
 ## Domains
 
 Business logic lives in domains under `src/domains/<domain>/`, built on a
-small kernel in `src/cqrs/`. There are two domains, `users` and `contact`.
+small kernel in `src/cqrs/`. There are three domains: `users`, `moderation`
+and `contact`.
 
 | Kernel (`#cqrs/*`) | Purpose                                                                                                                                                                                                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -174,6 +175,20 @@ it creates a row in `users` with our own UUID and the Keycloak `sub`
 same user end up with one row. The first login also grants
 `normalUser` (`user_roles`), in the same transaction. Sessions still
 reference users by `sub`.
+
+### Moderation
+
+`domains/moderation` owns who holds which role and who is restricted
+(`ModerationCommands`: `grantRole`, `revokeRole`, `restrict`,
+`liftRestriction`, and `grantInitialRoles` for registration;
+`ModerationQueries`: `accessOf`, `standingOf`, `historyOf`). The domains
+depend on each other in one direction per layer, so there is no cycle:
+moderation acts on users through `UserDirectory` (find and lock a user,
+nothing else of the users domain), and `UserCommands.syncFromLogin` calls
+`ModerationCommands.grantInitialRoles` inside its own transaction (a
+savepoint), so a user never exists without their first role. `UserQueries`
+composes the admin overview from `ModerationQueries`. `DomainsLive` wires
+it: users' directory, then moderation, then the rest of users.
 
 ## Logging
 

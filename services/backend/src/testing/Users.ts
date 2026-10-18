@@ -5,7 +5,10 @@ import { DomainEvents } from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
 import type { User } from "#domains/users/User";
 import { type Login, UserCommands } from "#domains/users/UserCommands";
-import { ModerationRepository } from "#domains/users/ModerationRepository";
+import { ModerationCommands } from "#domains/moderation/ModerationCommands";
+import { ModerationQueries } from "#domains/moderation/ModerationQueries";
+import { ModerationRepository } from "#domains/moderation/ModerationRepository";
+import { UserDirectory } from "#domains/users/UserDirectory";
 import { UserQueries } from "#domains/users/UserQueries";
 import { UserRepository } from "#domains/users/UserRepository";
 import { Sessions } from "#repositories/Sessions";
@@ -23,13 +26,18 @@ export const KernelTest = Transaction.layer.pipe(
 );
 
 /**
- * `UserCommands` and `UserQueries` with their repositories and `Sessions`,
- * all of which stay accessible to the test, on `KernelTest`.
+ * The users and moderation domains' commands and queries with their
+ * repositories, `UserDirectory` and `Sessions`, all of which stay accessible
+ * to the test, on `KernelTest`.
  */
 export const UsersTest = Layer.mergeAll(
   UserCommands.layer,
   UserQueries.layer,
 ).pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(ModerationCommands.layer, ModerationQueries.layer),
+  ),
+  Layer.provideMerge(UserDirectory.layer),
   Layer.provideMerge(
     Layer.mergeAll(
       UserRepository.layer,

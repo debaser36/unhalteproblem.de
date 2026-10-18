@@ -2,8 +2,8 @@ import { Authorized, type Role } from "@unhalteproblem.de/api";
 import type { Subject } from "@unhalteproblem.de/oidc";
 import { Context, Effect, Layer, Option } from "effect";
 import * as Query from "#cqrs/Query";
-import type { Restriction, RoleChange } from "./Moderation.ts";
-import { type Access, ModerationRepository } from "./ModerationRepository.ts";
+import type { Restriction, RoleChange } from "#domains/moderation/Moderation";
+import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { type User, UserNotFound, type UserId } from "./User.ts";
 import { UserRepository } from "./UserRepository.ts";
 
@@ -25,7 +25,7 @@ export interface UserDetails extends UserOverview {
 
 const make = Effect.gen(function* () {
   const users = yield* UserRepository;
-  const moderation = yield* ModerationRepository;
+  const moderation = yield* ModerationQueries;
 
   return UserQueries.of({
     getById: Effect.fn("UserQueries.getById")(function* (id: UserId) {
@@ -41,11 +41,6 @@ const make = Effect.gen(function* () {
       Query.boundary,
     ),
 
-    accessOf: Effect.fn("UserQueries.accessOf")(
-      (subject: typeof Subject.Type) => moderation.accessOf(subject),
-      Query.boundary,
-    ),
-
     listUsers: Effect.fn("UserQueries.listUsers")(function* (page: {
       readonly limit: number;
       readonly offset: number;
@@ -53,14 +48,12 @@ const make = Effect.gen(function* () {
       yield* Authorized("admin");
       const list = yield* users.page(page);
       const total = yield* users.count;
-      const ids = list.map((user) => user.id);
-      const roles = yield* moderation.rolesOfUsers(ids);
-      const restrictions = yield* moderation.activeRestrictionsOf(ids);
+      const standing = yield* moderation.standingOf(list.map((u) => u.id));
       return {
         users: list.map((user): UserOverview => ({
           user,
-          roles: roles.get(user.id) ?? [],
-          restriction: Option.fromUndefinedOr(restrictions.get(user.id)),
+          roles: standing.get(user.id)?.roles ?? [],
+          restriction: standing.get(user.id)?.restriction ?? Option.none(),
         })),
         total,
       };
@@ -72,19 +65,13 @@ const make = Effect.gen(function* () {
       if (Option.isNone(user)) {
         return yield* new UserNotFound({ userId: id });
       }
-      const roles = yield* moderation.rolesOfUsers([id]);
-      const restrictions = yield* moderation.restrictionsOf(id);
-      const roleChanges = yield* moderation.roleChangesOf(id);
+      const standing = (yield* moderation.standingOf([id])).get(id);
+      const history = yield* moderation.historyOf(id);
       return {
         user: user.value,
-        roles: roles.get(id) ?? [],
-        restriction: Option.fromUndefinedOr(
-          restrictions.find((restriction) =>
-            Option.isNone(restriction.liftedAt),
-          ),
-        ),
-        restrictions,
-        roleChanges,
+        roles: standing?.roles ?? [],
+        restriction: standing?.restriction ?? Option.none(),
+        ...history,
       } satisfies UserDetails;
     }, Query.boundary),
   });
@@ -99,12 +86,6 @@ export class UserQueries extends Context.Service<
     readonly findBySubject: (
       subject: typeof Subject.Type,
     ) => Effect.Effect<Option.Option<User>>;
-    /**
-     * The current roles (sorted) and restriction of the user with this
-     * OIDC `sub`: no roles and not restricted if they have never logged in.
-     * Read on every authenticated request.
-     */
-    readonly accessOf: (subject: typeof Subject.Type) => Effect.Effect<Access>;
     /** A page of all users, oldest first (admins only). */
     readonly listUsers: (page: {
       readonly limit: number;
@@ -120,6 +101,6 @@ export class UserQueries extends Context.Service<
     ) => Effect.Effect<UserDetails, UserNotFound, Authorized<"admin">>;
   }
 >()("@unhalteproblem.de/backend/domains/users/UserQueries") {
-  /** Needs `UserRepository` and `ModerationRepository`. */
+  /** Needs `UserRepository` and `ModerationQueries`. */
   static readonly layer = Layer.effect(UserQueries, make);
 }

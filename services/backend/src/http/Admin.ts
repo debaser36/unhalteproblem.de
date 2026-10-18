@@ -8,8 +8,8 @@ import {
 import { Effect, Option } from "effect";
 import { HttpEffect, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
-import type { Restriction, RoleChange } from "#domains/users/Moderation";
-import { UserCommands } from "#domains/users/UserCommands";
+import type { Restriction, RoleChange } from "#domains/moderation/Moderation";
+import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import {
   type UserDetails,
   type UserOverview,
@@ -74,7 +74,7 @@ export const AdminHandlers = HttpApiBuilder.group(
   Api,
   "admin",
   Effect.fn(function* (handlers) {
-    const commands = yield* UserCommands;
+    const commands = yield* ModerationCommands;
     const queries = yield* UserQueries;
     return handlers
       .handle("listUsers", ({ query }) =>

@@ -1,7 +1,7 @@
 import { Role } from "@unhalteproblem.de/api";
 import { Option, Schema } from "effect";
 import { Model } from "effect/schema";
-import { UserId } from "./User.ts";
+import { UserId } from "#domains/users/User";
 
 /**
  * Moderation of users: roles granted and revoked by superAdmins, accounts

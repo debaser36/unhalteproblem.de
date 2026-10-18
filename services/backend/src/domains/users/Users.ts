@@ -1,19 +1,27 @@
 import { Layer } from "effect";
-import { ModerationRepository } from "./ModerationRepository.ts";
 import { UserCommands } from "./UserCommands.ts";
+import { UserDirectory } from "./UserDirectory.ts";
 import { UserEventLog } from "./UserEventLog.ts";
 import { UserQueries } from "./UserQueries.ts";
 import { UserRepository } from "./UserRepository.ts";
 
 /**
- * The users domain: provides `UserCommands` and `UserQueries` and runs its
- * event subscribers. The repositories stay internal to the domain.
+ * The users domain, in two parts because moderation sits between them:
  *
- * Needs a migrated `SqlClient`, `Transaction`, `DomainEvents` and
- * `Sessions` (restricting a user ends their sessions).
+ * - `UserDirectoryLive` provides `UserDirectory` (find and lock users),
+ *   which moderation needs and which depends on nothing else.
+ * - `UsersLive` provides `UserCommands` and `UserQueries` and runs the
+ *   event log; it needs `ModerationCommands` and `ModerationQueries`.
+ *
+ * Both need a migrated `SqlClient`; `UsersLive` also `Transaction` and
+ * `DomainEvents`. The repository stays internal to each.
  */
+export const UserDirectoryLive = UserDirectory.layer.pipe(
+  Layer.provide(UserRepository.layer),
+);
+
 export const UsersLive = Layer.mergeAll(
   UserCommands.layer,
   UserQueries.layer,
   UserEventLog,
-).pipe(Layer.provide([UserRepository.layer, ModerationRepository.layer]));
+).pipe(Layer.provide(UserRepository.layer));

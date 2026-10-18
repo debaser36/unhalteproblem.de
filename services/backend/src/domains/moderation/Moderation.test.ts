@@ -28,9 +28,10 @@ import {
   RoleRevoked,
   UserRestricted,
 } from "./Moderation.ts";
-import { UserId, UserNotFound } from "./User.ts";
-import { UserCommands } from "./UserCommands.ts";
-import { UserQueries } from "./UserQueries.ts";
+import { UserId, UserNotFound } from "#domains/users/User";
+import { UserQueries } from "#domains/users/UserQueries";
+import { ModerationCommands } from "./ModerationCommands.ts";
+import { ModerationQueries } from "./ModerationQueries.ts";
 
 const a = UserId.make("8f3c2a4e-5b6d-4e7f-8a9b-0c1d2e3f4a5b");
 const b = UserId.make("1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d");
@@ -214,16 +215,16 @@ const addSession = (user: Member) =>
 const millis = (time: DateTime.Utc) => DateTime.toEpochMillis(time);
 
 const rolesOf = (user: Member) =>
-  Effect.flatMap(UserQueries, (queries) => queries.accessOf(user.subject)).pipe(
-    Effect.map(({ roles }) => roles),
-  );
+  Effect.flatMap(ModerationQueries, (queries) =>
+    queries.accessOf(user.subject),
+  ).pipe(Effect.map(({ roles }) => roles));
 
 const isRestricted = (user: Member) =>
-  Effect.flatMap(UserQueries, (queries) => queries.accessOf(user.subject)).pipe(
-    Effect.map(({ restricted }) => restricted),
-  );
+  Effect.flatMap(ModerationQueries, (queries) =>
+    queries.accessOf(user.subject),
+  ).pipe(Effect.map(({ restricted }) => restricted));
 
-describe("UserCommands moderation", () => {
+describe("ModerationCommands", () => {
   layer(UsersTest, { timeout: "30 seconds" })((it) => {
     describe("role change log", () => {
       it.effect(
@@ -252,7 +253,7 @@ describe("UserCommands moderation", () => {
         "grants %s and logs who granted it and when",
         (role) =>
           Effect.gen(function* () {
-            const commands = yield* UserCommands;
+            const commands = yield* ModerationCommands;
             const root = yield* member("admin", "superAdmin");
             const target = yield* member();
             yield* TestClock.adjust("1 hour");
@@ -294,7 +295,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("lets a superAdmin grant a role to themselves", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("superAdmin");
           yield* commands
             .grantRole(root.user.id, "admin")
@@ -309,7 +310,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("changes nothing when the user already holds the role", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("admin", "superAdmin");
           const other = yield* member("superAdmin");
           const target = yield* member();
@@ -337,7 +338,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("fails with UserNotFound for an unknown id", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("superAdmin");
           const error = yield* commands
             .grantRole(unknownId, "admin")
@@ -353,7 +354,7 @@ describe("UserCommands moderation", () => {
     describe("revokeRole", () => {
       it.effect("revokes a role and logs who revoked it and when", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("superAdmin");
           const target = yield* member("admin");
           yield* TestClock.adjust("1 hour");
@@ -383,7 +384,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("changes nothing when the user doesn't hold the role", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("superAdmin");
           const target = yield* member();
           const log = yield* roleChangeRows(target);
@@ -404,7 +405,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("revokes superAdmin from another superAdmin", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("superAdmin");
           const other = yield* member("superAdmin");
           yield* commands
@@ -416,7 +417,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("refuses to revoke your own superAdmin (ownSuperAdmin)", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("superAdmin");
           yield* member("superAdmin");
           const log = yield* roleChangeRows(root);
@@ -441,7 +442,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("lets a superAdmin revoke their own other roles", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("admin", "superAdmin");
           yield* commands
             .revokeRole(root.user.id, "admin")
@@ -455,7 +456,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("fails with UserNotFound for an unknown id", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("superAdmin");
           const error = yield* commands
             .revokeRole(unknownId, "admin")
@@ -473,7 +474,7 @@ describe("UserCommands moderation", () => {
         "is refused with Forbidden without superAdmin in the database",
         () =>
           Effect.gen(function* () {
-            const commands = yield* UserCommands;
+            const commands = yield* ModerationCommands;
             // The proof says superAdmin (say, read just before a
             // revocation), the database no longer does.
             const stale = {
@@ -502,7 +503,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("is refused with Forbidden without admin in the database", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const stale = {
             ...(yield* member()),
             roles: ["admin", "normalUser"],
@@ -527,7 +528,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("is refused with Forbidden while restricted", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("admin", "superAdmin");
           const admin = yield* member("admin", "superAdmin");
           const target = yield* member();
@@ -559,7 +560,7 @@ describe("UserCommands moderation", () => {
         "two superAdmins restricting each other: the second is refused",
         () =>
           Effect.gen(function* () {
-            const commands = yield* UserCommands;
+            const commands = yield* ModerationCommands;
             const first = yield* member("admin", "superAdmin");
             const second = yield* member("admin", "superAdmin");
 
@@ -580,7 +581,7 @@ describe("UserCommands moderation", () => {
     describe("restrict", () => {
       it.effect("restricts with a note and ends the user's sessions", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const queries = yield* UserQueries;
           const admin = yield* member("admin");
           const target = yield* member();
@@ -629,7 +630,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("fails with AlreadyRestricted on an active restriction", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const queries = yield* UserQueries;
           const admin = yield* member("admin");
           const target = yield* member();
@@ -664,7 +665,7 @@ describe("UserCommands moderation", () => {
         "refuses restricting yourself (self, actor with %j)",
         (roles) =>
           Effect.gen(function* () {
-            const commands = yield* UserCommands;
+            const commands = yield* ModerationCommands;
             const actor = yield* member(...roles);
             const error = yield* commands
               .restrict(actor.user.id, "me")
@@ -685,7 +686,7 @@ describe("UserCommands moderation", () => {
         "refuses an admin restricting a user with %j (privilegedTarget)",
         (roles) =>
           Effect.gen(function* () {
-            const commands = yield* UserCommands;
+            const commands = yield* ModerationCommands;
             const admin = yield* member("admin");
             const target = yield* member(...roles);
             yield* addSession(target);
@@ -707,7 +708,7 @@ describe("UserCommands moderation", () => {
         ["admin", "superAdmin"],
       ])("lets an admin and superAdmin restrict a user with %j", (roles) =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("admin", "superAdmin");
           const target = yield* member(...roles);
           yield* commands.restrict(target.user.id, "yes").pipe(asAdmin(root));
@@ -717,7 +718,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("fails with UserNotFound for an unknown id", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const admin = yield* member("admin");
           const error = yield* commands
             .restrict(unknownId, "who?")
@@ -733,7 +734,7 @@ describe("UserCommands moderation", () => {
     describe("liftRestriction", () => {
       it.effect("lifts the restriction, ends sessions and keeps history", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const queries = yield* UserQueries;
           const admin = yield* member("admin");
           const other = yield* member("admin");
@@ -797,7 +798,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("stores a lift without a note as none", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const queries = yield* UserQueries;
           const admin = yield* member("admin");
           const target = yield* member();
@@ -820,7 +821,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("fails with NotRestricted without an active restriction", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const admin = yield* member("admin");
           const target = yield* member();
           const never = yield* commands
@@ -847,7 +848,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("refuses lifting your own restriction (self)", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const admin = yield* member("admin");
           const error = yield* commands
             .liftRestriction(admin.user.id, Option.none())
@@ -861,7 +862,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("refuses an admin lifting an admin's restriction", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const root = yield* member("admin", "superAdmin");
           const admin = yield* member("admin");
           const target = yield* member("admin");
@@ -885,7 +886,7 @@ describe("UserCommands moderation", () => {
 
       it.effect("fails with UserNotFound for an unknown id", () =>
         Effect.gen(function* () {
-          const commands = yield* UserCommands;
+          const commands = yield* ModerationCommands;
           const admin = yield* member("admin");
           const error = yield* commands
             .liftRestriction(unknownId, Option.none())
@@ -903,7 +904,7 @@ describe("UserCommands moderation", () => {
     "a superAdmin revoked meanwhile can't revoke the remaining one",
     () =>
       Effect.gen(function* () {
-        const commands = yield* UserCommands;
+        const commands = yield* ModerationCommands;
         // The only two superAdmins of a fresh database.
         const first = yield* member("superAdmin");
         const second = yield* member("superAdmin");
@@ -926,13 +927,13 @@ describe("UserCommands moderation", () => {
   );
 });
 
-describe("UserQueries moderation", () => {
+describe("moderation in UserQueries", () => {
   it.effect(
     "listUsers pages through all users by registration, then id",
     () =>
       Effect.gen(function* () {
         const queries = yield* UserQueries;
-        const commands = yield* UserCommands;
+        const commands = yield* ModerationCommands;
         const sql = yield* SqlClient.SqlClient;
         const admin = yield* member("admin");
         yield* TestClock.adjust("1 hour");
@@ -998,7 +999,7 @@ describe("UserQueries moderation", () => {
     it.effect("getDetails returns the role change log oldest first", () =>
       Effect.gen(function* () {
         const queries = yield* UserQueries;
-        const commands = yield* UserCommands;
+        const commands = yield* ModerationCommands;
         const root = yield* member("admin", "superAdmin");
         const target = yield* member();
         const registeredAt = target.user.createdAt;

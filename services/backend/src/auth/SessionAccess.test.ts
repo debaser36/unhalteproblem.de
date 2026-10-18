@@ -1,8 +1,8 @@
 import { assert, describe, layer } from "@effect/vitest";
 import { DateTime, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
-import { ModerationRepository } from "#domains/users/ModerationRepository";
-import { UserCommands } from "#domains/users/UserCommands";
+import { ModerationQueries } from "#domains/moderation/ModerationQueries";
+import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import { Sessions } from "#repositories/Sessions";
 import { asAdmin, asSuperAdmin, member, UsersTest } from "#testing/Users";
 import { hashSecret } from "./Secrets.ts";
@@ -52,8 +52,8 @@ describe("SessionAccess", () => {
     it.effect("agrees with ModerationRepository.accessOf", () =>
       Effect.gen(function* () {
         const access = yield* SessionAccess;
-        const moderation = yield* ModerationRepository;
-        const commands = yield* UserCommands;
+        const moderation = yield* ModerationQueries;
+        const commands = yield* ModerationCommands;
         const admin = yield* member("admin");
         const target = yield* member();
         yield* commands
@@ -77,7 +77,7 @@ describe("SessionAccess", () => {
     it.effect("sees a lifted restriction as lifted", () =>
       Effect.gen(function* () {
         const access = yield* SessionAccess;
-        const commands = yield* UserCommands;
+        const commands = yield* ModerationCommands;
         const admin = yield* member("admin");
         const target = yield* member();
         yield* commands
@@ -96,7 +96,7 @@ describe("SessionAccess", () => {
     it.effect("sees a role change at once", () =>
       Effect.gen(function* () {
         const access = yield* SessionAccess;
-        const commands = yield* UserCommands;
+        const commands = yield* ModerationCommands;
         const root = yield* member("superAdmin");
         const target = yield* member();
         const idHash = yield* startSession(target.subject);
