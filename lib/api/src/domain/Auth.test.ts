@@ -5,7 +5,9 @@ import {
   LoginQuery,
   ReturnPath,
   ReturnPathMaxLength,
+  Role,
   SessionInfo,
+  User,
 } from "./Auth.ts";
 
 const char = (codePoint: number) => String.fromCodePoint(codePoint);
@@ -91,8 +93,13 @@ describe("LoginQuery", () => {
 });
 
 describe("SessionInfo", () => {
-  const encoded = {
-    user: { id: "f1b2c3", username: "ada", emailVerified: true },
+  const encoded: typeof SessionInfo.Encoded = {
+    user: {
+      id: "f1b2c3",
+      username: "ada",
+      emailVerified: true,
+      roles: ["normalUser", "admin"],
+    },
     expiresAt: "2026-01-01T12:00:00.000Z",
   };
 
@@ -120,5 +127,47 @@ describe("LoginErrorReason", () => {
     assert.isTrue(is("expired"));
     assert.isTrue(is("failed"));
     assert.isFalse(is("access_denied"));
+  });
+});
+
+describe("Role", () => {
+  it("accepts exactly the documented roles", () => {
+    const is = Schema.is(Role);
+    assert.isTrue(is("normalUser"));
+    assert.isTrue(is("admin"));
+    assert.isTrue(is("superAdmin"));
+    assert.isFalse(is("root"));
+    assert.isFalse(is("Admin"));
+  });
+});
+
+describe("User", () => {
+  const user: typeof User.Encoded = {
+    id: "f1b2c3",
+    username: "ada",
+    roles: ["normalUser", "superAdmin"],
+  };
+
+  it("round-trips the roles", () => {
+    const decoded = Schema.decodeSync(User)(user);
+    assert.deepStrictEqual(decoded.roles, ["normalUser", "superAdmin"]);
+    assert.deepStrictEqual(Schema.encodeSync(User)(decoded), user);
+  });
+
+  it("accepts an empty role list", () => {
+    const decode = Schema.decodeUnknownExit(User);
+    assert.deepStrictEqual(
+      decode({ id: "f1b2c3", roles: [] }),
+      Exit.succeed({ id: "f1b2c3", roles: [] }),
+    );
+  });
+
+  it("requires roles and rejects unknown ones", () => {
+    const decode = Schema.decodeUnknownExit(User);
+    assert.isTrue(Exit.isFailure(decode({ id: "f1b2c3" })));
+    assert.isTrue(
+      Exit.isFailure(decode({ ...user, roles: ["normalUser", "root"] })),
+    );
+    assert.isTrue(Exit.isFailure(decode({ ...user, roles: "admin" })));
   });
 });

@@ -53,9 +53,38 @@ export const LoginQuery = Schema.Struct({
 export type LoginQuery = typeof LoginQuery.Type;
 
 /**
+ * An authorization role. Roles are stored in the backend's database, not in
+ * Keycloak.
+ *
+ * - `normalUser`: every registered user; granted at registration.
+ * - `admin`: administers the website.
+ * - `superAdmin`: the highest level of administration.
+ *
+ * Roles are flat: none implies another, so a requirement that admins and
+ * super admins both meet names both (see `Authorized` and `RequireRoles`).
+ * A user can hold several roles at once.
+ *
+ * Adding a role is a contract change and needs a database migration in the
+ * backend as well, since the backend stores roles by these names. Removing
+ * or renaming one is breaking.
+ */
+export const Role = Schema.Literals([
+  "normalUser",
+  "admin",
+  "superAdmin",
+]).annotate({
+  identifier: "Role",
+  description:
+    "An authorization role. Roles are flat (none implies another) and a " +
+    "user can hold several.",
+});
+export type Role = typeof Role.Type;
+
+/**
  * The logged-in user, taken from the OpenID Connect ID token and userinfo
- * claims at login. Everything except `id` depends on the scopes and the
- * user's profile in Keycloak, so it is optional.
+ * claims at login, plus the roles from the backend's database. Everything
+ * except `id` and `roles` depends on the scopes and the user's profile in
+ * Keycloak, so it is optional.
  */
 export const User = Schema.Struct({
   /** The OIDC subject (`sub`): Keycloak's stable user id. */
@@ -67,6 +96,13 @@ export const User = Schema.Struct({
   email: Schema.optionalKey(Schema.String),
   /** Whether Keycloak has verified `email` (`email_verified`). */
   emailVerified: Schema.optionalKey(Schema.Boolean),
+  /**
+   * The user's current roles. The backend reads them from its database on
+   * every request, so a granted or revoked role takes effect without a new
+   * login. Every registered user holds `normalUser`; the schema itself also
+   * accepts an empty list.
+   */
+  roles: Schema.Array(Role),
 }).annotate({
   identifier: "User",
   description: "The logged-in user.",

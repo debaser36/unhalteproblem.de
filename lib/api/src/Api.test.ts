@@ -160,7 +160,12 @@ describe("OpenAPI document", () => {
 // services.
 
 const sessionInfo: SessionInfo = {
-  user: { id: "f1b2c3d4", username: "ada", emailVerified: true },
+  user: {
+    id: "f1b2c3d4",
+    username: "ada",
+    emailVerified: true,
+    roles: ["normalUser"],
+  },
   expiresAt: DateTime.makeUnsafe("2026-01-01T12:00:00Z"),
 };
 const validSession = "valid-session";
@@ -354,7 +359,12 @@ layer(Layer.mergeAll(HandlersLayer, HttpServer.layerServices))(
         });
         assert.strictEqual(response.status, 200);
         assert.deepStrictEqual(yield* response.json, {
-          user: { id: "f1b2c3d4", username: "ada", emailVerified: true },
+          user: {
+            id: "f1b2c3d4",
+            username: "ada",
+            emailVerified: true,
+            roles: ["normalUser"],
+          },
           expiresAt: "2026-01-01T12:00:00.000Z",
         });
 

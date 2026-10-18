@@ -6,6 +6,11 @@ export {
   SessionCookie,
   SessionSecurity,
 } from "./Authentication.ts";
+export {
+  type Authorization,
+  Authorized,
+  RequireRoles,
+} from "./Authorization.ts";
 
 export { AuthGroup } from "#groups/Auth";
 export { ContactGroup } from "#groups/Contact";
@@ -17,6 +22,7 @@ export {
   LoginQuery,
   ReturnPath,
   ReturnPathMaxLength,
+  Role,
   SessionInfo,
   User,
 } from "#domain/Auth";

@@ -10,6 +10,7 @@
   },
   "imports": {
     "#Authentication": "./src/Authentication.ts",
+    "#Authorization": "./src/Authorization.ts",
     "#domain/*": "./src/domain/*.ts",
     "#errors/*": "./src/errors/*.ts",
     "#groups/*": "./src/groups/*.ts"
