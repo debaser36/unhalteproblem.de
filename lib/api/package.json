@@ -9,8 +9,10 @@
     ".": "./src/index.ts"
   },
   "imports": {
+    "#Api": "./src/Api.ts",
     "#Authentication": "./src/Authentication.ts",
     "#Authorization": "./src/Authorization.ts",
+    "#SameOrigin": "./src/SameOrigin.ts",
     "#domain/*": "./src/domain/*.ts",
     "#errors/*": "./src/errors/*.ts",
     "#groups/*": "./src/groups/*.ts"

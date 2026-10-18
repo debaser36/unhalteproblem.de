@@ -17,6 +17,9 @@ import {
   Authentication,
   CurrentUser,
   RateLimited,
+  RequireAdmin,
+  RequireSuperAdmin,
+  SameOrigin,
   SessionCookie,
   type SessionInfo,
   Unauthorized,
@@ -27,6 +30,11 @@ describe("OpenAPI document", () => {
 
   it("exposes exactly the contract's paths and operations", () => {
     assert.deepStrictEqual(Object.keys(spec.paths).sort(), [
+      "/admin/users",
+      "/admin/users/{userId}",
+      "/admin/users/{userId}/restriction",
+      "/admin/users/{userId}/restriction/lift",
+      "/admin/users/{userId}/roles/{role}",
       "/auth/backchannel-logout",
       "/auth/callback",
       "/auth/login",
@@ -57,6 +65,16 @@ describe("OpenAPI document", () => {
       "/auth/callback": { get: "auth.callback" },
       "/auth/logout": { post: "auth.logout" },
       "/auth/backchannel-logout": { post: "auth.backchannelLogout" },
+      "/admin/users": { get: "admin.listUsers" },
+      "/admin/users/{userId}": { get: "admin.getUser" },
+      "/admin/users/{userId}/restriction": { post: "admin.restrictUser" },
+      "/admin/users/{userId}/restriction/lift": {
+        post: "admin.liftRestriction",
+      },
+      "/admin/users/{userId}/roles/{role}": {
+        put: "admin.grantRole",
+        delete: "admin.revokeRole",
+      },
     });
   });
 
@@ -91,7 +109,8 @@ describe("OpenAPI document", () => {
     }
   });
 
-  it("requires the session cookie only on GET /auth/session", () => {
+  // The admin endpoints are checked in `groups/Admin.test.ts`.
+  it("requires the session cookie on GET /auth/session, not on the public endpoints", () => {
     assert.deepStrictEqual(spec.components.securitySchemes, {
       session: {
         type: "apiKey",
@@ -252,6 +271,16 @@ const WithSessionCookie = HttpApiMiddleware.layerClient(
     ),
 );
 
+// The admin group's middlewares are never reached here (see
+// `groups/Admin.test.ts`), but the in-memory server needs an
+// implementation of every middleware of the API.
+const unusedMiddleware = Effect.die("not used by these groups");
+const AdminMiddlewareStubs = Layer.mergeAll(
+  Layer.succeed(RequireAdmin, () => unusedMiddleware),
+  Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
+  Layer.succeed(SameOrigin, () => unusedMiddleware),
+);
+
 const makeClient = HttpApiTest.groups(Api, ["system", "contact", "auth"]);
 
 // `Layer.provideMerge`: the HTTP pipeline resolves the middleware itself when
@@ -260,7 +289,9 @@ const HandlersLayer = Layer.mergeAll(
   SystemHandlers,
   ContactHandlers,
   AuthHandlers,
-).pipe(Layer.provideMerge(AuthenticationStub));
+).pipe(
+  Layer.provideMerge(Layer.mergeAll(AuthenticationStub, AdminMiddlewareStubs)),
+);
 
 layer(Layer.mergeAll(HandlersLayer, HttpServer.layerServices))(
   "client round trip",

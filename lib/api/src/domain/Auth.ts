@@ -114,7 +114,7 @@ export type User = typeof User.Type;
  * `Schema.DateTimeUtcFromString`, but with the encoded side documented as
  * `format: date-time` in JSON Schema.
  */
-const IsoDateTimeUtc = Schema.String.annotate({
+export const IsoDateTimeUtc = Schema.String.annotate({
   format: "date-time",
   description: "An ISO 8601 date-time in UTC, e.g. `2026-01-01T12:00:00.000Z`.",
 }).pipe(
@@ -143,12 +143,19 @@ export type SessionInfo = typeof SessionInfo.Type;
  * - `cancelled`: the user aborted the login at Keycloak (`access_denied`).
  * - `expired`: the login took too long or was started in another browser
  *   (the short-lived login cookie is missing, expired or does not match).
+ * - `restricted`: Keycloak authenticated the user, but an admin has
+ *   restricted the account (see `Restriction`), so no session is created
+ *   until the restriction is lifted.
  * - `failed`: anything else, such as an error from Keycloak or a token that
  *   failed validation.
+ *
+ * Clients should treat an unknown value like `failed`: new reasons may be
+ * added.
  */
 export const LoginErrorReason = Schema.Literals([
   "cancelled",
   "expired",
+  "restricted",
   "failed",
 ]).annotate({
   identifier: "LoginErrorReason",

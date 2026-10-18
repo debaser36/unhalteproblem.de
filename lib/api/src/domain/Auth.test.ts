@@ -125,6 +125,7 @@ describe("LoginErrorReason", () => {
     const is = Schema.is(LoginErrorReason);
     assert.isTrue(is("cancelled"));
     assert.isTrue(is("expired"));
+    assert.isTrue(is("restricted"));
     assert.isTrue(is("failed"));
     assert.isFalse(is("access_denied"));
   });

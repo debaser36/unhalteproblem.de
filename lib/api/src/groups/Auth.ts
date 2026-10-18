@@ -126,8 +126,9 @@ export class AuthGroup extends HttpApiGroup.make("auth")
         302,
         "Redirect back to the website: to the `returnTo` path of the login " +
           "with the session cookie set, or to `/?login_error=<reason>` " +
-          "(`cancelled`, `expired` or `failed`, see `LoginErrorReason`) if " +
-          "the login failed.",
+          "(`cancelled`, `expired`, `restricted` or `failed`, see " +
+          "`LoginErrorReason`) if the login failed or the account is " +
+          "restricted.",
       ),
       // Malformed queries are rejected by schema validation (400). Every
       // other failure (user cancelled, expired login cookie, bad token)

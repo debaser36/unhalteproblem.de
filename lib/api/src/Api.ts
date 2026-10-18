@@ -1,3 +1,4 @@
+import { AdminGroup } from "#groups/Admin";
 import { AuthGroup } from "#groups/Auth";
 import { ContactGroup } from "#groups/Contact";
 import { SystemGroup } from "#groups/System";
@@ -16,6 +17,7 @@ export class Api extends HttpApi.make("unhalteproblem")
   .add(SystemGroup)
   .add(ContactGroup)
   .add(AuthGroup)
+  .add(AdminGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "unhalteproblem.de API",
