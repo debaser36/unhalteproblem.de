@@ -67,6 +67,8 @@ let
   proxyConfig = ''
     # Overwrite, never append: the backend rate-limits by this header.
     proxy_set_header X-Real-IP $remote_addr;
+    # Lets the backend's log lines be matched to nginx's access log.
+    proxy_set_header X-Request-Id $request_id;
     # Same limit as the backend's MaxBodySize, so oversized requests get a
     # clean 413 here instead of a dropped connection there.
     client_max_body_size 32k;

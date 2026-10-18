@@ -11,6 +11,7 @@ import { AdminHandlers } from "#http/Admin";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
 import { ContactHandlers } from "#http/Contact";
+import { RequestLogging } from "#http/RequestLogging";
 import { SameOriginLive } from "#http/SameOrigin";
 import { SystemHandlers } from "#http/System";
 import { LoginAttempts } from "#repositories/LoginAttempts";
@@ -83,7 +84,11 @@ const MaxBodySizeLive = Layer.succeed(
   ByteSize.kibibytes(32),
 );
 
-export const Server = HttpRouter.serve(ApiRoutes).pipe(
+// The router's own access log is off: `RequestLogging` writes a richer one.
+export const Server = HttpRouter.serve(
+  Layer.mergeAll(ApiRoutes, RequestLogging),
+  { disableLogger: true },
+).pipe(
   Layer.provide([HttpServerLive, MaxBodySizeLive]),
   Layer.provide(LoggerLive),
 );
