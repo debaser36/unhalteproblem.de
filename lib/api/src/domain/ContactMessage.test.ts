@@ -26,6 +26,16 @@ describe("ContactMessage", () => {
     assert.isTrue(Exit.isSuccess(decode(atLimit)));
   });
 
+  it("still accepts newlines, tabs and other control characters", () => {
+    const message = "line 1\nline 2\t\u0001 \u{1F600}";
+    assert.isTrue(Exit.isSuccess(decode({ ...valid, message })));
+  });
+
+  it("rejects NUL in the encoded direction too", () => {
+    const encode = Schema.encodeUnknownExit(ContactMessage);
+    assert.isTrue(Exit.isFailure(encode({ ...valid, name: "A\u0000" })));
+  });
+
   it.each([
     ["no @", "ada.example.org"],
     ["no domain dot", "ada@example"],
@@ -57,6 +67,9 @@ describe("ContactMessage", () => {
         email: `${"a".repeat(ContactMessageLimits.emailMaxLength)}@example.org`,
       },
     ],
+    ["NUL in name", { name: "Ada\u0000Lovelace" }],
+    ["NUL in email", { email: "ada\u0000@example.org" }],
+    ["NUL in message", { message: "Hello\u0000there" }],
     ["missing field", { message: undefined }],
   ])("rejects %s", (_, patch) => {
     assert.isTrue(Exit.isFailure(decode({ ...valid, ...patch })));

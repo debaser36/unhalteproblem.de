@@ -160,6 +160,19 @@ describe("OpenAPI document", () => {
     assert.strictEqual(returnPath.maxLength, 2048);
   });
 
+  it("documents the NUL restriction of the contact fields", () => {
+    const contact = spec.components.schemas["ContactMessage"] as {
+      readonly properties: Record<
+        string,
+        { readonly allOf?: ReadonlyArray<{ readonly pattern?: string }> }
+      >;
+    };
+    for (const field of ["name", "email", "message"]) {
+      const patterns = contact.properties[field]?.allOf?.map((s) => s.pattern);
+      assert.isTrue(patterns?.includes("^[^\\u0000]*$") ?? false, field);
+    }
+  });
+
   it("takes the back-channel logout token as a form-urlencoded body", () => {
     const operation = spec.paths["/auth/backchannel-logout"]?.post;
     assert.deepStrictEqual(Object.keys(operation?.requestBody?.content ?? {}), [

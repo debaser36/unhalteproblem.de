@@ -23,8 +23,19 @@ export const ContactMessageLimits = {
 // is documented. Clients therefore trim before sending, and both sides apply
 // exactly the same rules.
 
-/** The sender's name: trimmed, 1 to 100 characters. */
+// Postgres `text` cannot store U+0000, so such a submission would pass
+// validation and then fail in the database with a 500. Reject it here instead.
+// The `u` flag is required for `Schema.isPattern` to export the pattern to
+// JSON Schema.
+// oxlint-disable-next-line no-control-regex -- matching NUL is the point
+const NO_NUL_PATTERN = /^[^\u0000]*$/u;
+const noNul = Schema.isPattern(NO_NUL_PATTERN, {
+  expected: "text without NUL characters",
+});
+
+/** The sender's name: trimmed, 1 to 100 characters, no NUL. */
 export const ContactName = Schema.Trimmed.check(
+  noNul,
   Schema.isNonEmpty(),
   Schema.isMaxLength(ContactMessageLimits.nameMaxLength),
 ).annotate({ description: "The sender's name." });
@@ -38,6 +49,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/u;
 
 /** The address to reply to: trimmed, at most 254 characters, e-mail shaped. */
 export const ContactEmail = Schema.Trimmed.check(
+  noNul,
   Schema.isMaxLength(ContactMessageLimits.emailMaxLength),
   Schema.isPattern(EMAIL_PATTERN, {
     expected: "an e-mail address",
@@ -45,8 +57,9 @@ export const ContactEmail = Schema.Trimmed.check(
   }),
 ).annotate({ description: "The address a reply should be sent to." });
 
-/** The message text: trimmed, 1 to 5000 characters. */
+/** The message text: trimmed, 1 to 5000 characters, no NUL. */
 export const ContactMessageBody = Schema.Trimmed.check(
+  noNul,
   Schema.isNonEmpty(),
   Schema.isMaxLength(ContactMessageLimits.messageMaxLength),
 ).annotate({ description: "The message itself." });
