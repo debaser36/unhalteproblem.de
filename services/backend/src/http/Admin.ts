@@ -78,13 +78,18 @@ export const AdminHandlers = HttpApiBuilder.group(
     const queries = yield* UserQueries;
     return handlers
       .handle("listUsers", ({ query }) =>
-        queries.listUsers(query).pipe(
-          noStore,
-          Effect.map(({ users, total }) => ({
-            users: users.map(toAdminUser),
-            total,
-          })),
-        ),
+        queries
+          .listUsers({
+            limit: query.limit,
+            after: Option.fromUndefinedOr(query.cursor),
+          })
+          .pipe(
+            noStore,
+            Effect.map(({ users, next }) => ({
+              users: users.map(toAdminUser),
+              nextCursor: Option.getOrNull(next),
+            })),
+          ),
       )
       .handle("getUser", ({ params }) =>
         queries

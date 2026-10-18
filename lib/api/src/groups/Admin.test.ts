@@ -7,6 +7,7 @@ import {
   Exit,
   Layer,
   Redacted,
+  Schema,
 } from "effect";
 import { HttpClientRequest, HttpServer, HttpServerRequest } from "effect/http";
 import {
@@ -20,7 +21,13 @@ import {
 import { Api } from "#Api";
 import { Authentication, CurrentUser, SessionCookie } from "#Authentication";
 import { type RequireRoles } from "#Authorization";
-import { type Restriction, UserId, type UserPageQuery } from "#domain/Admin";
+import {
+  type Restriction,
+  UserCursor,
+  UserCursorMaxLength,
+  UserId,
+  type UserPageQuery,
+} from "#domain/Admin";
 import type { Role } from "#domain/Auth";
 import { AlreadyRestricted } from "#errors/AlreadyRestricted";
 import { Forbidden } from "#errors/Forbidden";
@@ -159,7 +166,7 @@ describe("admin endpoints in the OpenAPI document", () => {
     assert.strictEqual(userId.format, "uuid");
   });
 
-  it("documents limit and offset as optional query parameters", () => {
+  it("documents limit and cursor as optional string query parameters", () => {
     const parameters = operation("/admin/users", "get")?.parameters ?? [];
     assert.deepStrictEqual(
       parameters.map(({ name, in: location, required }) => ({
@@ -169,9 +176,40 @@ describe("admin endpoints in the OpenAPI document", () => {
       })),
       [
         { name: "limit", location: "query", required: false },
-        { name: "offset", location: "query", required: false },
+        { name: "cursor", location: "query", required: false },
       ],
     );
+  });
+
+  it("documents the cursor as a bounded string and the page without a total", () => {
+    const cursor = spec.components.schemas["UserCursorEncoded"] as {
+      readonly type?: string;
+      readonly maxLength?: number;
+    };
+    assert.strictEqual(cursor.type, "string");
+    assert.strictEqual(cursor.maxLength, UserCursorMaxLength);
+
+    const parameters = operation("/admin/users", "get")?.parameters ?? [];
+    assert.deepStrictEqual(
+      parameters.find(({ name }) => name === "cursor")?.schema,
+      { $ref: "#/components/schemas/UserCursorEncoded" },
+    );
+
+    const page = spec.components.schemas["UserPage"] as {
+      readonly properties?: Record<string, unknown>;
+      readonly required?: ReadonlyArray<string>;
+    };
+    assert.deepStrictEqual(Object.keys(page.properties ?? {}), [
+      "users",
+      "nextCursor",
+    ]);
+    assert.deepStrictEqual(page.required, ["users", "nextCursor"]);
+    assert.deepStrictEqual(page.properties?.["nextCursor"], {
+      anyOf: [
+        { $ref: "#/components/schemas/UserCursorEncoded" },
+        { type: "null" },
+      ],
+    });
   });
 
   it("takes JSON payloads for restrictions", () => {
@@ -282,6 +320,13 @@ const ada = {
   restriction: null,
 };
 
+const adaCursor = { createdAt: t0, id: adaId };
+const adaCursorEncoded = Schema.encodeSync(UserCursor)(adaCursor);
+
+// Base64url without padding, as the cursor is encoded.
+const base64Url = (text: string) =>
+  btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+
 // The decoded query of the last `listUsers` call.
 let lastQuery: UserPageQuery | undefined;
 
@@ -295,7 +340,11 @@ const AdminHandlers = HttpApiBuilder.group(Api, "admin", (handlers) =>
     .handle("listUsers", ({ query }) =>
       Effect.sync(() => {
         lastQuery = query;
-        return { users: [ada], total: 1 };
+        // Echoes a position after `ada` unless the request already is one.
+        return {
+          users: [ada],
+          nextCursor: query.cursor === undefined ? adaCursor : null,
+        };
       }),
     )
     .handle("getUser", ({ params }) =>
@@ -437,7 +486,7 @@ layer(
     HttpServer.layerServices,
   ),
 )("admin client round trip", (it) => {
-  const query = { limit: 50, offset: 0 };
+  const query = { limit: 50 };
 
   it.effect("answers 401 Unauthorized without a session", () =>
     Effect.gen(function* () {
@@ -472,14 +521,20 @@ layer(
     }).pipe(Effect.provide(asAdmin)),
   );
 
-  it.effect("listUsers returns a page and passes limit and offset", () =>
+  it.effect("listUsers returns a page and passes limit and cursor", () =>
     Effect.gen(function* () {
       const client = yield* makeClient;
-      const page = yield* client.admin.listUsers({
-        query: { limit: 10, offset: 20 },
+      const first = yield* client.admin.listUsers({ query: { limit: 10 } });
+      assert.deepStrictEqual(first, { users: [ada], nextCursor: adaCursor });
+      assert.deepStrictEqual(lastQuery, { limit: 10 });
+
+      // The cursor makes the round trip as an opaque string and arrives
+      // decoded; the last page has no next cursor.
+      const last = yield* client.admin.listUsers({
+        query: { limit: 10, cursor: first.nextCursor! },
       });
-      assert.deepStrictEqual(page, { users: [ada], total: 1 });
-      assert.deepStrictEqual(lastQuery, { limit: 10, offset: 20 });
+      assert.deepStrictEqual(last, { users: [ada], nextCursor: null });
+      assert.deepStrictEqual(lastQuery, { limit: 10, cursor: adaCursor });
 
       const response = yield* client.admin.listUsers({
         query,
@@ -501,17 +556,19 @@ layer(
             restriction: null,
           },
         ],
-        total: 1,
+        nextCursor: adaCursorEncoded,
       });
     }).pipe(Effect.provide(asAdmin)),
   );
 
-  it.effect("listUsers defaults limit and offset when the URL has none", () =>
+  it.effect("listUsers defaults limit when the URL has none", () =>
     Effect.gen(function* () {
       lastQuery = undefined;
       const client = yield* makeClient;
-      yield* client.admin.listUsers({ query: { limit: 7, offset: 3 } });
-      assert.deepStrictEqual(lastQuery, { limit: 50, offset: 0 });
+      yield* client.admin.listUsers({
+        query: { limit: 7, cursor: adaCursor },
+      });
+      assert.deepStrictEqual(lastQuery, { limit: 50 });
     }).pipe(
       Effect.provide(
         // Sends the same GET without the query that the generated client
@@ -536,7 +593,15 @@ layer(
     ["limit=201"],
     ["limit=1.5"],
     ["limit=ten"],
-    ["offset=-1"],
+    ["cursor="],
+    ["cursor=not*base64url"],
+    ["cursor=" + base64Url("not json")],
+    ["cursor=" + base64Url(JSON.stringify([1767225600000]))],
+    ["cursor=" + base64Url(JSON.stringify([1767225600000, "not-a-uuid"]))],
+    ["cursor=" + base64Url(JSON.stringify(["x", adaId]))],
+    ["cursor=" + base64Url(JSON.stringify([1.5, adaId]))],
+    ["cursor=" + base64Url(JSON.stringify([1767225600000, adaId, "extra"]))],
+    ["cursor=" + "A".repeat(UserCursorMaxLength + 1)],
   ])("listUsers rejects ?%s on the server", ([search]) =>
     Effect.gen(function* () {
       const client = yield* makeClient;
@@ -567,11 +632,7 @@ layer(
   it.effect("listUsers rejects limits out of range", () =>
     Effect.gen(function* () {
       const client = yield* makeClient;
-      for (const bad of [
-        { limit: 0, offset: 0 },
-        { limit: 201, offset: 0 },
-        { limit: 10, offset: -1 },
-      ]) {
+      for (const bad of [{ limit: 0 }, { limit: 201 }, { limit: 1.5 }]) {
         const exit = yield* client.admin
           .listUsers({ query: bad })
           .pipe(Effect.exit);
@@ -769,7 +830,10 @@ layer(
         assert.instanceOf(error, Forbidden);
       }
       // Reads need none.
-      assert.strictEqual((yield* client.admin.listUsers({ query })).total, 1);
+      assert.strictEqual(
+        (yield* client.admin.listUsers({ query })).users.length,
+        1,
+      );
     }).pipe(Effect.provide(withSession("normalUser,admin,superAdmin"))),
   );
 

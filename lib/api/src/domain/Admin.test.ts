@@ -9,6 +9,8 @@ import {
   RestrictionNote,
   RestrictionNoteMaxLength,
   RoleChange,
+  UserCursor,
+  UserCursorMaxLength,
   UserId,
   UserPage,
   UserPageLimits,
@@ -204,51 +206,136 @@ describe("AdminUserDetails", () => {
   });
 });
 
-describe("UserPage", () => {
-  it("round-trips a page", () => {
-    const page = { users: [adminUser], total: 1 };
-    const decoded = Schema.decodeSync(UserPage)(page);
-    assert.deepStrictEqual(Schema.encodeSync(UserPage)(decoded), page);
+// The cursor of `adaId` created at 2026-01-01T12:00:00.000Z: base64url
+// (no padding) of `[1767268800000,"3f0c6a8e-..."]`.
+const adaCursorEncoded =
+  "WzE3NjcyNjg4MDAwMDAsIjNmMGM2YThlLTJiMWQtNGM1ZS05ZjdhLTFiMmMzZDRlNWY2MCJd";
+
+const base64Url = (text: string) =>
+  btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+
+describe("UserCursor", () => {
+  const decode = Schema.decodeUnknownExit(UserCursor);
+
+  it("decodes the base64url JSON pair into createdAt and id", () => {
+    const cursor = Schema.decodeSync(UserCursor)(adaCursorEncoded);
+    assert.isTrue(DateTime.isUtc(cursor.createdAt));
+    assert.strictEqual(
+      DateTime.formatIso(cursor.createdAt),
+      "2026-01-01T12:00:00.000Z",
+    );
+    assert.strictEqual(cursor.id, adaId);
+    assert.deepStrictEqual(Object.keys(cursor).sort(), ["createdAt", "id"]);
   });
 
-  it("rejects a negative or fractional total", () => {
+  it("round-trips in both directions", () => {
+    const cursor = Schema.decodeSync(UserCursor)(adaCursorEncoded);
+    assert.strictEqual(Schema.encodeSync(UserCursor)(cursor), adaCursorEncoded);
+    const made = {
+      createdAt: DateTime.makeUnsafe("2026-07-04T08:09:10.123Z"),
+      id: UserId.make(graceId),
+    };
+    const encoded = Schema.encodeSync(UserCursor)(made);
+    assert.match(encoded, /^[A-Za-z0-9_-]+$/);
+    assert.isAtMost(encoded.length, UserCursorMaxLength);
+    assert.deepStrictEqual(Schema.decodeSync(UserCursor)(encoded), made);
+  });
+
+  it("rejects malformed and tampered cursors", () => {
+    const pair = (a: unknown, b: unknown) => base64Url(JSON.stringify([a, b]));
+    for (const bad of [
+      "",
+      "not*base64url",
+      adaCursorEncoded + "=",
+      adaCursorEncoded.slice(0, -4),
+      adaCursorEncoded.replace("W", "X"),
+      base64Url("not json"),
+      base64Url("{}"),
+      base64Url(JSON.stringify([1767268800000])),
+      base64Url(JSON.stringify([1767268800000, adaId, "extra"])),
+      pair("1767268800000", adaId),
+      pair(1.5, adaId),
+      pair(1767268800000, "not-a-uuid"),
+      pair(1767268800000, null),
+      pair(null, adaId),
+      "A".repeat(UserCursorMaxLength + 1),
+    ]) {
+      assert.isTrue(Exit.isFailure(decode(bad)), bad);
+    }
+    for (const bad of [null, 5, {}, undefined]) {
+      assert.isTrue(Exit.isFailure(decode(bad)));
+    }
+  });
+
+  it("bounds the encoded length", () => {
+    // Padding the JSON with whitespace keeps it valid but too long.
+    const padded = base64Url(
+      `[1767268800000,${" ".repeat(UserCursorMaxLength)}"${adaId}"]`,
+    );
+    assert.isAbove(padded.length, UserCursorMaxLength);
+    assert.isTrue(Exit.isFailure(decode(padded)));
+  });
+});
+
+describe("UserPage", () => {
+  it("round-trips a page with and without a next cursor", () => {
+    for (const nextCursor of [adaCursorEncoded, null]) {
+      const page = { users: [adminUser], nextCursor };
+      const decoded = Schema.decodeSync(UserPage)(page);
+      assert.deepStrictEqual(Schema.encodeSync(UserPage)(decoded), page);
+    }
+  });
+
+  it("requires nextCursor and has no total", () => {
     const decode = Schema.decodeUnknownExit(UserPage);
-    assert.isTrue(Exit.isFailure(decode({ users: [], total: -1 })));
-    assert.isTrue(Exit.isFailure(decode({ users: [], total: 1.5 })));
+    assert.isTrue(Exit.isFailure(decode({ users: [] })));
+    assert.isTrue(Exit.isFailure(decode({ users: [], nextCursor: "x" })));
+    const legacy = { users: [], nextCursor: null, total: 3 };
+    const page = Schema.decodeSync(UserPage)(legacy);
+    assert.deepStrictEqual(Object.keys(page).sort(), ["nextCursor", "users"]);
   });
 });
 
 describe("UserPageQuery", () => {
   const decode = Schema.decodeUnknownExit(UserPageQuery);
+  const cursor = Schema.decodeSync(UserCursor)(adaCursorEncoded);
 
-  it("fills in the defaults", () => {
+  it("fills in the default limit and leaves the cursor out", () => {
     assert.deepStrictEqual(
       decode({}),
-      Exit.succeed({ limit: UserPageLimits.defaultLimit, offset: 0 }),
+      Exit.succeed({ limit: UserPageLimits.defaultLimit }),
+    );
+  });
+
+  it("decodes the cursor", () => {
+    assert.deepStrictEqual(
+      decode({ cursor: adaCursorEncoded }),
+      Exit.succeed({ limit: 50, cursor }),
     );
     assert.deepStrictEqual(
-      decode({ offset: 10 }),
-      Exit.succeed({ limit: 50, offset: 10 }),
+      Schema.encodeSync(UserPageQuery)({ limit: 5, cursor }),
+      { limit: 5, cursor: adaCursorEncoded },
     );
   });
 
   it("accepts the bounds", () => {
+    assert.deepStrictEqual(decode({ limit: 1 }), Exit.succeed({ limit: 1 }));
     assert.deepStrictEqual(
-      decode({ limit: 1, offset: 0 }),
-      Exit.succeed({ limit: 1, offset: 0 }),
+      decode({ limit: UserPageLimits.maxLimit }),
+      Exit.succeed({ limit: 200 }),
     );
-    assert.deepStrictEqual(
-      decode({ limit: UserPageLimits.maxLimit, offset: 1_000_000 }),
-      Exit.succeed({ limit: 200, offset: 1_000_000 }),
-    );
+  });
+
+  it("ignores the removed offset", () => {
+    assert.deepStrictEqual(decode({ offset: 10 }), Exit.succeed({ limit: 50 }));
   });
 
   it.each([
     ["a limit of 0", { limit: 0 }],
     ["a limit above the maximum", { limit: 201 }],
     ["a fractional limit", { limit: 1.5 }],
-    ["a negative offset", { offset: -1 }],
-    ["a fractional offset", { offset: 0.5 }],
+    ["a malformed cursor", { cursor: "nope" }],
+    ["an empty cursor", { cursor: "" }],
   ])("rejects %s", (_, query) => {
     assert.isTrue(Exit.isFailure(decode(query)));
   });

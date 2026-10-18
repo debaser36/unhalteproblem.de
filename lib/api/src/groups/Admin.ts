@@ -78,7 +78,7 @@ export class AdminGroup extends HttpApiGroup.make("admin")
     HttpApiEndpoint.get("listUsers", "/admin/users", {
       query: UserPageQuery,
       success: UserPage,
-      // An invalid `limit` or `offset` is rejected by schema validation
+      // An invalid `limit` or `cursor` is rejected by schema validation
       // (400). 401 and 403 come from the middlewares.
       error: [],
     })
@@ -88,10 +88,14 @@ export class AdminGroup extends HttpApiGroup.make("admin")
           summary: "List users",
           description:
             "Requires `admin`. Returns one page of all users with every " +
-            "stored field, their roles and the active restriction, ordered " +
-            "by `createdAt`, then `id`, plus the total number of users. " +
-            "`limit` is 1 to 200 (default 50), `offset` at least 0 " +
-            "(default 0).",
+            "stored field, their roles and the active restriction, oldest " +
+            "first (by `createdAt`, then `id`). Paged by cursor: " +
+            "`nextCursor` is the position after the last returned user " +
+            "(null on the last page); pass it as `cursor` to get the next " +
+            "page. New users sort to the end, so they appear on later " +
+            "pages and never shift the pages already read. A malformed " +
+            "`cursor` is rejected with 400. `limit` is 1 to 200 " +
+            "(default 50).",
         }),
       ),
     HttpApiEndpoint.get("getUser", "/admin/users/:userId", {

@@ -1,6 +1,6 @@
 import { IsoDateTimeUtc, Role } from "#domain/Auth";
 import { Subject } from "@unhalteproblem.de/oidc";
-import { Effect, Schema } from "effect";
+import { type DateTime, Effect, Schema, SchemaGetter } from "effect";
 
 /**
  * Our own id of a user (a UUID), assigned by the backend at registration and
@@ -158,12 +158,65 @@ export const UserPageLimits = {
 } as const;
 
 /**
- * Query of `GET /admin/users`. Both parameters may be left out of the URL;
- * decoding fills in the defaults, so handlers always see numbers. Users are
- * ordered by `createdAt`, then `id`.
+ * Longest accepted encoded `UserCursor`. A real cursor is about 70
+ * characters (`[<epoch millis>,"<uuid>"]` in base64url); the rest is room
+ * for the extremes of `DateTime`, so longer input is rejected before it is
+ * decoded.
+ */
+export const UserCursorMaxLength = 128;
+
+/** Decoded form of `UserCursor`: the position of one user in the order. */
+export interface UserCursorPosition {
+  /** `createdAt` of the user, at millisecond precision. */
+  readonly createdAt: DateTime.Utc;
+  readonly id: UserId;
+}
+
+/**
+ * Position in the user list: the `createdAt` and `id` of the last user of a
+ * page. Clients treat it as an opaque string and pass `nextCursor` back as
+ * `cursor`.
  *
- * In the generated client both are required: its request type is the
- * decoded type. Pass the defaults explicitly (`UserPageLimits`).
+ * Encoded: base64url (no padding) of the JSON array
+ * `[createdAtEpochMillis, userId]`. Decoded: `{ createdAt, id }`. Anything
+ * else (not base64url, not that JSON, a malformed id or timestamp, longer
+ * than `UserCursorMaxLength`) fails decoding, which the endpoint answers
+ * with 400.
+ */
+export const UserCursor = Schema.String.annotate({
+  description:
+    "Opaque position in the user list: pass the `nextCursor` of a page " +
+    "as `cursor` to get the next one.",
+}).pipe(
+  Schema.check(Schema.isMaxLength(UserCursorMaxLength)),
+  Schema.decodeTo(Schema.StringFromBase64Url),
+  Schema.decodeTo(
+    Schema.fromJsonString(Schema.Tuple([Schema.DateTimeUtcFromMillis, UserId])),
+  ),
+  Schema.decodeTo(
+    Schema.Struct({
+      createdAt: Schema.DateTimeUtc,
+      // Only the Type of `UserId`: the tuple above has validated it.
+      id: Schema.toType(UserId),
+    }),
+    {
+      decode: SchemaGetter.transform(([createdAt, id]) => ({ createdAt, id })),
+      encode: SchemaGetter.transform(
+        ({ createdAt, id }) => [createdAt, id] as const,
+      ),
+    },
+  ),
+  Schema.annotate({ identifier: "UserCursor" }),
+);
+export type UserCursor = typeof UserCursor.Type;
+
+/**
+ * Query of `GET /admin/users`. Both parameters may be left out of the URL;
+ * decoding fills in the default `limit`, so handlers always see a number.
+ * Users are ordered by `createdAt`, then `id`, ascending (oldest first).
+ *
+ * In the generated client `limit` is required: its request type is the
+ * decoded type. Pass the default explicitly (`UserPageLimits`).
  */
 export const UserPageQuery = Schema.Struct({
   /** Page size, 1 to 200; 50 by default. */
@@ -181,24 +234,31 @@ export const UserPageQuery = Schema.Struct({
         Effect.succeed(UserPageLimits.defaultLimit),
       ),
     ),
-  /** Number of users to skip, at least 0; 0 by default. */
-  offset: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
-    .annotateKey({
-      description:
-        "Number of users to skip, an integer of at least 0; 0 if absent.",
-    })
-    .pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
+  /**
+   * The `nextCursor` of the previous page. Absent for the first page. The
+   * page starts right after the position it holds.
+   */
+  cursor: Schema.optionalKey(UserCursor).annotateKey({
+    description:
+      "The `nextCursor` of the previous page; leave out for the first page.",
+  }),
 }).annotate({ identifier: "UserPageQuery" });
 export type UserPageQuery = typeof UserPageQuery.Type;
 
 /** Body of `GET /admin/users`: one page of users. */
 export const UserPage = Schema.Struct({
   users: Schema.Array(AdminUser),
-  /** The number of users in total, for paging. */
-  total: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  /**
+   * The position after the last returned user, to pass as `cursor` for the
+   * next page; `null` on the last page.
+   */
+  nextCursor: Schema.NullOr(UserCursor),
 }).annotate({
   identifier: "UserPage",
-  description: "One page of users, ordered by `createdAt`, then `id`.",
+  description:
+    "One page of users, ordered by `createdAt`, then `id` (oldest first). " +
+    "`nextCursor` is the position after the last returned user, or null " +
+    "on the last page.",
 });
 export type UserPage = typeof UserPage.Type;
 

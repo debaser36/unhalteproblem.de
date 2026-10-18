@@ -1,11 +1,17 @@
 import { Authorized, type Role } from "@unhalteproblem.de/api";
 import type { Subject } from "@unhalteproblem.de/oidc";
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, type DateTime, Effect, Layer, Option } from "effect";
 import * as Query from "#cqrs/Query";
 import type { Restriction, RoleChange } from "#domains/moderation/Moderation";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { type User, UserNotFound, type UserId } from "./User.ts";
 import { UserRepository } from "./UserRepository.ts";
+
+/** A place in the list of all users: the registration time and id of a user. */
+export interface UserPosition {
+  readonly createdAt: DateTime.Utc;
+  readonly id: UserId;
+}
 
 /** A user as admins see them in the list. */
 export interface UserOverview {
@@ -43,11 +49,13 @@ const make = Effect.gen(function* () {
 
     listUsers: Effect.fn("UserQueries.listUsers")(function* (page: {
       readonly limit: number;
-      readonly offset: number;
+      readonly after: Option.Option<UserPosition>;
     }) {
       yield* Authorized("admin");
-      const list = yield* users.page(page);
-      const total = yield* users.count;
+      // One more than asked for, to learn whether there is a next page.
+      const fetched = yield* users.page({ ...page, limit: page.limit + 1 });
+      const list = fetched.slice(0, page.limit);
+      const last = list[list.length - 1];
       const standing = yield* moderation.standingOf(list.map((u) => u.id));
       return {
         users: list.map((user): UserOverview => ({
@@ -55,7 +63,10 @@ const make = Effect.gen(function* () {
           roles: standing.get(user.id)?.roles ?? [],
           restriction: standing.get(user.id)?.restriction ?? Option.none(),
         })),
-        total,
+        next:
+          fetched.length > page.limit && last !== undefined
+            ? Option.some({ createdAt: last.createdAt, id: last.id })
+            : Option.none<UserPosition>(),
       };
     }, Query.boundary),
 
@@ -86,12 +97,18 @@ export class UserQueries extends Context.Service<
     readonly findBySubject: (
       subject: typeof Subject.Type,
     ) => Effect.Effect<Option.Option<User>>;
-    /** A page of all users, oldest first (admins only). */
+    /**
+     * A page of up to `limit` users, oldest first, starting after `after`
+     * (admins only), and where the next page starts, if there is one.
+     */
     readonly listUsers: (page: {
       readonly limit: number;
-      readonly offset: number;
+      readonly after: Option.Option<UserPosition>;
     }) => Effect.Effect<
-      { readonly users: ReadonlyArray<UserOverview>; readonly total: number },
+      {
+        readonly users: ReadonlyArray<UserOverview>;
+        readonly next: Option.Option<UserPosition>;
+      },
       never,
       Authorized<"admin">
     >;

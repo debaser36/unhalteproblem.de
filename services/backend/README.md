@@ -357,12 +357,20 @@ session cookie still reaches the backend from same-site pages such as
 
 | Endpoint                                 | Role         | Does                                                      |
 | ---------------------------------------- | ------------ | --------------------------------------------------------- |
-| `GET /admin/users?limit&offset`          | `admin`      | Lists users with all fields, roles and active restriction |
+| `GET /admin/users?limit&cursor`          | `admin`      | Lists users with all fields, roles and active restriction |
 | `GET /admin/users/:id`                   | `admin`      | One user, with restriction history and role change log    |
 | `POST /admin/users/:id/restriction`      | `admin`      | Restricts the account, with a note                        |
 | `POST /admin/users/:id/restriction/lift` | `admin`      | Lifts the active restriction, with an optional note       |
 | `PUT /admin/users/:id/roles/:role`       | `superAdmin` | Grants a role                                             |
 | `DELETE /admin/users/:id/roles/:role`    | `superAdmin` | Revokes a role                                            |
+
+The list is paged by keyset, oldest first (`created_at`, then `id`): the
+response carries `nextCursor`, an opaque token for the position after the
+last user, which the next request passes as `cursor` (400 if it is
+malformed). It costs the same on every page, and users who register
+meanwhile appear on later pages without shifting earlier ones. The cursor
+holds the time in milliseconds, which is the precision `users.created_at` is
+written with (from the Effect clock), so don't insert users by hand.
 
 Roles are flat here too: a superAdmin needs `admin` as well to use the
 admin endpoints. `:id` is our user id (`users.id`), not the Keycloak `sub`.

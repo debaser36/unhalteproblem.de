@@ -347,42 +347,58 @@ describe("admin listUsers", () => {
           const body = yield* json(response);
           return {
             ids: (body["users"] as Array<Json>).map((user) => user["id"]),
+            nextCursor: body["nextCursor"] as string | null,
             total: body["total"],
           };
         });
 
-      assert.deepStrictEqual(yield* page(""), { ids: expected, total: 5 });
-      assert.deepStrictEqual(yield* page("?limit=2"), {
-        ids: expected.slice(0, 2),
-        total: 5,
+      // Everything on one page: no next cursor, and no total any more.
+      const all = yield* page("");
+      assert.deepStrictEqual(all, {
+        ids: expected,
+        nextCursor: null,
+        total: undefined,
       });
-      assert.deepStrictEqual(yield* page("?limit=2&offset=1"), {
-        ids: expected.slice(1, 3),
-        total: 5,
-      });
-      assert.deepStrictEqual(yield* page("?offset=4"), {
-        ids: expected.slice(4),
-        total: 5,
-      });
-      assert.deepStrictEqual(yield* page("?limit=200&offset=5"), {
-        ids: [],
-        total: 5,
-      });
+
+      // Walking the list with the cursors the endpoint hands out.
+      const seen: Array<unknown> = [];
+      let query = "?limit=2";
+      for (let pages = 0; pages < 10; pages++) {
+        const current = yield* page(query);
+        seen.push(...current.ids);
+        if (current.nextCursor === null) break;
+        query = `?limit=2&cursor=${current.nextCursor}`;
+      }
+      assert.deepStrictEqual(seen, expected);
+
+      // A page that ends exactly at the last user has no next cursor.
+      assert.strictEqual((yield* page("?limit=5")).nextCursor, null);
+      const firstTwo = yield* page("?limit=2");
+      assert.isString(firstTwo.nextCursor);
+      assert.deepStrictEqual(
+        (yield* page(`?limit=200&cursor=${firstTwo.nextCursor}`)).ids,
+        expected.slice(2),
+      );
     }).pipe(Effect.scoped),
   );
 
-  it.effect.each(["limit=0", "limit=201", "limit=1.5", "limit=x", "offset=-1"])(
-    "rejects %s with 400",
-    (query) =>
-      Effect.gen(function* () {
-        const { call, admin } = yield* setup;
-        const response = yield* call(
-          admin.cookie,
-          "GET",
-          `/admin/users?${query}`,
-        );
-        assert.strictEqual(response.status, 400);
-      }).pipe(Effect.scoped),
+  it.effect.each([
+    "limit=0",
+    "limit=201",
+    "limit=1.5",
+    "limit=x",
+    "cursor=garbage",
+    "cursor=",
+  ])("rejects %s with 400", (query) =>
+    Effect.gen(function* () {
+      const { call, admin } = yield* setup;
+      const response = yield* call(
+        admin.cookie,
+        "GET",
+        `/admin/users?${query}`,
+      );
+      assert.strictEqual(response.status, 400);
+    }).pipe(Effect.scoped),
   );
 
   it.effect("lists every field, roles and the active restriction", () =>

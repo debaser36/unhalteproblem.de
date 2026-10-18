@@ -1,5 +1,13 @@
 import type { Subject } from "@unhalteproblem.de/oidc";
-import { Cause, Context, Effect, Layer, Option, Schema } from "effect";
+import {
+  Cause,
+  Context,
+  type DateTime,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+} from "effect";
 import { SqlClient, type SqlError, SqlModel, SqlSchema } from "effect/sql";
 import { dieOnSchemaError } from "#repositories/Sql";
 import { User, type UserId } from "./User.ts";
@@ -26,12 +34,30 @@ const make = Effect.gen(function* () {
     `,
   });
 
+  // Keyset paging: the position is the (created_at, id) of the last user
+  // seen, so a page costs the same however deep it is, and users who
+  // register meanwhile never shift the pages already read. `users_created_at_id_idx`
+  // serves both the comparison and the order.
   const page = SqlSchema.findAll({
-    Request: Schema.Struct({ limit: Schema.Int, offset: Schema.Int }),
+    Request: Schema.Struct({
+      limit: Schema.Int,
+      after: Schema.NullOr(
+        Schema.Struct({
+          createdAt: Schema.DateTimeUtcFromDate,
+          id: Schema.String,
+        }),
+      ),
+    }),
     Result: User,
-    execute: ({ limit, offset }) => sql`
-      SELECT * FROM users ORDER BY created_at, id
-      LIMIT ${limit} OFFSET ${offset}
+    execute: ({ limit, after }) => sql`
+      SELECT * FROM users
+      ${
+        after === null
+          ? sql``
+          : sql`WHERE (created_at, id) > (${after.createdAt}, ${after.id}::uuid)`
+      }
+      ORDER BY created_at, id
+      LIMIT ${limit}
     `,
   });
 
@@ -61,18 +87,11 @@ const make = Effect.gen(function* () {
         Effect.withSpan("UserRepository.lockForUpdate"),
       ),
 
-    page: ({ limit, offset }) =>
-      page({ limit, offset }).pipe(
+    page: ({ limit, after }) =>
+      page({ limit, after: Option.getOrNull(after) }).pipe(
         dieOnSchemaError,
         Effect.withSpan("UserRepository.page"),
       ),
-
-    count: sql<{ readonly count: number }>`
-      SELECT count(*)::int AS count FROM users
-    `.pipe(
-      Effect.map((rows) => rows[0]?.count ?? 0),
-      Effect.withSpan("UserRepository.count"),
-    ),
 
     findById: (id) =>
       repository.findById(id).pipe(
@@ -120,13 +139,17 @@ export class UserRepository extends Context.Service<
     readonly lockForUpdate: (
       ids: ReadonlyArray<UserId>,
     ) => Effect.Effect<ReadonlyArray<User>, SqlError.SqlError>;
-    /** A page of all users, oldest registration first. */
+    /**
+     * Up to `limit` users, oldest registration first (then by id), starting
+     * after the user at position `after`.
+     */
     readonly page: (page: {
       readonly limit: number;
-      readonly offset: number;
+      readonly after: Option.Option<{
+        readonly createdAt: DateTime.Utc;
+        readonly id: UserId;
+      }>;
     }) => Effect.Effect<ReadonlyArray<User>, SqlError.SqlError>;
-    /** How many users there are. */
-    readonly count: Effect.Effect<number, SqlError.SqlError>;
     readonly findById: (
       id: UserId,
     ) => Effect.Effect<Option.Option<User>, SqlError.SqlError>;

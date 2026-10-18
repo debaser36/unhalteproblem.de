@@ -953,9 +953,9 @@ describe("moderation in UserQueries", () => {
         ];
 
         const all = yield* queries
-          .listUsers({ limit: 50, offset: 0 })
+          .listUsers({ limit: 50, after: Option.none() })
           .pipe(asAdmin(admin));
-        assert.strictEqual(all.total, 4);
+        assert.isTrue(Option.isNone(all.next));
         assert.deepStrictEqual(
           all.users.map(({ user }) => user.id),
           expected,
@@ -978,19 +978,41 @@ describe("moderation in UserQueries", () => {
         assert.isTrue(
           adminEntry !== undefined && Option.isNone(adminEntry.restriction),
         );
-
-        const page = yield* queries
-          .listUsers({ limit: 2, offset: 1 })
+        // Keyset paging: each page starts after the last user of the one
+        // before, and the last page has no next position.
+        const first = yield* queries
+          .listUsers({ limit: 2, after: Option.none() })
           .pipe(asAdmin(admin));
-        assert.strictEqual(page.total, 4);
         assert.deepStrictEqual(
-          page.users.map(({ user }) => user.id),
-          expected.slice(1, 3),
+          first.users.map(({ user }) => user.id),
+          expected.slice(0, 2),
         );
-        const past = yield* queries
-          .listUsers({ limit: 2, offset: 4 })
+        assert.deepStrictEqual(
+          first.next,
+          Option.some({
+            createdAt: first.users[1]!.user.createdAt,
+            id: expected[1],
+          }),
+        );
+        const second = yield* queries
+          .listUsers({ limit: 2, after: first.next })
           .pipe(asAdmin(admin));
-        assert.deepStrictEqual(past, { users: [], total: 4 });
+        assert.deepStrictEqual(
+          second.users.map(({ user }) => user.id),
+          expected.slice(2),
+        );
+        // A page that ends exactly at the last user has no next one.
+        assert.isTrue(Option.isNone(second.next));
+        const past = yield* queries
+          .listUsers({
+            limit: 2,
+            after: Option.some({
+              createdAt: second.users[1]!.user.createdAt,
+              id: expected[3]!,
+            }),
+          })
+          .pipe(asAdmin(admin));
+        assert.deepStrictEqual(past, { users: [], next: Option.none() });
       }).pipe(Effect.provide(UsersTest)),
     { timeout: 30_000 },
   );
