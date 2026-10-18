@@ -13,7 +13,7 @@ Use the vendored Effect documentation as targeted reference, not ambient
 context:
 
 1. Identify the Effect APIs and concepts involved in the change.
-2. Search `repos/effect/LLMS.md` and `repos/effect/ai-docs/src` for those names
+2. Check `agent-patterns/` and existing code in this repo first; if the pattern is there, stop. Otherwise grep (do not read whole) `repos/effect/LLMS.md` and `repos/effect/ai-docs/src` for those names
    and concepts, then read the matching sections and examples. If
    `agent-patterns/effect-<topic>.md` exists for the topic, read it first.
 3. Apply the relevant guidance and inspect the module source

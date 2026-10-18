@@ -14,7 +14,7 @@ from it, so be precise and cite sources.
 ## Where to look, in order
 
 1. `agent-patterns/effect-*.md`: project notes already derived from the source.
-2. `repos/effect/LLMS.md`: the curated guide written for agents.
+2. `repos/effect/LLMS.md`: the curated guide written for agents. Grep it for the relevant section and read only that, not the whole file.
 3. `repos/effect/ai-docs/src/<NN_topic>/`: runnable examples by topic (basics,
    schema, services, errors, resources, streams, sql, http-client, http-server,
    cli, ai, testing).

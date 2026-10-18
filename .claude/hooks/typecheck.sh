@@ -106,7 +106,7 @@ if [[ -z $report ]]; then
   exit 0
 fi
 
-report=$(head -n 80 <<<"$report")
+report=$(head -n 40 <<<"$report")
 if [[ $(jq -r '.stop_hook_active // false' <<<"$input") == true ]]; then
   jq -n --arg r "$report" --arg n "$note" '{systemMessage: ("Type check still failing for files edited this turn:\n" + $r + (if $n == "" then "" else "\n" + $n end))}'
   exit 0

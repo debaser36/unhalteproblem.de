@@ -2,6 +2,7 @@
 name: dependency-maintainer
 description: Dependency hygiene for the monorepo. It applies safe patch/minor updates, fixes security advisories, checks catalog and version consistency, and reports which majors are available, without doing major upgrades itself (that is the package-upgrader's job). Use only when the user asks for it ("check dependencies", "run dependency maintenance", security audits); it is not scheduled.
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch
+model: sonnet
 skills:
   - dependency-workflow
 ---

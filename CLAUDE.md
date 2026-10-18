@@ -19,6 +19,10 @@ Run from the repo root; everything goes through Turborepo with `.env` loaded.
 - `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm check-types`
 - Scope to one package with `pnpm --filter <package-name> <script>`.
 - Dev environment: `nix develop` (Node and pnpm come from `flake.nix`; they are not on the PATH outside it).
+- Keep command output short; it stays in context for the rest of the session.
+  Pass `--output-logs=errors-only` to turbo runs, use `--reporter=dot` for
+  vitest, scope to the affected package with `--filter`, and pipe long
+  output through `tail -n 50`. Re-run verbosely only to debug a failure.
 
 ## Imports and path aliases
 
@@ -94,9 +98,13 @@ agents can read real library source instead of guessing or searching the web.
 
 - `repos/effect` is **Effect v4** (see `repos/effect/packages/effect/package.json`
   for the exact version). It is the source of truth for idiomatic Effect code.
-- Before writing Effect code, read `repos/effect/LLMS.md` and follow the
-  `effect-development` skill. For anything non-trivial, ask the
-  `effect-researcher` agent instead of reading the subtree in the main context.
+- Before writing Effect code, follow the `effect-development` skill. Check
+  existing code in this repo and `agent-patterns/` first; when the pattern is
+  already there, use it without further research. Otherwise search
+  `repos/effect/LLMS.md` for the relevant section (don't read all of it), and
+  for anything non-trivial ask the `effect-researcher` agent instead of
+  reading the subtree in the main context. A lookup you expect to need again
+  belongs in `agent-patterns/` via `/effect-patterns`.
 - Most training data is Effect v3. When unsure whether an API is v3 or v4, check
   `repos/effect/MIGRATION.md` and `repos/effect/migration/v3-to-v4.md` (import map
   plus a per-module API reference, e.g. search for ``### `effect/Effect` ``).
@@ -146,6 +154,18 @@ agents can read real library source instead of guessing or searching the web.
 Changes touching authentication, authorization, sessions, cookies, tokens or
 secrets need two checks before they count as done: a review by the
 `effect-reviewer` agent (its auth checklist) and `/security-review`.
+Run both once over the finished branch diff before asking to merge, not after
+each step or commit.
+
+## Token budget
+
+Subagents start cold and re-read context, so use them where they add
+something the main session can't: one `effect-reviewer` pass per branch, the
+owning agent for `lib/api` and migrations, and `effect-researcher` only when
+the pattern isn't in this repo or `agent-patterns/` yet. Give each agent the
+file paths and facts you already have so it doesn't rediscover them. Do one
+task per session; suggest a fresh session rather than continuing past a
+context compaction.
 
 ## Hooks
 
@@ -159,21 +179,6 @@ note, so run `pnpm install` there first.
 
 ## Agents and skills
 
-Agents (`.claude/agents/`):
-
-- `effect-researcher`: read-only lookup of idiomatic v4 usage in `repos/effect`, returning patterns with `file:line` sources.
-- `effect-reviewer`: reviews a diff for Effect idioms, v3 drift, boundary mistakes and auth/security. Read-only.
-- `effect-test-writer`: writes and runs `@effect/vitest` tests.
-- `api-contract`: owns `lib/api`; adds or changes endpoints and classifies changes as breaking or compatible.
-- `db-migration`: writes and tests Postgres migrations, keeps Models in sync, and guards destructive changes.
-- `package-upgrader`: upgrades all packages to latest (majors included) and fixes breaking changes while keeping the gates green.
-- `dependency-maintainer`: dependency hygiene (patch/minor updates, `pnpm audit` fixes, catalog consistency, reports on available majors). Run only when the user asks; it is deliberately not scheduled.
-- `nix-maintainer`: `flake.nix`/`flake.lock`, dev shell versions, `nix build`.
-
-Skills (`.claude/skills/`):
-
-- `effect-development`: method for grounding Effect code in local docs (adapted from Effect's own agent skill).
-- `dependency-workflow`: shared baseline, gates and rules for dependency changes (preloaded by the dependency agents).
-- `/effect-update`: pulls the latest Effect subtree and reports what changed.
-- `/effect-patterns <topic>`: writes or refreshes `agent-patterns/effect-<topic>.md`.
-- `/effect-service <name>`: scaffolds a new Effect backend service.
+Agents live in `.claude/agents/`, skills in `.claude/skills/`; their
+descriptions are loaded automatically. `dependency-maintainer` runs only when
+the user asks; it is deliberately not scheduled.

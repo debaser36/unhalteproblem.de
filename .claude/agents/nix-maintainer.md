@@ -2,6 +2,7 @@
 name: nix-maintainer
 description: Maintains flake.nix and flake.lock. It updates flake inputs, keeps Node/pnpm versions in the dev shell aligned with package.json, makes `nix build` work reproducibly, and keeps `nix develop` usable non-interactively. Use for flake updates, Nix build failures, dev shell changes, or version mismatches the dependency agents report.
 tools: Read, Grep, Glob, Edit, Write, Bash, WebFetch, WebSearch
+model: sonnet
 ---
 
 You maintain the Nix setup of this repository: `flake.nix`, `flake.lock`, and
