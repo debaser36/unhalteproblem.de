@@ -10,7 +10,8 @@ import { UsersLive } from "./users/Users.ts";
  * Provides the domains' services and `Transaction`. `DomainEvents` stays
  * internal, so nothing outside a transaction can publish events.
  *
- * Needs a migrated `SqlClient` (`DatabaseLive` or `DatabaseTest`).
+ * Needs a migrated `SqlClient` (`DatabaseLive` or `DatabaseTest`) and
+ * `Sessions` (restricting a user ends their sessions).
  */
 export const DomainsLive = Layer.mergeAll(UsersLive).pipe(
   Layer.provideMerge(Transaction.layer),

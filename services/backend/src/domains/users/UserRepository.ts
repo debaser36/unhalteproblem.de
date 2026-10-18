@@ -1,15 +1,5 @@
-import { Role } from "@unhalteproblem.de/api";
 import type { Subject } from "@unhalteproblem.de/oidc";
-import {
-  Array as Arr,
-  Cause,
-  Context,
-  type DateTime,
-  Effect,
-  Layer,
-  Option,
-  Schema,
-} from "effect";
+import { Cause, Context, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlModel, SqlSchema } from "effect/sql";
 import { dieOnSchemaError } from "#repositories/Sql";
 import { User, type UserId } from "./User.ts";
@@ -22,12 +12,35 @@ const make = Effect.gen(function* () {
     idColumn: "id",
   });
 
+  // FOR NO KEY UPDATE, not FOR UPDATE: nothing changes users.id, and the
+  // weaker lock doesn't conflict with the KEY SHARE that foreign keys to
+  // users (e.g. restricted_by) take, which would deadlock moderators acting
+  // on each other.
+  const lockForUpdate = SqlSchema.findAll({
+    Request: Schema.Struct({ ids: Schema.Array(Schema.String) }),
+    Result: User,
+    execute: ({ ids }) => sql`
+      SELECT * FROM users WHERE ${sql.in("id", ids)}
+      ORDER BY id
+      FOR NO KEY UPDATE
+    `,
+  });
+
+  const page = SqlSchema.findAll({
+    Request: Schema.Struct({ limit: Schema.Int, offset: Schema.Int }),
+    Result: User,
+    execute: ({ limit, offset }) => sql`
+      SELECT * FROM users ORDER BY created_at, id
+      LIMIT ${limit} OFFSET ${offset}
+    `,
+  });
+
   const findBySubject = SqlSchema.findOneOption({
     Request: Schema.Struct({ subject: Schema.String, lock: Schema.Boolean }),
     Result: User,
     execute: ({ subject, lock }) => sql`
       SELECT * FROM users WHERE subject = ${subject}
-      ${lock ? sql`FOR UPDATE` : sql``}
+      ${lock ? sql`FOR NO KEY UPDATE` : sql``}
     `,
   });
 
@@ -41,31 +54,26 @@ const make = Effect.gen(function* () {
     `,
   });
 
-  const rolesOf = SqlSchema.findAll({
-    Request: Schema.Struct({ subject: Schema.String }),
-    Result: Schema.Struct({ role: Role }),
-    execute: ({ subject }) => sql`
-      SELECT r.role FROM users u
-      JOIN user_roles r ON r.user_id = u.id
-      WHERE u.subject = ${subject}
-      ORDER BY r.role
-    `,
-  });
-
-  const grantRoles = SqlSchema.void({
-    Request: Schema.Struct({
-      userId: Schema.String,
-      roles: Schema.NonEmptyArray(Role),
-      grantedAt: Schema.DateTimeUtcFromDate,
-    }),
-    execute: ({ userId, roles, grantedAt }) => sql`
-      INSERT INTO user_roles
-      ${sql.insert(roles.map((role) => ({ userId, role, grantedAt })))}
-      ON CONFLICT (user_id, role) DO NOTHING
-    `,
-  });
-
   return UserRepository.of({
+    lockForUpdate: (ids) =>
+      lockForUpdate({ ids: [...new Set(ids)] }).pipe(
+        dieOnSchemaError,
+        Effect.withSpan("UserRepository.lockForUpdate"),
+      ),
+
+    page: ({ limit, offset }) =>
+      page({ limit, offset }).pipe(
+        dieOnSchemaError,
+        Effect.withSpan("UserRepository.page"),
+      ),
+
+    count: sql<{ readonly count: number }>`
+      SELECT count(*)::int AS count FROM users
+    `.pipe(
+      Effect.map((rows) => rows[0]?.count ?? 0),
+      Effect.withSpan("UserRepository.count"),
+    ),
+
     findById: (id) =>
       repository.findById(id).pipe(
         Effect.asSome,
@@ -94,21 +102,6 @@ const make = Effect.gen(function* () {
 
     update: (user) =>
       repository.updateVoid(User.update.make(user)).pipe(dieOnSchemaError),
-
-    rolesOf: (subject) =>
-      rolesOf({ subject }).pipe(
-        Effect.map(Arr.map(({ role }) => role)),
-        dieOnSchemaError,
-        Effect.withSpan("UserRepository.rolesOf"),
-      ),
-
-    grantRoles: (userId, roles, grantedAt) =>
-      Arr.isReadonlyArrayNonEmpty(roles)
-        ? grantRoles({ userId, roles, grantedAt }).pipe(
-            dieOnSchemaError,
-            Effect.withSpan("UserRepository.grantRoles"),
-          )
-        : Effect.void,
   });
 });
 
@@ -119,6 +112,21 @@ const make = Effect.gen(function* () {
 export class UserRepository extends Context.Service<
   UserRepository,
   {
+    /**
+     * The users with these ids (duplicates allowed), locked until the
+     * transaction ends. Locks in id order, so commands locking the same
+     * users can't deadlock each other.
+     */
+    readonly lockForUpdate: (
+      ids: ReadonlyArray<UserId>,
+    ) => Effect.Effect<ReadonlyArray<User>, SqlError.SqlError>;
+    /** A page of all users, oldest registration first. */
+    readonly page: (page: {
+      readonly limit: number;
+      readonly offset: number;
+    }) => Effect.Effect<ReadonlyArray<User>, SqlError.SqlError>;
+    /** How many users there are. */
+    readonly count: Effect.Effect<number, SqlError.SqlError>;
     readonly findById: (
       id: UserId,
     ) => Effect.Effect<Option.Option<User>, SqlError.SqlError>;
@@ -144,19 +152,6 @@ export class UserRepository extends Context.Service<
     ) => Effect.Effect<boolean, SqlError.SqlError>;
     /** Stores the user's changeable fields (all but subject and createdAt). */
     readonly update: (user: User) => Effect.Effect<void, SqlError.SqlError>;
-    /**
-     * The roles of the user with this subject, sorted; empty for an unknown
-     * subject.
-     */
-    readonly rolesOf: (
-      subject: typeof Subject.Type,
-    ) => Effect.Effect<ReadonlyArray<Role>, SqlError.SqlError>;
-    /** Grants the roles; ones the user already has are left as they are. */
-    readonly grantRoles: (
-      userId: UserId,
-      roles: ReadonlyArray<Role>,
-      grantedAt: DateTime.Utc,
-    ) => Effect.Effect<void, SqlError.SqlError>;
   }
 >()("@unhalteproblem.de/backend/domains/users/UserRepository") {
   /** Needs a migrated `SqlClient`. */

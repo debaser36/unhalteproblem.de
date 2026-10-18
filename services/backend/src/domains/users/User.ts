@@ -75,10 +75,8 @@ export type UserEvent = UserRegistered | UserProfileChanged;
 
 // Errors
 
-export class UserNotFound extends Schema.TaggedError<
-  UserNotFound,
-  { readonly brand: unique symbol }
->()("UserNotFound", { userId: UserId }) {}
+/** No user with this id; the contract's error, so it maps to 404 as is. */
+export { UserNotFound } from "@unhalteproblem.de/api";
 
 // Rules. Pure functions from the current state to the new state and the
 // events describing the change; the commands load, apply and store.
