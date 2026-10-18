@@ -202,22 +202,74 @@ even though an admin would pass that check, so provide what the code asks
 for. Denied requests are logged as "Access denied" with the user and the
 required roles.
 
-There is no role management yet. Operators grant and revoke roles in `psql`;
-the user must have logged in once, so that their row in `users` exists:
+Roles are managed through the admin API (see "Administration"). Only the
+first superAdmin has to be made in `psql`; the user must have logged in once,
+so that their row in `users` exists. The statement also writes the role
+change log, with `changed_by` NULL for "an operator":
 
 ```sql
 \set subject 'the-keycloak-sub'
 
 -- grant superAdmin (INSERT 0 0: never logged in, or already has it)
-INSERT INTO user_roles (user_id, role)
-SELECT id, 'superAdmin' FROM users WHERE subject = :'subject'
-ON CONFLICT (user_id, role) DO NOTHING;
-
--- revoke superAdmin
-DELETE FROM user_roles
-WHERE role = 'superAdmin'
-  AND user_id = (SELECT id FROM users WHERE subject = :'subject');
+WITH granted AS (
+  INSERT INTO user_roles (user_id, role, granted_at)
+  SELECT id, 'superAdmin', now() FROM users WHERE subject = :'subject'
+  ON CONFLICT (user_id, role) DO NOTHING
+  RETURNING user_id, role, granted_at
+)
+INSERT INTO user_role_changes (user_id, role, change, changed_at)
+SELECT user_id, role, 'granted', granted_at FROM granted;
 ```
 
-Don't revoke `normalUser`. A new role needs a migration that changes the
-`user_roles_role_check` constraint and the `Role` schema in the contract.
+A new role needs a migration that changes the `user_roles_role_check` and
+`user_role_changes_role_check` constraints, and the `Role` schema in the
+contract.
+
+## Administration
+
+The `admin` group of the contract, under `/admin`. Every endpoint needs a
+session (401) and a role (403); the state-changing ones also need the
+website's `Origin` (`SameOrigin`, 403 otherwise), because the SameSite=Lax
+session cookie still reaches the backend from same-site pages such as
+`auth.unhalteproblem.de`.
+
+| Endpoint                                 | Role         | Does                                                      |
+| ---------------------------------------- | ------------ | --------------------------------------------------------- |
+| `GET /admin/users?limit&offset`          | `admin`      | Lists users with all fields, roles and active restriction |
+| `GET /admin/users/:id`                   | `admin`      | One user, with restriction history and role change log    |
+| `POST /admin/users/:id/restriction`      | `admin`      | Restricts the account, with a note                        |
+| `POST /admin/users/:id/restriction/lift` | `admin`      | Lifts the active restriction, with an optional note       |
+| `PUT /admin/users/:id/roles/:role`       | `superAdmin` | Grants a role                                             |
+| `DELETE /admin/users/:id/roles/:role`    | `superAdmin` | Revokes a role                                            |
+
+Roles are flat here too: a superAdmin needs `admin` as well to use the
+admin endpoints. `:id` is our user id (`users.id`), not the Keycloak `sub`.
+
+- **Roles.** Granting a held role and revoking one that isn't held change
+  nothing. Nobody revokes their own `superAdmin`, and the last superAdmin
+  keeps it (`RoleChangeNotAllowed`); revocations lock all superAdmin grants,
+  so two concurrent ones can't both succeed. Every change is logged in
+  `user_role_changes` with who made it.
+- **Restrictions.** A restricted account is blocked until an admin lifts the
+  restriction: its sessions are deleted at once, `Authentication` refuses
+  restricted users on every request anyway (401), and the login callback
+  refuses them with `login_error=restricted` (Keycloak itself still lets them
+  log in). One restriction can be active per user; all of them are kept in
+  `user_restrictions`, with who restricted and lifted, when, and the notes.
+  Nobody restricts or lifts themselves, and only a superAdmin acts on an
+  admin or superAdmin (`RestrictionNotAllowed`).
+
+Each command locks the actor's and the target's `users` rows (in id
+order, `FOR NO KEY UPDATE`) and reads both again under the lock. A moderator
+who lost the needed role or was restricted since their request started is
+refused with `Forbidden`; so two superAdmins restricting each other at the
+same moment can't both succeed. Lifting a restriction ends the user's
+sessions once more, in case a login raced the restriction.
+
+Don't delete `users` rows by hand: their roles and restrictions go with them
+(`ON DELETE CASCADE`), while sessions, keyed by the Keycloak `sub`, stay
+valid with no roles. Restrict the account instead.
+
+The notes are visible to admins only and stay out of the logs; the domain
+events (`RoleGranted`, `RoleRevoked`, `UserRestricted`, `RestrictionLifted`)
+are logged with ids only.
