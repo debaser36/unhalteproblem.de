@@ -1,6 +1,5 @@
 import { assert, describe, it, layer } from "@effect/vitest";
 import { PgliteClient, PgliteMigrator } from "@effect/sql-pglite";
-import { Role } from "@unhalteproblem.de/api";
 import { Effect, Exit, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 import { readdirSync } from "node:fs";
@@ -73,6 +72,51 @@ const describeIndexes = (sql: SqlClient.SqlClient, table: string) =>
     WHERE schemaname = 'public' AND tablename = ${table}
     ORDER BY indexname
   `.pipe(Effect.map((indexes) => indexes.map((i) => i.indexdef)));
+
+/** The fixed roles of the contract's `Role`, as the role checks list them. */
+const fixedRoles = ["normalUser", "admin", "superAdmin"] as const;
+
+/**
+ * user_roles_role_check and user_role_changes_role_check since 0012: a fixed
+ * role or `blogEditor:<slug>`, as Postgres prints the definition.
+ */
+const roleCheck =
+  `CHECK (((role = ANY (ARRAY[${fixedRoles.map((role) => `'${role}'::text`).join(", ")}]))` +
+  ` OR ((role ~ '^blogEditor:[a-z0-9]+(-[a-z0-9]+)*$'::text)` +
+  ` AND (char_length(role) <= 75))))`;
+
+/** Roles of the form `blogEditor:<slug>` that the role checks accept. */
+const validBlogEditorRoles = [
+  "blogEditor:rust-notes",
+  "blogEditor:a",
+  "blogEditor:2026",
+  "blogEditor:a1-b2-c3",
+  // The longest slug, 64 characters.
+  `blogEditor:${"a".repeat(64)}`,
+];
+
+/** Malformed `blogEditor:` roles that the role checks reject. */
+const invalidBlogEditorRoles = [
+  // No slug.
+  "blogEditor:",
+  // Not lowercase ASCII letters and digits.
+  "blogEditor:Rust",
+  "blogEditor:a_b",
+  "blogEditor:a b",
+  "blogEditor:ä",
+  // Hyphens only between groups.
+  "blogEditor:-a",
+  "blogEditor:a-",
+  "blogEditor:a--b",
+  // The prefix is case sensitive and anchored.
+  "blogeditor:x",
+  "BlogEditor:x",
+  " blogEditor:x",
+  "xblogEditor:x",
+  "blogEditor:x\n",
+  // A slug of 65 characters.
+  `blogEditor:${"a".repeat(65)}`,
+];
 
 describe("migrations", () => {
   it("registers every file in src/migrations, numbered without gaps", () => {
@@ -509,11 +553,8 @@ describe("DatabaseTest", () => {
           [
             // Added by 0004.
             "user_roles_granted_by_fkey: FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL",
-            // Derived from the contract: a role added there without a
-            // migration fails here.
-            `user_roles_role_check: CHECK ((role = ANY (ARRAY[${Role.literals
-              .map((role) => `'${role}'::text`)
-              .join(", ")}])))`,
+            // Replaced by 0012.
+            `user_roles_role_check: ${roleCheck}`,
             "user_roles_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
             "user_roles_user_id_role_pkey: PRIMARY KEY (user_id, role)",
           ],
@@ -533,26 +574,33 @@ describe("DatabaseTest", () => {
       }),
     );
 
-    it.effect("accepts the known roles and rejects any other", () =>
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient;
-        const userId = yield* insertUser(sql, "roles-check");
-        const grant = (role: string) => sql`
+    it.effect(
+      "accepts the fixed and blogEditor roles and rejects any other",
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const userId = yield* insertUser(sql, "roles-check");
+          const grant = (role: string) => sql`
           INSERT INTO user_roles (user_id, role) VALUES (${userId}, ${role})
         `;
-        for (const role of ["normalUser", "admin", "superAdmin"]) {
-          yield* grant(role);
-        }
-        for (const role of ["moderator", "Admin", ""]) {
-          const error = yield* grant(role).pipe(Effect.flip);
-          assert.strictEqual(error.reason._tag, "ConstraintError");
-          assert.propertyVal(
-            error.reason.cause,
-            "constraint",
-            "user_roles_role_check",
-          );
-        }
-      }),
+          for (const role of [...fixedRoles, ...validBlogEditorRoles]) {
+            yield* grant(role);
+          }
+          for (const role of [
+            "moderator",
+            "Admin",
+            "",
+            ...invalidBlogEditorRoles,
+          ]) {
+            const error = yield* grant(role).pipe(Effect.flip);
+            assert.strictEqual(error.reason._tag, "ConstraintError");
+            assert.propertyVal(
+              error.reason.cause,
+              "constraint",
+              "user_roles_role_check",
+            );
+          }
+        }),
     );
 
     it.effect("rejects granting the same role twice", () =>
@@ -657,10 +705,8 @@ describe("DatabaseTest", () => {
               "user_role_changes_change_check: CHECK ((change = ANY (ARRAY['granted'::text, 'revoked'::text])))",
               "user_role_changes_changed_by_fkey: FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL",
               "user_role_changes_id_pkey: PRIMARY KEY (id)",
-              // Derived from the contract, like user_roles_role_check.
-              `user_role_changes_role_check: CHECK ((role = ANY (ARRAY[${Role.literals
-                .map((role) => `'${role}'::text`)
-                .join(", ")}])))`,
+              // Replaced by 0012, like user_roles_role_check.
+              `user_role_changes_role_check: ${roleCheck}`,
               "user_role_changes_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
             ],
           );
@@ -696,7 +742,7 @@ describe("DatabaseTest", () => {
         }),
     );
 
-    it.effect("logs the known roles as granted or revoked, nothing else", () =>
+    it.effect("logs the fixed and blogEditor roles as granted or revoked", () =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
         const userId = yield* insertUser(sql, "role-changes-check");
@@ -704,11 +750,16 @@ describe("DatabaseTest", () => {
           INSERT INTO user_role_changes (user_id, role, change, changed_at)
           VALUES (${userId}, ${role}, ${change}, now())
         `;
-        for (const role of Role.literals) {
+        for (const role of [...fixedRoles, ...validBlogEditorRoles]) {
           yield* log(role, "granted");
           yield* log(role, "revoked");
         }
-        for (const role of ["moderator", "Admin", ""]) {
+        for (const role of [
+          "moderator",
+          "Admin",
+          "",
+          ...invalidBlogEditorRoles,
+        ]) {
           const error = yield* log(role, "granted").pipe(Effect.flip);
           assert.strictEqual(error.reason._tag, "ConstraintError");
           assert.propertyVal(
@@ -1772,6 +1823,69 @@ describe("0007_drop_session_id_token", () => {
           { userId: "drop-token-user", claims: { a: 1 } },
         ]);
       }).pipe(Effect.provide(DatabaseBefore0007)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0012_allow_blog_editor_roles", () => {
+  // Runs the migrations before 0012 first, so roles and their log exist
+  // before the checks are replaced.
+  const DatabaseBefore0012 = databaseUpTo(11);
+
+  it.effect(
+    "keeps the existing roles and validates the replaced checks",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "blog-editor-alice");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role) VALUES
+            (${alice}, 'normalUser'),
+            (${alice}, 'superAdmin')
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${alice}, 'superAdmin', 'granted', now())
+        `;
+        // Not allowed before 0012.
+        const before = yield* sql`
+          INSERT INTO user_roles (user_id, role)
+          VALUES (${alice}, 'blogEditor:rust-notes')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(12) });
+        assert.deepStrictEqual(applied, [[12, "allow_blog_editor_roles"]]);
+
+        const roles = yield* sql<{ readonly role: string }>`
+          SELECT role FROM user_roles WHERE user_id = ${alice} ORDER BY role
+        `;
+        assert.deepStrictEqual(
+          roles.map((row) => row.role),
+          ["normalUser", "superAdmin"],
+        );
+
+        // Same names, and validated (not NOT VALID) on both tables.
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conname IN (
+            'user_roles_role_check', 'user_role_changes_role_check'
+          )
+          ORDER BY conname
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "user_role_changes_role_check", convalidated: true },
+          { conname: "user_roles_role_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO user_roles (user_id, role)
+          VALUES (${alice}, 'blogEditor:rust-notes')
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0012)),
     { timeout: 30_000 },
   );
 });

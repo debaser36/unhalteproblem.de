@@ -17,6 +17,7 @@ import indexUsersCreatedAt from "#migrations/0008_index_users_created_at";
 import createAuditLog from "#migrations/0009_create_audit_log";
 import addUserDeletedAt from "#migrations/0010_add_user_deleted_at";
 import usersCreatedAtMilliseconds from "#migrations/0011_users_created_at_milliseconds";
+import allowBlogEditorRoles from "#migrations/0012_allow_blog_editor_roles";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -37,6 +38,7 @@ export const migrations = {
   "0009_create_audit_log": createAuditLog,
   "0010_add_user_deleted_at": addUserDeletedAt,
   "0011_users_created_at_milliseconds": usersCreatedAtMilliseconds,
+  "0012_allow_blog_editor_roles": allowBlogEditorRoles,
 };
 
 /** Loads {@link migrations} in id order. */
