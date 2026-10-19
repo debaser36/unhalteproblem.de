@@ -242,6 +242,8 @@ describe("DatabaseTest", () => {
         assert.deepStrictEqual(
           constraints.map((c) => `${c.conname}: ${c.definition}`),
           [
+            // Added by 0011.
+            "users_created_at_milliseconds_check: CHECK ((created_at = date_trunc('milliseconds'::text, created_at))) NOT VALID",
             // Added by 0010.
             "users_deleted_check: CHECK (((deleted_at IS NULL) OR ((username IS NULL) AND (name IS NULL) AND (email IS NULL) AND (NOT email_verified))))",
             "users_id_pkey: PRIMARY KEY (id)",
@@ -395,6 +397,60 @@ describe("DatabaseTest", () => {
           WHERE id = ${userId}
         `;
         assert.isTrue(row.deleted);
+      }),
+    );
+
+    it.effect("rejects users.created_at with sub-millisecond precision", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const insert = (createdAt: string) => sql`
+          INSERT INTO users (id, subject, created_at, updated_at, last_login_at)
+          VALUES (
+            gen_random_uuid(), ${`ms-${createdAt}`}, ${createdAt}::timestamptz,
+            now(), now()
+          )
+        `;
+
+        yield* insert("2026-01-01 00:00:00.001+00");
+        yield* insert("2026-01-01 00:00:00+00");
+
+        for (const createdAt of [
+          "2026-01-01 00:00:00.000001+00",
+          "2026-01-01 00:00:00.0015+00",
+        ]) {
+          const error = yield* insert(createdAt).pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "users_created_at_milliseconds_check",
+          );
+        }
+
+        // Updates are checked as well.
+        const error = yield* sql`
+          UPDATE users SET created_at = '2026-01-01 00:00:00.000001+00'
+          WHERE subject = ${"ms-2026-01-01 00:00:00+00"}
+        `.pipe(Effect.flip);
+        assert.propertyVal(
+          error.reason.cause,
+          "constraint",
+          "users_created_at_milliseconds_check",
+        );
+      }),
+    );
+
+    it.effect("leaves users_created_at_milliseconds_check not validated", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // NOT VALID: existing rows are not scanned at deploy time. An
+        // operator may run VALIDATE CONSTRAINT later.
+        const [row] = yield* sql<{ readonly convalidated: boolean }>`
+          SELECT convalidated FROM pg_constraint
+          WHERE conrelid = 'users'::regclass
+            AND conname = 'users_created_at_milliseconds_check'
+        `;
+        assert.isFalse(row.convalidated);
       }),
     );
 

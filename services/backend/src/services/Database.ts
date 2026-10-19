@@ -16,6 +16,7 @@ import dropSessionIdToken from "#migrations/0007_drop_session_id_token";
 import indexUsersCreatedAt from "#migrations/0008_index_users_created_at";
 import createAuditLog from "#migrations/0009_create_audit_log";
 import addUserDeletedAt from "#migrations/0010_add_user_deleted_at";
+import usersCreatedAtMilliseconds from "#migrations/0011_users_created_at_milliseconds";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -35,6 +36,7 @@ export const migrations = {
   "0008_index_users_created_at": indexUsersCreatedAt,
   "0009_create_audit_log": createAuditLog,
   "0010_add_user_deleted_at": addUserDeletedAt,
+  "0011_users_created_at_milliseconds": usersCreatedAtMilliseconds,
 };
 
 /** Loads {@link migrations} in id order. */
