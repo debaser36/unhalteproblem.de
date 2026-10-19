@@ -31,6 +31,8 @@ import {
 } from "#auth/Secrets";
 import { PublicUrlConfig, SessionConfig } from "#Config";
 import { UserCommands } from "#domains/users/UserCommands";
+import { UserQueries } from "#domains/users/UserQueries";
+import { AuditCommands } from "#domains/audit/AuditCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
@@ -69,10 +71,30 @@ export const AuthHandlers = HttpApiBuilder.group(
     const logoutTokens = yield* LogoutTokens;
     const loginRateLimit = yield* LoginRateLimit;
     const userCommands = yield* UserCommands;
+    const userQueries = yield* UserQueries;
     const moderation = yield* ModerationQueries;
+    const audit = yield* AuditCommands;
     const sql = yield* SqlClient.SqlClient;
     const { origin } = yield* PublicUrlConfig;
     const { maxAge } = yield* SessionConfig;
+
+    /**
+     * For audit entries of things that already happened or are refused
+     * anyway (a logout, a refused login): the user gets the redirect even if
+     * the entry can't be written, which is logged instead.
+     */
+    const bestEffort = (entry: Effect.Effect<void>) =>
+      entry.pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("Audit entry not written", cause),
+        ),
+      );
+
+    /** Our id of the user with this OIDC `sub`, if they have ever logged in. */
+    const userIdOf = (subject: string) =>
+      userQueries
+        .findBySubject(subject)
+        .pipe(Effect.map(Option.map((user) => user.id)));
 
     /**
      * Starts the authorization code flow: stores the login attempt, sets the
@@ -196,12 +218,22 @@ export const AuthHandlers = HttpApiBuilder.group(
       // before the sync, so a refused attempt isn't recorded as a login (a
       // restricted user has always logged in before).
       if ((yield* moderation.accessOf(claims.sub)).restricted) {
+        yield* bestEffort(
+          Effect.gen(function* () {
+            yield* audit.record({
+              action: "login_refused",
+              actor: Option.none(),
+              target: yield* userIdOf(claims.sub),
+              detail: "restricted",
+            });
+          }),
+        );
         return yield* fail("restricted", "account is restricted");
       }
 
       // Our copy of the user, created on the first login. Fails the login
       // (as a defect) if the database is unreachable, like the session.
-      yield* userCommands.syncFromLogin({
+      const user = yield* userCommands.syncFromLogin({
         subject: claims.sub,
         profile: {
           username: Option.fromUndefinedOr(claims.preferred_username),
@@ -209,6 +241,15 @@ export const AuthHandlers = HttpApiBuilder.group(
           email: Option.fromUndefinedOr(claims.email),
           emailVerified: claims.email_verified ?? false,
         },
+      });
+
+      // Before the session exists and not best-effort: a login whose entry
+      // can't be written fails, so every session has its entry and a failure
+      // leaves nothing behind.
+      yield* audit.record({
+        action: "login",
+        actor: Option.some(user.id),
+        target: Option.some(user.id),
       });
 
       const sessionCookie = yield* randomSecret;
@@ -322,7 +363,22 @@ export const AuthHandlers = HttpApiBuilder.group(
             }
             const cookie = request.cookies[SessionCookie];
             if (cookie !== undefined && cookie !== "") {
-              yield* sessions.delete(hashSecret(cookie)).pipe(Effect.orDie);
+              const ended = yield* sessions
+                .delete(hashSecret(cookie))
+                .pipe(Effect.orDie);
+              if (Option.isSome(ended)) {
+                const subject = ended.value.userId;
+                yield* bestEffort(
+                  Effect.gen(function* () {
+                    const user = yield* userIdOf(subject);
+                    yield* audit.record({
+                      action: "logout",
+                      actor: user,
+                      target: user,
+                    });
+                  }),
+                );
+              }
             }
             // No `id_token_hint` (we keep no ID token), so Keycloak asks the
             // user to confirm before it ends its own session.

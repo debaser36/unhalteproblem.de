@@ -230,3 +230,9 @@ export const MailConfig: Config.Config<Option.Option<MailSettings>> =
           ),
     ),
   );
+
+/** How long audit log entries are kept before they are deleted. */
+export const AuditRetentionConfig = Config.schema(
+  PositiveDuration,
+  "AUDIT_RETENTION",
+).pipe(Config.withDefault(Duration.days(365)));

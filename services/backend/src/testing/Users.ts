@@ -5,6 +5,8 @@ import { DomainEvents } from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
 import type { User } from "#domains/users/User";
 import { type Login, UserCommands } from "#domains/users/UserCommands";
+import { AuditCommands } from "#domains/audit/AuditCommands";
+import { AuditRepository } from "#domains/audit/AuditRepository";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { ModerationRepository } from "#domains/moderation/ModerationRepository";
@@ -37,9 +39,11 @@ export const UsersTest = Layer.mergeAll(
   Layer.provideMerge(
     Layer.mergeAll(ModerationCommands.layer, ModerationQueries.layer),
   ),
+  Layer.provideMerge(AuditCommands.layer),
   Layer.provideMerge(UserDirectory.layer),
   Layer.provideMerge(
     Layer.mergeAll(
+      AuditRepository.layer,
       UserRepository.layer,
       ModerationRepository.layer,
       Sessions.layer,

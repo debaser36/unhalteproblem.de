@@ -39,6 +39,14 @@ below).
 | `PUBLIC_ORIGIN`              | `https://unhalteproblem.de`                                 | Origin of the website: login return target, post-logout target, allowed `Origin` of `POST /auth/logout` |
 | `PUBLIC_API_URL`             | `<PUBLIC_ORIGIN>/api`                                       | Public URL of this backend; the login callback is `<PUBLIC_API_URL>/auth/callback`                      |
 | `SESSION_MAX_AGE`            | `8 hours`                                                   | How long a login lasts, as an Effect duration (must be > 0)                                             |
+| `CONTACT_RETENTION`          | `90 days`                                                   | How long contact messages are kept before they are deleted (must be > 0)                                |
+| `AUDIT_RETENTION`            | `365 days`                                                  | How long audit log entries are kept before they are deleted (must be > 0)                               |
+| `SMTP_HOST`                  | unset                                                       | SMTP server for the mails about contact messages. Unset: messages are stored but not mailed             |
+| `SMTP_PORT`                  | `587` (`465` with `tls`)                                    | SMTP port                                                                                               |
+| `SMTP_SECURITY`              | `starttls`                                                  | `starttls`, `tls`, or `none` (plain text, only accepted for `localhost`, e.g. Mailpit)                  |
+| `SMTP_USER`                  | unset                                                       | SMTP login; then `SMTP_PASSWORD` is required (set it through an environment file)                       |
+| `SMTP_FROM`                  | required with `SMTP_HOST`                                   | Sender of the mails, e.g. `Website <noreply@unhalteproblem.de>`                                         |
+| `CONTACT_MAIL_TO`            | required with `SMTP_HOST`                                   | Who gets the mails about contact messages                                                               |
 
 Invalid values stop the service at startup instead of being ignored.
 
@@ -229,6 +237,29 @@ nothing else of the users domain), and `UserCommands.syncFromLogin` calls
 savepoint), so a user never exists without their first role. `UserQueries`
 composes the admin overview from `ModerationQueries`. `DomainsLive` wires
 it: users' directory, then moderation, then the rest of users.
+
+## Audit log
+
+`audit_log` (domain `audit`, `AuditCommands.record`) remembers who did what
+to whom, for the people who run the site. One row per action: when, which
+action, the acting and the affected user (our ids), and a short qualifier
+(the role of a role change).
+
+| Action                                  | Written                                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| `role_granted`, `role_revoked`          | by the moderation command, in its transaction; only if it changed something     |
+| `user_restricted`, `restriction_lifted` | by the moderation command, in its transaction                                   |
+| `login`                                 | by the login callback, before the session is created (no entry, no session)     |
+| `logout`, `login_refused`               | by `POST /auth/logout` and the login callback; best effort, a failure is logged |
+
+A row written inside a command exists exactly when the change does (it joins
+the transaction), and a refused or no-op command leaves none. Not recorded:
+logouts that Keycloak starts (back-channel) and the registration of a user
+with their first role. The log holds ids only, never names, addresses,
+restriction notes or IPs, because it is kept for `AUDIT_RETENTION` (a year by
+default; a job deletes older rows once a day). Rows are never updated. Read
+them with, for example,
+`SELECT at, action, actor_id, target_id, detail FROM audit_log WHERE target_id = '…' ORDER BY id`.
 
 ## Logging
 

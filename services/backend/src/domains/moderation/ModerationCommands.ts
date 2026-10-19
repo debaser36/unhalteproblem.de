@@ -11,6 +11,7 @@ import { Context, DateTime, Effect, Layer, Option } from "effect";
 import * as Command from "#cqrs/Command";
 import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
+import { AuditCommands } from "#domains/audit/AuditCommands";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import { initialRoles, type UserId, UserNotFound } from "#domains/users/User";
 import { Sessions } from "#repositories/Sessions";
@@ -31,6 +32,7 @@ const make = Effect.gen(function* () {
   const users = yield* UserDirectory;
   const moderation = yield* ModerationRepository;
   const sessions = yield* Sessions;
+  const audit = yield* AuditCommands;
   const transaction = yield* Transaction;
 
   const newId = Effect.sync(() => crypto.randomUUID());
@@ -98,6 +100,12 @@ const make = Effect.gen(function* () {
         yield* DomainEvent.record(
           new RoleGranted({ userId, role, by: actor.id }),
         );
+        yield* audit.record({
+          action: "role_granted",
+          actor: Option.some(actor.id),
+          target: Option.some(userId),
+          detail: role,
+        });
       }
     }, Command.boundary(transaction)),
 
@@ -136,6 +144,12 @@ const make = Effect.gen(function* () {
       yield* DomainEvent.record(
         new RoleRevoked({ userId, role, by: actor.id }),
       );
+      yield* audit.record({
+        action: "role_revoked",
+        actor: Option.some(actor.id),
+        target: Option.some(userId),
+        detail: role,
+      });
     }, Command.boundary(transaction)),
 
     restrict: Effect.fn("ModerationCommands.restrict")(function* (
@@ -177,6 +191,11 @@ const make = Effect.gen(function* () {
           by: actor.id,
         }),
       );
+      yield* audit.record({
+        action: "user_restricted",
+        actor: Option.some(actor.id),
+        target: Option.some(userId),
+      });
       return restriction;
     }, Command.boundary(transaction)),
 
@@ -223,6 +242,11 @@ const make = Effect.gen(function* () {
           by: actor.id,
         }),
       );
+      yield* audit.record({
+        action: "restriction_lifted",
+        actor: Option.some(actor.id),
+        target: Option.some(userId),
+      });
       return lifted;
     }, Command.boundary(transaction)),
   });
@@ -299,6 +323,6 @@ export class ModerationCommands extends Context.Service<
     >;
   }
 >()("@unhalteproblem.de/backend/domains/moderation/ModerationCommands") {
-  /** Needs `UserDirectory`, `ModerationRepository`, `Sessions` and `Transaction`. */
+  /** Needs `UserDirectory`, `ModerationRepository`, `Sessions`, `AuditCommands` and `Transaction`. */
   static readonly layer = Layer.effect(ModerationCommands, make);
 }

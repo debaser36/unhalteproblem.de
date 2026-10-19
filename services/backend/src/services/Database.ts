@@ -14,6 +14,7 @@ import createOutbox from "#migrations/0005_create_outbox";
 import createContactMessages from "#migrations/0006_create_contact_messages";
 import dropSessionIdToken from "#migrations/0007_drop_session_id_token";
 import indexUsersCreatedAt from "#migrations/0008_index_users_created_at";
+import createAuditLog from "#migrations/0009_create_audit_log";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -31,6 +32,7 @@ export const migrations = {
   "0006_create_contact_messages": createContactMessages,
   "0007_drop_session_id_token": dropSessionIdToken,
   "0008_index_users_created_at": indexUsersCreatedAt,
+  "0009_create_audit_log": createAuditLog,
 };
 
 /** Loads {@link migrations} in id order. */

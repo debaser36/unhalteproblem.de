@@ -10,6 +10,7 @@ import {
   cookieValue,
   issuer,
   login,
+  loginResponse,
   makeApp,
   makeAppWithServices,
   now,
@@ -523,6 +524,82 @@ describe("auth back-channel logout", () => {
         error_description: "Invalid logout token",
       });
       assert.strictEqual((yield* session(request, sessionCookie)).status, 200);
+    }).pipe(Effect.scoped),
+  );
+});
+
+describe("auth audit log", () => {
+  const auditRows = (
+    sql: <A>(
+      statement: (
+        sql: import("effect/sql").SqlClient.SqlClient,
+      ) => Effect.Effect<A, unknown>,
+    ) => Effect.Effect<A>,
+  ) =>
+    sql(
+      (sql) => sql<{
+        readonly action: string;
+        readonly actorId: string | null;
+        readonly targetId: string | null;
+        readonly detail: string | null;
+      }>`
+        SELECT action, actor_id, target_id, detail FROM audit_log ORDER BY id
+      `,
+    );
+
+  it.effect("records a login and a logout of the same user", () =>
+    Effect.gen(function* () {
+      const { request, sql } = yield* makeAppWithServices();
+      const sessionCookie = yield* login(request);
+      yield* request("/auth/logout", {
+        method: "POST",
+        headers: { origin: site, cookie: `__Host-session=${sessionCookie}` },
+      });
+
+      const rows = yield* auditRows(sql);
+      assert.deepStrictEqual(
+        rows.map(({ action }) => action),
+        ["login", "logout"],
+      );
+      const [first, second] = rows;
+      assert.isNotNull(first?.actorId);
+      assert.strictEqual(first?.actorId, first?.targetId);
+      assert.deepStrictEqual(second, first && { ...first, action: "logout" });
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("records neither for a logout without a session", () =>
+    Effect.gen(function* () {
+      const { request, sql } = yield* makeAppWithServices();
+      yield* request("/auth/logout", {
+        method: "POST",
+        headers: { origin: site, cookie: "__Host-session=unknown" },
+      });
+      assert.deepStrictEqual(yield* auditRows(sql), []);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("records a refused login of a restricted user", () =>
+    Effect.gen(function* () {
+      const { request, sql } = yield* makeAppWithServices();
+      yield* login(request);
+      yield* sql(
+        (sql) => sql`
+          INSERT INTO user_restrictions (id, user_id, note, restricted_at)
+          SELECT gen_random_uuid(), id, 'x', now() FROM users
+          WHERE subject = 'user-1'
+        `,
+      );
+      const response = yield* loginResponse(request);
+      assert.include(response.headers.get("location") ?? "", "restricted");
+
+      const refused = (yield* auditRows(sql)).filter(
+        ({ action }) => action === "login_refused",
+      );
+      assert.strictEqual(refused.length, 1);
+      assert.isNull(refused[0]?.actorId);
+      assert.isNotNull(refused[0]?.targetId);
+      assert.strictEqual(refused[0]?.detail, "restricted");
     }).pipe(Effect.scoped),
   );
 });

@@ -2,6 +2,7 @@ import { Layer } from "effect";
 import { DomainEvents } from "#cqrs/DomainEvent";
 import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
+import { AuditLive } from "./audit/Audits.ts";
 import { ContactLive } from "./contact/Contacts.ts";
 import { ModerationLive } from "./moderation/Moderations.ts";
 import { UserDirectoryLive, UsersLive } from "./users/Users.ts";
@@ -25,6 +26,7 @@ const Moderation = ModerationLive.pipe(Layer.provide(UserDirectoryLive));
  */
 export const DomainsLive = Layer.mergeAll(UsersLive, ContactLive).pipe(
   Layer.provideMerge(Moderation),
+  Layer.provideMerge(AuditLive),
   Layer.provideMerge(Transaction.layer),
   Layer.provide([DomainEvents.layer, Outbox.layer]),
 );

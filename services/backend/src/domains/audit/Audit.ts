@@ -1,0 +1,46 @@
+import { Option, Schema } from "effect";
+import { UserId } from "#domains/users/User";
+
+/**
+ * What can be audited. A new action needs a migration that changes the
+ * `audit_log_action_check` constraint.
+ */
+export const AuditAction = Schema.Literals([
+  "login",
+  "logout",
+  "login_refused",
+  "role_granted",
+  "role_revoked",
+  "user_restricted",
+  "restriction_lifted",
+  "account_deleted",
+]);
+export type AuditAction = typeof AuditAction.Type;
+
+/**
+ * Something worth remembering, as callers describe it. Ids and a short
+ * qualifier only: the log is kept for a year, so it never holds personal
+ * data (no names, addresses, notes or IPs).
+ */
+export interface AuditEntry {
+  readonly action: AuditAction;
+  /** Who acted; none for the system or someone not logged in. */
+  readonly actor: Option.Option<UserId>;
+  /** Who it was done to. */
+  readonly target: Option.Option<UserId>;
+  /** A short, non-personal qualifier, e.g. the role of `role_granted`. */
+  readonly detail?: string;
+}
+
+/** A stored entry. */
+export class AuditRecord extends Schema.Class<
+  AuditRecord,
+  { readonly brand: unique symbol }
+>("AuditRecord")({
+  id: Schema.String,
+  at: Schema.DateTimeUtcFromDate,
+  action: AuditAction,
+  actorId: Schema.NullOr(UserId),
+  targetId: Schema.NullOr(UserId),
+  detail: Schema.NullOr(Schema.String),
+}) {}

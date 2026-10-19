@@ -7,7 +7,7 @@ import {
   type Role,
   RoleChangeNotAllowed,
 } from "@unhalteproblem.de/api";
-import { DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Exit, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { hashSecret } from "#auth/Secrets";
@@ -925,6 +925,75 @@ describe("ModerationCommands", () => {
       }).pipe(Effect.provide(UsersTest)),
     { timeout: 30_000 },
   );
+});
+
+describe("moderation audit trail", () => {
+  layer(UsersTest, { timeout: "30 seconds" })((it) => {
+    it.effect(
+      "records each moderation action with actor, target and role",
+      () =>
+        Effect.gen(function* () {
+          const commands = yield* ModerationCommands;
+          const sql = yield* SqlClient.SqlClient;
+          const root = yield* member("admin", "superAdmin");
+          const target = yield* member();
+          yield* sql`DELETE FROM audit_log`;
+
+          yield* commands
+            .grantRole(target.user.id, "admin")
+            .pipe(asSuperAdmin(root));
+          yield* commands
+            .revokeRole(target.user.id, "admin")
+            .pipe(asSuperAdmin(root));
+          // No change, nothing recorded.
+          yield* commands
+            .revokeRole(target.user.id, "admin")
+            .pipe(asSuperAdmin(root));
+          yield* commands
+            .restrict(target.user.id, "a private note")
+            .pipe(asAdmin(root));
+          yield* commands
+            .liftRestriction(target.user.id, Option.some("another note"))
+            .pipe(asAdmin(root));
+
+          const rows = yield* sql<{
+            readonly action: string;
+            readonly actorId: string;
+            readonly targetId: string;
+            readonly detail: string | null;
+          }>`SELECT action, actor_id, target_id, detail FROM audit_log ORDER BY id`;
+          assert.deepStrictEqual(
+            rows.map(({ action, detail }) => [action, detail]),
+            [
+              ["role_granted", "admin"],
+              ["role_revoked", "admin"],
+              ["user_restricted", null],
+              ["restriction_lifted", null],
+            ],
+          );
+          for (const row of rows) {
+            assert.strictEqual(row.actorId, root.user.id);
+            assert.strictEqual(row.targetId, target.user.id);
+          }
+          // Notes are personal data and never reach the log.
+          assert.notInclude(JSON.stringify(rows), "note");
+        }),
+    );
+
+    it.effect("records nothing for a refused action", () =>
+      Effect.gen(function* () {
+        const commands = yield* ModerationCommands;
+        const sql = yield* SqlClient.SqlClient;
+        const admin = yield* member("admin");
+        yield* sql`DELETE FROM audit_log`;
+        const exit = yield* commands
+          .restrict(admin.user.id, "myself")
+          .pipe(asAdmin(admin), Effect.exit);
+        assert.isTrue(Exit.isFailure(exit));
+        assert.strictEqual((yield* sql`SELECT 1 FROM audit_log`).length, 0);
+      }),
+    );
+  });
 });
 
 describe("moderation in UserQueries", () => {

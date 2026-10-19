@@ -120,6 +120,7 @@ in
         SESSION_MAX_AGE = "8 hours";
         CONTACT_RATE_LIMIT = "5";
         CONTACT_RATE_LIMIT_WINDOW = "1 hour";
+        # AUDIT_RETENTION = "365 days"; CONTACT_RETENTION = "90 days";
         # Mail about contact messages; SMTP_PASSWORD belongs in environmentFiles.
         # SMTP_HOST = "mail.example.org";
         # SMTP_FROM = "Website <noreply@unhalteproblem.de>";
