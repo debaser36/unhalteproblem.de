@@ -77,11 +77,14 @@ let
 
   backendUrl = path: "http://127.0.0.1:${toString cfg.port}${path}";
 
-  proxyConfig = ''
+  proxyHeaders = ''
     # Overwrite, never append: the backend rate-limits by this header.
     proxy_set_header X-Real-IP $remote_addr;
     # Lets the backend's log lines be matched to nginx's access log.
     proxy_set_header X-Request-Id $request_id;
+  '';
+
+  proxyConfig = proxyHeaders + ''
     # Same limit as the backend's MaxBodySize, so oversized requests get a
     # clean 413 here instead of a dropped connection there.
     client_max_body_size 32k;
@@ -282,6 +285,17 @@ in
         "= /api/ready" = authRateLimited "/ready";
         "= /api/auth/login" = authRateLimited "/auth/login";
         "= /api/auth/callback" = authRateLimited "/auth/callback";
+        # Saving a post (512 KiB of JSON) and uploading an image (5 MiB) need
+        # more than the 32k of every other route; the backend enforces the
+        # exact limits per endpoint. A regex location can't proxy_pass with a
+        # URI, so the /api prefix is stripped by a rewrite instead.
+        "~ ^/api/blogs/[^/]+/manage/" = {
+          proxyPass = backendUrl "";
+          extraConfig = proxyHeaders + ''
+            client_max_body_size 6m;
+            rewrite ^/api(/.*)$ $1 break;
+          '';
+        };
       };
     })
 
