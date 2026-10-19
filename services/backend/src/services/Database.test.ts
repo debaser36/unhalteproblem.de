@@ -225,6 +225,8 @@ describe("DatabaseTest", () => {
             "users.created_at timestamp with time zone not null",
             "users.updated_at timestamp with time zone not null",
             "users.last_login_at timestamp with time zone not null",
+            // Added by 0010.
+            "users.deleted_at timestamp with time zone",
           ],
         );
 
@@ -240,6 +242,8 @@ describe("DatabaseTest", () => {
         assert.deepStrictEqual(
           constraints.map((c) => `${c.conname}: ${c.definition}`),
           [
+            // Added by 0010.
+            "users_deleted_check: CHECK (((deleted_at IS NULL) OR ((username IS NULL) AND (name IS NULL) AND (email IS NULL) AND (NOT email_verified))))",
             "users_id_pkey: PRIMARY KEY (id)",
             "users_subject_check: CHECK (((char_length(subject) >= 1) AND (char_length(subject) <= 255)))",
             "users_subject_key: UNIQUE (subject)",
@@ -337,6 +341,60 @@ describe("DatabaseTest", () => {
           );
         }
         yield* insert("s".repeat(255));
+      }),
+    );
+
+    it.effect("accepts only anonymised rows with a deleted_at", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const userId = yield* insertUser(sql, "deleted-check");
+        const [{ deletedAt }] = yield* sql<{ readonly deletedAt: Date | null }>`
+          SELECT deleted_at FROM users WHERE id = ${userId}
+        `;
+        assert.strictEqual(deletedAt, null);
+
+        // Profile data may stay as long as the user is not deleted.
+        yield* sql`
+          UPDATE users
+          SET username = 'u', name = 'n', email = 'e', email_verified = true
+          WHERE id = ${userId}
+        `;
+
+        const rejected = [
+          sql`UPDATE users SET deleted_at = now() WHERE id = ${userId}`,
+          sql`
+            UPDATE users
+            SET deleted_at = now(), username = NULL, name = NULL, email = NULL
+            WHERE id = ${userId}
+          `,
+          sql`
+            UPDATE users
+            SET deleted_at = now(), username = NULL, name = 'n', email = NULL,
+              email_verified = false
+            WHERE id = ${userId}
+          `,
+        ];
+        for (const statement of rejected) {
+          const error = yield* statement.pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "users_deleted_check",
+          );
+        }
+
+        yield* sql`
+          UPDATE users
+          SET deleted_at = now(), username = NULL, name = NULL, email = NULL,
+            email_verified = false
+          WHERE id = ${userId}
+        `;
+        const [row] = yield* sql<{ readonly deleted: boolean }>`
+          SELECT deleted_at IS NOT NULL AS deleted FROM users
+          WHERE id = ${userId}
+        `;
+        assert.isTrue(row.deleted);
       }),
     );
 
