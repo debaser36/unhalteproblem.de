@@ -6,6 +6,7 @@ import {
   Duration,
   Effect,
   Exit,
+  Fiber,
   Layer,
   Schema,
 } from "effect";
@@ -315,6 +316,49 @@ describe("Outbox", () => {
           assert.deepStrictEqual(seen, [1, 2, 3]);
           assert.strictEqual((yield* rowsOf(other.name)).length, 1);
         }),
+    );
+  });
+});
+
+describe("Outbox handler timeout", () => {
+  layer(TestLayer, { timeout: "30 seconds" })((it) => {
+    it.effect("fails a handler that outlives the lease and goes on", () =>
+      Effect.gen(function* () {
+        const outbox = yield* Outbox.Outbox;
+        const topic = freshTopic();
+        yield* send(topic, { n: 1, to: "a" }, { n: 2, to: "b" });
+        const options = {
+          lease: Duration.minutes(1),
+          backoff: () => Duration.hours(1),
+        };
+        const seen: Array<number> = [];
+
+        let finished = false;
+        const pass = yield* Effect.forkChild(
+          outbox
+            .process(
+              topic,
+              ({ n }) =>
+                n === 1 ? Effect.never : Effect.sync(() => void seen.push(n)),
+              options,
+            )
+            .pipe(Effect.tap(() => Effect.sync(() => void (finished = true)))),
+        );
+        // The pass talks to the database between the steps, in real time;
+        // move the test clock past the lease until it has come that far.
+        for (let i = 0; i < 200 && !finished; i++) {
+          yield* Effect.promise(() => new Promise((r) => setTimeout(r, 20)));
+          yield* TestClock.adjust("61 seconds");
+        }
+        assert.strictEqual(yield* Fiber.join(pass), 2);
+
+        // The hanging one failed with a timeout and waits for its retry; the
+        // one behind it was handled.
+        assert.deepStrictEqual(seen, [2]);
+        const [row] = yield* rowsOf(topic.name);
+        assert.strictEqual(row?.lastError, "TimeoutError");
+        assert.strictEqual(row?.attempts, 1);
+      }),
     );
   });
 });

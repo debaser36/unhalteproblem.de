@@ -13,9 +13,7 @@ interface Line {
  * Sends requests to a router that has the middleware and returns the
  * responses with every log line written meanwhile.
  */
-const run = Effect.fnUntraced(function* (
-  requests: ReadonlyArray<readonly [path: string, headers?: HeadersInit]>,
-) {
+const setup = () => {
   const lines: Array<Line> = [];
   const capture = Logger.make<unknown, void>((options) => {
     lines.push({
@@ -38,6 +36,7 @@ const run = Effect.fnUntraced(function* (
       Effect.succeed(HttpServerResponse.text("ready")),
     ),
     HttpRouter.add("GET", "/boom", Effect.die("kaboom")),
+    HttpRouter.add("GET", "/hang", Effect.never),
     RequestLogging,
     Logger.layer([capture], { mergeWithExisting: false }),
     Layer.succeed(References.MinimumLogLevel, "Debug"),
@@ -45,6 +44,13 @@ const run = Effect.fnUntraced(function* (
   const { handler, dispose } = HttpRouter.toWebHandler(routes, {
     disableLogger: true,
   });
+  return { lines, handler, dispose };
+};
+
+const run = Effect.fnUntraced(function* (
+  requests: ReadonlyArray<readonly [path: string, headers?: HeadersInit]>,
+) {
+  const { lines, handler, dispose } = setup();
   const responses: Array<Response> = [];
   for (const [path, headers] of requests) {
     responses.push(
@@ -126,6 +132,32 @@ describe("RequestLogging", () => {
         line?.annotations["requestId"],
         responses[0]?.headers.get("x-request-id"),
       );
+    }),
+  );
+
+  it.live("logs a request the client gave up on as 499", () =>
+    Effect.gen(function* () {
+      const { lines, handler, dispose } = setup();
+      const abort = new AbortController();
+      const pending = handler(
+        new Request("http://backend.test/hang", { signal: abort.signal }),
+      ).catch(() => undefined);
+      yield* Effect.sleep("100 millis");
+      abort.abort();
+      yield* Effect.promise(() => pending);
+      // The interruption runs the line asynchronously; give it a moment.
+      for (let i = 0; i < 50 && lines.length === 0; i++) {
+        yield* Effect.sleep("20 millis");
+      }
+      yield* Effect.promise(dispose);
+
+      const [line] = lines.filter(
+        ({ message }) => message === "Sent HTTP response",
+      );
+      assert.isDefined(line);
+      assert.strictEqual(line?.annotations["http.status"], 499);
+      assert.strictEqual(line?.annotations["http.url"], "/hang");
+      assert.isString(line?.annotations["requestId"]);
     }),
   );
 

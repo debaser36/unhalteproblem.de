@@ -115,14 +115,20 @@ daily (`backup.startAt`) as the postgres user:
 
 1. `pg_dump --format=custom` into `backup.location`
    (`/var/backup/unhalteproblem/<db>-<date>.dump`, mode 0700 directory).
-2. **Restores that dump into a scratch database** and checks that it holds
-   applied migrations (`nix/verify-backup.sh`), then drops the scratch
-   database. A dump that cannot be restored fails the unit instead of
-   sitting unnoticed until the day it is needed: watch `systemctl --failed`.
-3. Only then deletes dumps older than `backup.keepDays` (14).
+2. **Restores that dump into a scratch database** and checks that it holds as
+   many applied migrations as the live database (`nix/verify-backup.sh`),
+   then drops the scratch database (and any left over by a run that could not
+   drop it). A dump that fails is renamed to `*.dump.failed`, so the newest
+   `*.dump` is always a proven one, and the unit fails instead of the problem
+   sitting unnoticed until the day it is needed. **Nothing alerts you**: watch
+   `systemctl --failed` or hook an alert to the unit. The timer is
+   persistent, so a run missed while the machine was off happens at boot.
+3. Only then deletes dumps (and failed ones) older than `backup.keepDays` (14).
 
 The dumps contain everything, personal data included, and live on the same
-machine as the database. Copy them to another place (restic, rsync, a
+machine as the database. Accounts users deleted
+are still in the dumps until they age out (`keepDays`, plus any copy you took
+off the machine). Copy them to another place (restic, rsync, a
 provider's object storage) from `backup.location`; that part is not
 automated here. Check a dump from anywhere with
 `PGUSER=… bash nix/verify-backup.sh <dump>` (a Postgres of the same version
@@ -385,6 +391,8 @@ their role first, so the site never loses its last one by accident. Nothing
 can undo a deletion; restore from a backup if it was a mistake. Restriction
 notes an admin wrote about the user stay, as do the role change log and the
 audit log (ids only): they are records about what admins did.
+Backups (see there) and the request log (`client.key`, the client's IPv4
+address or IPv6 /64) also keep things for as long as you keep them.
 
 Keycloak setup for the deletion: in the backend's client (`OIDC_CLIENT_ID`)
 turn on "Service accounts roles", and give the service account the

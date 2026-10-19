@@ -204,3 +204,37 @@ describe("MailConfig security", () => {
     }),
   );
 });
+
+describe("MailConfig addresses", () => {
+  const base = { SMTP_HOST: "mail.example.org" };
+
+  it.effect.each([
+    { SMTP_FROM: "noreply@example.org", CONTACT_MAIL_TO: "me@example.org" },
+    {
+      SMTP_FROM: "Website <noreply@example.org>",
+      CONTACT_MAIL_TO: "me@example.org",
+    },
+  ])("accepts %o", (env) =>
+    Effect.gen(function* () {
+      assert.isTrue(
+        Exit.isSuccess(yield* load(MailConfig, { ...base, ...env })),
+      );
+    }),
+  );
+
+  it.effect.each([
+    { SMTP_FROM: "noreply", CONTACT_MAIL_TO: "me@example.org" },
+    { SMTP_FROM: "noreply@example.org", CONTACT_MAIL_TO: "me" },
+    { SMTP_FROM: "noreply@example.org", CONTACT_MAIL_TO: "a@b.org, c@d.org" },
+    {
+      SMTP_FROM: "Name <noreply@example.org",
+      CONTACT_MAIL_TO: "me@example.org",
+    },
+  ])("rejects %o at startup", (env) =>
+    Effect.gen(function* () {
+      assert.isTrue(
+        Exit.isFailure(yield* load(MailConfig, { ...base, ...env })),
+      );
+    }),
+  );
+});

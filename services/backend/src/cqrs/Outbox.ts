@@ -302,6 +302,10 @@ const make = Effect.gen(function* () {
         // consumer's own interruption still reaches `Fiber.await`.
         const exit = yield* Effect.forkChild(
           handle(decoded.value).pipe(
+            // A handler that hangs (a DNS lookup, a dead socket) must not hold
+            // the consumer, and its message, past the reservation: after the
+            // lease another worker would handle the message again anyway.
+            Effect.timeout(lease),
             Effect.withSpan("Outbox.handle", {
               attributes: { topic: topic.name, id: message.id },
             }),

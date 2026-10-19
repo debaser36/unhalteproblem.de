@@ -219,6 +219,29 @@ describe("boundaries", () => {
       }),
     );
 
+    it.effect(
+      "the defect names the kind of failure and nothing it quoted",
+      () =>
+        Effect.gen(function* () {
+          const quoting = new SqlError.SqlError({
+            reason: new SqlError.UnknownError({
+              cause: new Error("Failing row contains (ada@example.org, Ada)"),
+            }),
+          });
+          const exit = yield* Effect.fail(quoting).pipe(
+            Query.boundary,
+            Effect.exit,
+          );
+          assert.isTrue(Exit.isFailure(exit));
+          const text = Cause.pretty(
+            (exit as Exit.Failure<unknown, unknown>).cause,
+          );
+          assert.include(text, "Database error (UnknownError)");
+          assert.notInclude(text, "ada@example.org");
+          assert.notInclude(text, "Failing row");
+        }),
+    );
+
     it.effect("Query.boundary keeps domain errors", () =>
       Effect.gen(function* () {
         const exit = yield* new Refused().pipe(Query.boundary, Effect.exit);

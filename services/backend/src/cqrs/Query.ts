@@ -9,6 +9,19 @@ import { SqlError } from "effect/sql";
  */
 export type InfrastructureError = SqlError.SqlError | Schema.SchemaError;
 
+/**
+ * What a boundary turns an infrastructure failure into: a defect that names
+ * the kind and nothing else. The original errors tend to quote the data they
+ * failed on (a `SchemaError` the offending value, Postgres the "Failing row
+ * contains (…)" of a constraint), and defects end up in the request log.
+ */
+const scrubbed = (error: InfrastructureError): Error =>
+  new Error(
+    SqlError.isSqlError(error)
+      ? `Database error (${error.reason._tag})`
+      : "Stored data does not match its schema",
+  );
+
 const isInfrastructureError = <E>(
   error: E,
 ): error is Extract<E, InfrastructureError> =>
@@ -33,8 +46,6 @@ export const boundary = <A, E, R>(
 ): Effect.Effect<A, Exclude<E, InfrastructureError>, R> =>
   // `Exclude<E, Extract<E, X>>` is `Exclude<E, X>` for every concrete `E`,
   // but TypeScript can't show it for a generic one.
-  Effect.catchIf(self, isInfrastructureError, Effect.die) as Effect.Effect<
-    A,
-    Exclude<E, InfrastructureError>,
-    R
-  >;
+  Effect.catchIf(self, isInfrastructureError, (error) =>
+    Effect.die(scrubbed(error)),
+  ) as Effect.Effect<A, Exclude<E, InfrastructureError>, R>;

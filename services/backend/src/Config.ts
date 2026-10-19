@@ -157,6 +157,23 @@ export const ContactRetentionConfig = Config.schema(
   "CONTACT_RETENTION",
 ).pipe(Config.withDefault(Duration.days(90)));
 
+// Checked at startup because a typo would otherwise show only as mails that
+// fail one after the other, ten attempts each, and end up dead in the outbox.
+// Not a full RFC 5322 parser, just "an address is in there".
+const MailFrom = Schema.String.check(
+  Schema.isPattern(
+    /^(?:[^<>\r\n]*<[^\s<>@,;]+@[^\s<>@,;]+>|[^\s<>@,;]+@[^\s<>@,;]+)$/u,
+    {
+      expected: "an address, or Name <address>",
+    },
+  ),
+);
+const MailRecipient = Schema.String.check(
+  Schema.isPattern(/^[^\s<>@,;]+@[^\s<>@,;]+$/u, {
+    expected: "one e-mail address",
+  }),
+);
+
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 
 /** The SMTP server that sends the mails about contact messages. */
@@ -204,8 +221,8 @@ export const MailConfig: Config.Config<Option.Option<MailSettings>> =
                     ),
               ),
             ),
-            from: Config.NonEmptyString("SMTP_FROM"),
-            to: Config.NonEmptyString("CONTACT_MAIL_TO"),
+            from: Config.schema(MailFrom, "SMTP_FROM"),
+            to: Config.schema(MailRecipient, "CONTACT_MAIL_TO"),
           }).pipe(
             Config.flatMap((settings) =>
               Config.Port("SMTP_PORT").pipe(
