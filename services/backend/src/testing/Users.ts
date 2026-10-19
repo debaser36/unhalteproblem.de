@@ -8,6 +8,8 @@ import type { User } from "#domains/users/User";
 import { type Login, UserCommands } from "#domains/users/UserCommands";
 import { AuditCommands } from "#domains/audit/AuditCommands";
 import { AuditRepository } from "#domains/audit/AuditRepository";
+import { BlogDirectory } from "#domains/blogs/BlogDirectory";
+import { BlogRepository } from "#domains/blogs/BlogRepository";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { ModerationRepository } from "#domains/moderation/ModerationRepository";
@@ -41,10 +43,11 @@ export const UsersTest = Layer.mergeAll(
     Layer.mergeAll(ModerationCommands.layer, ModerationQueries.layer),
   ),
   Layer.provideMerge(AuditCommands.layer),
-  Layer.provideMerge(UserDirectory.layer),
+  Layer.provideMerge(Layer.mergeAll(UserDirectory.layer, BlogDirectory.layer)),
   Layer.provideMerge(
     Layer.mergeAll(
       AuditRepository.layer,
+      BlogRepository.layer,
       Outbox.layer,
       UserRepository.layer,
       ModerationRepository.layer,

@@ -3,14 +3,22 @@ import { DomainEvents } from "#cqrs/DomainEvent";
 import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
 import { AuditLive } from "./audit/Audits.ts";
+import { BlogDirectoryLive, BlogsLive } from "./blogs/Blogs.ts";
 import { ContactLive } from "./contact/Contacts.ts";
+import { MediaLive } from "./media/Medias.ts";
 import { ModerationLive } from "./moderation/Moderations.ts";
 import { UserDirectoryLive, UsersLive } from "./users/Users.ts";
 
 // Moderation acts on users (through their directory), and registering a user
 // grants their first roles (through moderation): users' directory, then
-// moderation, then the rest of users.
-const Moderation = ModerationLive.pipe(Layer.provide(UserDirectoryLive));
+// moderation, then the rest of users. Moderation also asks the blogs'
+// directory before it grants an editor role.
+const Moderation = ModerationLive.pipe(
+  Layer.provide([UserDirectoryLive, BlogDirectoryLive]),
+);
+
+// Posts name their authors, and their images live in the media domain.
+const Blogs = BlogsLive.pipe(Layer.provide(UserDirectoryLive));
 
 /**
  * Every domain, on one shared `Transaction`, `DomainEvents` and `Outbox`. A
@@ -24,8 +32,9 @@ const Moderation = ModerationLive.pipe(Layer.provide(UserDirectoryLive));
  * Needs a migrated `SqlClient` (`DatabaseLive` or `DatabaseTest`),
  * `Sessions` (restricting a user ends their sessions) and a `Mailer`.
  */
-export const DomainsLive = Layer.mergeAll(UsersLive, ContactLive).pipe(
+export const DomainsLive = Layer.mergeAll(UsersLive, ContactLive, Blogs).pipe(
   Layer.provideMerge(Moderation),
+  Layer.provideMerge(MediaLive),
   Layer.provideMerge(AuditLive),
   Layer.provideMerge(Transaction.layer),
   Layer.provide([DomainEvents.layer, Outbox.layer]),

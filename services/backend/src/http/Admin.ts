@@ -6,8 +6,8 @@ import {
   type RoleChange as RoleChangeDto,
 } from "@unhalteproblem.de/api";
 import { Effect, Option } from "effect";
-import { HttpEffect, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
+import { BlogCommands } from "#domains/blogs/BlogCommands";
 import type { Restriction, RoleChange } from "#domains/moderation/Moderation";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import {
@@ -15,14 +15,8 @@ import {
   type UserOverview,
   UserQueries,
 } from "#domains/users/UserQueries";
-
-/** Personal data of other users: no cache may keep the response. */
-const noStore = <A, E, R>(self: Effect.Effect<A, E, R>) =>
-  HttpEffect.appendPreResponseHandler((_request, response) =>
-    Effect.succeed(
-      HttpServerResponse.setHeader(response, "cache-control", "no-store"),
-    ),
-  ).pipe(Effect.andThen(self));
+import { toBlog } from "./BlogViews.ts";
+import { noStore } from "./CacheControl.ts";
 
 const toRestriction = (restriction: Restriction): RestrictionDto => ({
   id: restriction.id,
@@ -77,6 +71,7 @@ export const AdminHandlers = HttpApiBuilder.group(
   Effect.fn(function* (handlers) {
     const commands = yield* ModerationCommands;
     const queries = yield* UserQueries;
+    const blogs = yield* BlogCommands;
     return handlers
       .handle("listUsers", ({ query }) =>
         queries
@@ -112,6 +107,12 @@ export const AdminHandlers = HttpApiBuilder.group(
       )
       .handle("revokeRole", ({ params }) =>
         commands.revokeRole(params.userId, params.role),
+      )
+      .handle("createBlog", ({ payload }) =>
+        blogs.createBlog(payload).pipe(Effect.map(toBlog)),
+      )
+      .handle("updateBlog", ({ params, payload }) =>
+        blogs.updateBlog(params.blog, payload).pipe(Effect.map(toBlog)),
       );
   }),
 );

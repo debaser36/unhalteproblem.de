@@ -11,7 +11,11 @@ import { AdminHandlers } from "#http/Admin";
 import { AccountHandlers } from "#http/Account";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
+import { BlogEditorHandlers } from "#http/BlogEditor";
+import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
+import { LargeBodyLive } from "#http/LargeBody";
+import { MediaHandlers } from "#http/Media";
 import { RequestLogging } from "#http/RequestLogging";
 import { SameOriginLive } from "#http/SameOrigin";
 import { SystemHandlers } from "#http/System";
@@ -42,6 +46,7 @@ const Repositories = Layer.mergeAll(
 const AuthServices = Layer.mergeAll(
   AuthenticationLive,
   SameOriginLive,
+  LargeBodyLive,
   Authorization.middleware(RequireAdmin),
   Authorization.middleware(RequireSuperAdmin),
   OidcProvider.layer,
@@ -56,6 +61,9 @@ const Handlers = Layer.mergeAll(
   AuthHandlers,
   AdminHandlers,
   AccountHandlers,
+  BlogsHandlers,
+  BlogEditorHandlers,
+  MediaHandlers,
 ).pipe(
   Layer.provide([ContactRateLimit.layer, Readiness.layer]),
   Layer.provideMerge(AuthServices),
@@ -84,7 +92,9 @@ const LoggerLive = Layer.unwrap(
 );
 
 // The largest valid contact message is about 5.5 KB, so anything much bigger
-// is rejected before it is read into memory, independent of nginx.
+// is rejected before it is read into memory, independent of nginx. Saving a
+// post (`LargeBody`, 512 KiB) and uploading an image (the multipart limits
+// of `uploadMedia`, 5 MiB) raise it for their own endpoints only.
 const MaxBodySizeLive = Layer.succeed(
   HttpIncomingMessage.MaxBodySize,
   ByteSize.kibibytes(32),

@@ -23,7 +23,11 @@ import { AccountHandlers } from "#http/Account";
 import { AdminHandlers } from "#http/Admin";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
+import { BlogEditorHandlers } from "#http/BlogEditor";
+import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
+import { LargeBodyLive } from "#http/LargeBody";
+import { MediaHandlers } from "#http/Media";
 import { SameOriginLive } from "#http/SameOrigin";
 import { SystemHandlers } from "#http/System";
 import { LoginAttempts } from "#repositories/LoginAttempts";
@@ -183,9 +187,13 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     ContactHandlers,
     AdminHandlers,
     AccountHandlers,
+    BlogsHandlers,
+    BlogEditorHandlers,
+    MediaHandlers,
   ).pipe(
     Layer.provide([
       SameOriginLive,
+      LargeBodyLive,
       Authorization.middleware(RequireAdmin),
       Authorization.middleware(RequireSuperAdmin),
       Layer.succeed(OidcProvider, makeProvider(options)),

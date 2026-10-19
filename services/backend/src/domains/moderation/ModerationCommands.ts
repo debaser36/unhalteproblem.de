@@ -2,6 +2,8 @@ import {
   AccountDeletionNotAllowed,
   AlreadyRestricted,
   Authorized,
+  BlogNotFound,
+  blogOfEditorRole,
   Forbidden,
   NotRestricted,
   RestrictionNotAllowed,
@@ -13,6 +15,7 @@ import * as Command from "#cqrs/Command";
 import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
 import { AuditCommands } from "#domains/audit/AuditCommands";
+import { BlogDirectory } from "#domains/blogs/BlogDirectory";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import { initialRoles, type UserId, UserNotFound } from "#domains/users/User";
 import { Sessions } from "#repositories/Sessions";
@@ -34,6 +37,7 @@ const make = Effect.gen(function* () {
   const moderation = yield* ModerationRepository;
   const sessions = yield* Sessions;
   const audit = yield* AuditCommands;
+  const blogs = yield* BlogDirectory;
   const transaction = yield* Transaction;
 
   const newId = Effect.sync(() => crypto.randomUUID());
@@ -119,6 +123,12 @@ const make = Effect.gen(function* () {
         userId,
         "superAdmin",
       );
+      // An editor role only for a subblog that exists: one for a subblog
+      // created later would start to count without anyone deciding so then.
+      const blog = blogOfEditorRole(role);
+      if (Option.isSome(blog) && !(yield* blogs.exists(blog.value))) {
+        return yield* new BlogNotFound({ blog: blog.value });
+      }
       const now = yield* DateTime.now;
       const change = { userId, role, by: Option.some(actor.id), at: now };
       if (yield* moderation.grantRole(change)) {
@@ -310,14 +320,15 @@ export class ModerationCommands extends Context.Service<
     ) => Effect.Effect<void, AccountDeletionNotAllowed>;
     /**
      * Grants a role (superAdmins only). Granting a held role changes
-     * nothing; otherwise it is logged and `RoleGranted` recorded.
+     * nothing; otherwise it is logged and `RoleGranted` recorded. A
+     * `blogEditor:<slug>` role only for an existing subblog (`BlogNotFound`).
      */
     readonly grantRole: (
       userId: UserId,
       role: Role,
     ) => Effect.Effect<
       void,
-      UserNotFound | Forbidden,
+      UserNotFound | BlogNotFound | Forbidden,
       Authorized<"superAdmin">
     >;
     /**
@@ -360,6 +371,6 @@ export class ModerationCommands extends Context.Service<
     >;
   }
 >()("@unhalteproblem.de/backend/domains/moderation/ModerationCommands") {
-  /** Needs `UserDirectory`, `ModerationRepository`, `Sessions`, `AuditCommands` and `Transaction`. */
+  /** Needs `UserDirectory`, `BlogDirectory`, `ModerationRepository`, `Sessions`, `AuditCommands` and `Transaction`. */
   static readonly layer = Layer.effect(ModerationCommands, make);
 }

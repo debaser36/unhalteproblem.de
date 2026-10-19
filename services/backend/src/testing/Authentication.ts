@@ -1,6 +1,7 @@
 import {
   Authentication,
   Forbidden,
+  LargeBody,
   RequireAdmin,
   RequireSuperAdmin,
   SameOrigin,
@@ -26,4 +27,6 @@ export const MiddlewaresRejectAll = Layer.mergeAll(
   Layer.succeed(RequireAdmin, () => Effect.fail(new Forbidden())),
   Layer.succeed(RequireSuperAdmin, () => Effect.fail(new Forbidden())),
   Layer.succeed(SameOrigin, () => Effect.fail(new Forbidden())),
+  // Raises a limit, checks nothing: passing the request on is all it does.
+  Layer.succeed(LargeBody, (httpEffect) => httpEffect),
 );
