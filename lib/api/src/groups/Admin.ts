@@ -10,7 +10,15 @@ import {
   UserPageQuery,
 } from "#domain/Admin";
 import { Role } from "#domain/Auth";
+import {
+  Blog,
+  BlogSlug,
+  CreateBlogPayload,
+  UpdateBlogPayload,
+} from "#domain/Blog";
 import { AlreadyRestricted } from "#errors/AlreadyRestricted";
+import { BlogNotFound } from "#errors/BlogNotFound";
+import { BlogSlugTaken } from "#errors/BlogSlugTaken";
 import { NotRestricted } from "#errors/NotRestricted";
 import { RestrictionNotAllowed } from "#errors/RestrictionNotAllowed";
 import { RoleChangeNotAllowed } from "#errors/RoleChangeNotAllowed";
@@ -24,7 +32,7 @@ import {
   OpenApi,
 } from "effect/http-api";
 
-/** Requires `admin`: user administration (listing, restrictions). */
+/** Requires `admin`: user administration (listing, restrictions) and subblogs. */
 export const RequireAdmin = RequireRoles("admin");
 
 /**
@@ -52,6 +60,11 @@ const CreatedRestriction = Schema.Union([Restriction])
   .pipe(HttpApiSchema.status(201))
   .annotate({ description: "The new restriction." });
 
+/** Success of `createBlog`: the new `Blog`, with status 201 (see above). */
+const CreatedBlog = Schema.Union([Blog])
+  .pipe(HttpApiSchema.status(201))
+  .annotate({ description: "The new subblog." });
+
 // Shared by `restrictUser` and `liftRestriction`.
 const restrictionRules =
   "Nobody may restrict or lift their own account, and a caller without " +
@@ -59,8 +72,9 @@ const restrictionRules =
   "`superAdmin`; otherwise 403 `RestrictionNotAllowed`.";
 
 /**
- * User administration: admins see every user, restrict (block) and lift
- * restrictions; superAdmins grant and revoke roles. Every change is
+ * User and subblog administration: admins see every user, restrict (block)
+ * and lift restrictions, and create and rename subblogs; superAdmins grant
+ * and revoke roles. Every change is
  * recorded with who made it and when, and shows up in `getUser`.
  *
  * Every endpoint requires a session (`Authentication`, 401) and a role
@@ -172,7 +186,7 @@ export class AdminGroup extends HttpApiGroup.make("admin")
       success: HttpApiSchema.NoContent.annotate({
         description: "The user holds the role.",
       }),
-      error: UserNotFound,
+      error: [UserNotFound, BlogNotFound],
     })
       .middleware(RequireSuperAdmin)
       .middleware(SameOrigin)
@@ -186,7 +200,9 @@ export class AdminGroup extends HttpApiGroup.make("admin")
             "answers 204 as well and changes nothing. A grant records the " +
             "caller and the time in the role change log. The new role " +
             "takes effect on the user's next request. Answers 404 " +
-            "`UserNotFound` for an unknown id.",
+            "`UserNotFound` for an unknown id, and 404 `BlogNotFound` " +
+            "when granting `blogEditor:<slug>` for a subblog that does not " +
+            "exist (so no editor role waits for a subblog created later).",
         }),
       ),
     HttpApiEndpoint.delete("revokeRole", "/admin/users/:userId/roles/:role", {
@@ -213,6 +229,43 @@ export class AdminGroup extends HttpApiGroup.make("admin")
             "an unknown id.",
         }),
       ),
+    HttpApiEndpoint.post("createBlog", "/admin/blogs", {
+      payload: CreateBlogPayload,
+      success: CreatedBlog,
+      error: BlogSlugTaken,
+    })
+      .middleware(RequireAdmin)
+      .middleware(SameOrigin)
+      .annotateMerge(
+        OpenApi.annotations({
+          summary: "Create a subblog",
+          description:
+            "Requires `admin` and a same-origin request. Creates an empty " +
+            "subblog and answers 201 with it. The slug is immutable: it is " +
+            "part of the subblog's URLs and of its editor role " +
+            "`blogEditor:<slug>`, which superAdmins grant with " +
+            "`grantRole`. Answers 409 `BlogSlugTaken` if a subblog with the " +
+            "slug exists.",
+        }),
+      ),
+    HttpApiEndpoint.patch("updateBlog", "/admin/blogs/:blog", {
+      params: { blog: BlogSlug },
+      payload: UpdateBlogPayload,
+      success: Blog,
+      error: BlogNotFound,
+    })
+      .middleware(RequireAdmin)
+      .middleware(SameOrigin)
+      .annotateMerge(
+        OpenApi.annotations({
+          summary: "Rename a subblog",
+          description:
+            "Requires `admin` and a same-origin request. Replaces the " +
+            "subblog's title and description (the slug cannot change) and " +
+            "answers with the subblog. Answers 404 `BlogNotFound` for an " +
+            "unknown slug.",
+        }),
+      ),
   )
   // Protects every endpoint above; added after them, so it runs before
   // their role middlewares and answers 401 before any 403.
@@ -221,8 +274,9 @@ export class AdminGroup extends HttpApiGroup.make("admin")
     OpenApi.annotations({
       title: "Admin",
       description:
-        "User administration. Admins list users and restrict or lift " +
-        "restrictions; superAdmins grant and revoke roles. Every change is " +
-        "recorded with who made it and when.",
+        "User and subblog administration. Admins list users, restrict or " +
+        "lift restrictions, and create and rename subblogs; superAdmins " +
+        "grant and revoke roles. Every change to a user is recorded with " +
+        "who made it and when.",
     }),
   ) {}

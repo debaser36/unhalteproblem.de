@@ -15,6 +15,7 @@ import type { Role } from "#domain/Auth";
 import { AccountDeletionNotAllowed } from "#errors/AccountDeletionNotAllowed";
 import { Forbidden } from "#errors/Forbidden";
 import { Unauthorized } from "#errors/Unauthorized";
+import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 
 describe("account endpoints in the OpenAPI document", () => {
@@ -150,11 +151,12 @@ const withOrigin = (origin: string) =>
   );
 
 // The in-memory server needs an implementation of every middleware of the
-// API, but the admin group's are never reached here.
+// API, but the admin and blog editor groups' are never reached here.
 const unusedMiddleware = Effect.die("not used by these tests");
 const AdminMiddlewareStubs = Layer.mergeAll(
   Layer.succeed(RequireAdmin, () => unusedMiddleware),
   Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
+  Layer.succeed(LargeBody, () => unusedMiddleware),
 );
 
 const makeClient = HttpApiTest.groups(Api, ["account"]);

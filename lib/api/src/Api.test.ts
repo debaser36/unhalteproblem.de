@@ -16,6 +16,7 @@ import { Api } from "./Api.ts";
 import {
   Authentication,
   CurrentUser,
+  LargeBody,
   RateLimited,
   RequireAdmin,
   RequireSuperAdmin,
@@ -32,6 +33,8 @@ describe("OpenAPI document", () => {
   it("exposes exactly the contract's paths and operations", () => {
     assert.deepStrictEqual(Object.keys(spec.paths).sort(), [
       "/account/delete",
+      "/admin/blogs",
+      "/admin/blogs/{blog}",
       "/admin/users",
       "/admin/users/{userId}",
       "/admin/users/{userId}/restriction",
@@ -43,8 +46,19 @@ describe("OpenAPI document", () => {
       "/auth/logout",
       "/auth/register",
       "/auth/session",
+      "/blogs",
+      "/blogs/{blog}",
+      "/blogs/{blog}/manage/media",
+      "/blogs/{blog}/manage/posts",
+      "/blogs/{blog}/manage/posts/{postId}",
+      "/blogs/{blog}/manage/posts/{postId}/publish",
+      "/blogs/{blog}/manage/posts/{postId}/unpublish",
+      "/blogs/{blog}/posts",
+      "/blogs/{blog}/posts/{post}",
       "/contact",
       "/health",
+      "/media/{mediaId}",
+      "/posts",
       "/ready",
     ]);
     const operations = Object.fromEntries(
@@ -80,6 +94,30 @@ describe("OpenAPI document", () => {
         put: "admin.grantRole",
         delete: "admin.revokeRole",
       },
+      "/admin/blogs": { post: "admin.createBlog" },
+      "/admin/blogs/{blog}": { patch: "admin.updateBlog" },
+      "/blogs": { get: "blogs.listBlogs" },
+      "/blogs/{blog}": { get: "blogs.getBlog" },
+      "/blogs/{blog}/posts": { get: "blogs.listPosts" },
+      "/blogs/{blog}/posts/{post}": { get: "blogs.getPost" },
+      "/posts": { get: "blogs.recentPosts" },
+      "/media/{mediaId}": { get: "media.getMedia" },
+      "/blogs/{blog}/manage/posts": {
+        get: "blogEditor.listManagedPosts",
+        post: "blogEditor.createPost",
+      },
+      "/blogs/{blog}/manage/posts/{postId}": {
+        get: "blogEditor.getManagedPost",
+        put: "blogEditor.updatePost",
+        delete: "blogEditor.deletePost",
+      },
+      "/blogs/{blog}/manage/posts/{postId}/publish": {
+        post: "blogEditor.publishPost",
+      },
+      "/blogs/{blog}/manage/posts/{postId}/unpublish": {
+        post: "blogEditor.unpublishPost",
+      },
+      "/blogs/{blog}/manage/media": { post: "blogEditor.uploadMedia" },
     });
   });
 
@@ -115,7 +153,8 @@ describe("OpenAPI document", () => {
     }
   });
 
-  // The admin endpoints are checked in `groups/Admin.test.ts`.
+  // The admin and blog endpoints are checked in `groups/Admin.test.ts` and
+  // `groups/Blogs.test.ts`.
   it("requires the session cookie on GET /auth/session, not on the public endpoints", () => {
     assert.deepStrictEqual(spec.components.securitySchemes, {
       session: {
@@ -308,6 +347,7 @@ const AdminMiddlewareStubs = Layer.mergeAll(
   Layer.succeed(RequireAdmin, () => unusedMiddleware),
   Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
   Layer.succeed(SameOrigin, () => unusedMiddleware),
+  Layer.succeed(LargeBody, () => unusedMiddleware),
 );
 
 const makeClient = HttpApiTest.groups(Api, ["system", "contact", "auth"]);

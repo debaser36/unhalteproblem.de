@@ -1,4 +1,5 @@
-import { IsoDateTimeUtc, Role } from "#domain/Auth";
+import { Role } from "#domain/Auth";
+import { IsoDateTimeUtc } from "#domain/IsoDateTimeUtc";
 import { Subject } from "@unhalteproblem.de/oidc";
 import { type DateTime, Effect, Schema, SchemaGetter } from "effect";
 

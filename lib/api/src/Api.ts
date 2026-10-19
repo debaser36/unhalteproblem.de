@@ -1,7 +1,10 @@
 import { AccountGroup } from "#groups/Account";
 import { AdminGroup } from "#groups/Admin";
 import { AuthGroup } from "#groups/Auth";
+import { BlogEditorGroup } from "#groups/BlogEditor";
+import { BlogsGroup } from "#groups/Blogs";
 import { ContactGroup } from "#groups/Contact";
+import { MediaGroup } from "#groups/Media";
 import { SystemGroup } from "#groups/System";
 import { HttpApi, OpenApi } from "effect/http-api";
 
@@ -20,6 +23,9 @@ export class Api extends HttpApi.make("unhalteproblem")
   .add(AuthGroup)
   .add(AdminGroup)
   .add(AccountGroup)
+  .add(BlogsGroup)
+  .add(MediaGroup)
+  .add(BlogEditorGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "unhalteproblem.de API",

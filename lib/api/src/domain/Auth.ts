@@ -1,6 +1,7 @@
 import { Subject } from "@unhalteproblem.de/oidc";
 import { type BlogSlug, BlogSlugMaxLength, BlogSlugPart } from "#domain/Blog";
-import { Option, Schema, SchemaTransformation } from "effect";
+import { IsoDateTimeUtc } from "#domain/IsoDateTimeUtc";
+import { Option, Schema } from "effect";
 
 /** Length limit of `ReturnPath`, generous for any real page URL. */
 export const ReturnPathMaxLength = 2048;
@@ -172,21 +173,6 @@ export const User = Schema.Struct({
   description: "The logged-in user.",
 });
 export type User = typeof User.Type;
-
-/**
- * A `DateTime.Utc` encoded as an ISO 8601 UTC string. The same codec as
- * `Schema.DateTimeUtcFromString`, but with the encoded side documented as
- * `format: date-time` in JSON Schema.
- */
-export const IsoDateTimeUtc = Schema.String.annotate({
-  format: "date-time",
-  description: "An ISO 8601 date-time in UTC, e.g. `2026-01-01T12:00:00.000Z`.",
-}).pipe(
-  Schema.decodeTo(
-    Schema.DateTimeUtc,
-    SchemaTransformation.dateTimeUtcFromString,
-  ),
-);
 
 /** Body of `GET /auth/session`: the browser's current login session. */
 export const SessionInfo = Schema.Struct({

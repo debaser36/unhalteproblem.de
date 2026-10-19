@@ -29,13 +29,17 @@ import {
   type UserPageQuery,
 } from "#domain/Admin";
 import { blogEditorRole, type Role } from "#domain/Auth";
+import type { Blog } from "#domain/Blog";
 import { AlreadyRestricted } from "#errors/AlreadyRestricted";
+import { BlogNotFound } from "#errors/BlogNotFound";
+import { BlogSlugTaken } from "#errors/BlogSlugTaken";
 import { Forbidden } from "#errors/Forbidden";
 import { NotRestricted } from "#errors/NotRestricted";
 import { RestrictionNotAllowed } from "#errors/RestrictionNotAllowed";
 import { RoleChangeNotAllowed } from "#errors/RoleChangeNotAllowed";
 import { Unauthorized } from "#errors/Unauthorized";
 import { UserNotFound } from "#errors/UserNotFound";
+import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 
@@ -44,11 +48,13 @@ const stateChanging = [
   "admin.liftRestriction",
   "admin.grantRole",
   "admin.revokeRole",
+  "admin.createBlog",
+  "admin.updateBlog",
 ];
 
 describe("admin endpoints in the OpenAPI document", () => {
   const spec = OpenApi.fromApi(Api);
-  type Method = "get" | "post" | "put" | "delete";
+  type Method = "get" | "post" | "put" | "patch" | "delete";
   const operation = (path: string, method: Method) =>
     spec.paths[path]?.[method];
   const statuses = (path: string, method: Method) =>
@@ -81,6 +87,34 @@ describe("admin endpoints in the OpenAPI document", () => {
     assert.deepStrictEqual(
       statuses("/admin/users/{userId}/roles/{role}", "delete"),
       ["204", "401", "403", "404", "409"],
+    );
+    assert.deepStrictEqual(statuses("/admin/blogs", "post"), [
+      "201",
+      "401",
+      "403",
+      "409",
+    ]);
+    assert.deepStrictEqual(statuses("/admin/blogs/{blog}", "patch"), [
+      "200",
+      "401",
+      "403",
+      "404",
+    ]);
+  });
+
+  it("returns the one Blog component with 201 and 200", () => {
+    const created = operation("/admin/blogs", "post")?.responses["201"]
+      ?.content?.["application/json"]?.schema as {
+      readonly anyOf?: ReadonlyArray<unknown>;
+    };
+    assert.deepStrictEqual(created.anyOf, [
+      { $ref: "#/components/schemas/Blog" },
+    ]);
+    assert.deepStrictEqual(
+      operation("/admin/blogs/{blog}", "patch")?.responses["200"]?.content?.[
+        "application/json"
+      ]?.schema,
+      { $ref: "#/components/schemas/Blog" },
     );
   });
 
@@ -279,6 +313,12 @@ describe("admin endpoint middleware", () => {
         [...admin, SameOrigin.key].sort(),
       );
     }
+    for (const name of ["admin.createBlog", "admin.updateBlog"]) {
+      assert.deepStrictEqual(
+        middlewares.get(name),
+        [...admin, SameOrigin.key].sort(),
+      );
+    }
     for (const name of ["admin.grantRole", "admin.revokeRole"]) {
       assert.deepStrictEqual(
         middlewares.get(name),
@@ -348,6 +388,17 @@ const adaCursorEncoded = Schema.encodeSync(UserCursor)(adaCursor);
 const base64Url = (text: string) =>
   btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 
+const missingBlog = "no-such-blog";
+const takenBlog = "taken";
+const rustNotes: Blog = {
+  slug: "rust-notes",
+  title: "Rust notes",
+  description: "",
+  createdAt: t0,
+  postCount: 0,
+  latestPostAt: null,
+};
+
 // The decoded role of the last `grantRole` call.
 let lastGrantedRole: Role | undefined;
 
@@ -416,9 +467,11 @@ const AdminHandlers = HttpApiBuilder.group(Api, "admin", (handlers) =>
       }),
     )
     .handle("grantRole", ({ params }) =>
-      Effect.sync(() => {
-        lastGrantedRole = params.role;
-      }).pipe(Effect.andThen(notFound(params.userId))),
+      params.role === blogEditorRole(missingBlog)
+        ? Effect.fail(new BlogNotFound({ blog: missingBlog }))
+        : Effect.sync(() => {
+            lastGrantedRole = params.role;
+          }).pipe(Effect.andThen(notFound(params.userId))),
     )
     .handle("revokeRole", ({ params }) =>
       Effect.gen(function* () {
@@ -427,6 +480,16 @@ const AdminHandlers = HttpApiBuilder.group(Api, "admin", (handlers) =>
           return yield* new RoleChangeNotAllowed({ reason: "lastSuperAdmin" });
         }
       }),
+    )
+    .handle("createBlog", ({ payload }) =>
+      payload.slug === takenBlog
+        ? Effect.fail(new BlogSlugTaken({ blog: payload.slug }))
+        : Effect.succeed({ ...rustNotes, ...payload }),
+    )
+    .handle("updateBlog", ({ params, payload }) =>
+      params.blog === missingBlog
+        ? Effect.fail(new BlogNotFound({ blog: params.blog }))
+        : Effect.succeed({ ...rustNotes, slug: params.blog, ...payload }),
     ),
 );
 
@@ -508,6 +571,8 @@ layer(
           requireRolesStub(RequireAdmin),
           requireRolesStub(RequireSuperAdmin),
           SameOriginStub,
+          // Only the blog editor group uses it.
+          Layer.succeed(LargeBody, () => Effect.die("not used by admin")),
         ),
       ),
     ),
@@ -851,6 +916,80 @@ layer(
       }
     }).pipe(Effect.provide(asSuperAdmin)),
   );
+  it.effect("grantRole refuses an editor role of a missing subblog", () =>
+    Effect.gen(function* () {
+      const client = yield* makeClient;
+      lastGrantedRole = undefined;
+      const params = { userId: adaId, role: blogEditorRole(missingBlog) };
+      const response = yield* client.admin.grantRole({
+        params,
+        responseMode: "response-only",
+      });
+      assert.strictEqual(response.status, 404);
+      assert.deepStrictEqual(
+        yield* client.admin.grantRole({ params }).pipe(Effect.flip),
+        new BlogNotFound({ blog: missingBlog }),
+      );
+      assert.isUndefined(lastGrantedRole);
+    }).pipe(Effect.provide(asSuperAdmin)),
+  );
+
+  it.effect("createBlog answers 201 or 409 BlogSlugTaken", () =>
+    Effect.gen(function* () {
+      const client = yield* makeClient;
+      const payload = {
+        slug: "type-theory",
+        title: "Type theory",
+        description: "Notes.",
+      };
+      const response = yield* client.admin.createBlog({
+        payload,
+        responseMode: "response-only",
+      });
+      assert.strictEqual(response.status, 201);
+      const created = yield* client.admin.createBlog({ payload });
+      assert.deepStrictEqual(created, { ...rustNotes, ...payload });
+
+      assert.deepStrictEqual(
+        yield* client.admin
+          .createBlog({ payload: { ...payload, slug: takenBlog } })
+          .pipe(Effect.flip),
+        new BlogSlugTaken({ blog: takenBlog }),
+      );
+      for (const invalid of [
+        { ...payload, slug: "Type Theory" },
+        { ...payload, title: " Type theory" },
+        { ...payload, title: "" },
+        { ...payload, description: "d".repeat(1001) },
+      ]) {
+        const exit = yield* client.admin
+          .createBlog({ payload: invalid })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(exit));
+      }
+    }).pipe(Effect.provide(asAdmin)),
+  );
+
+  it.effect("updateBlog answers 200 or 404 BlogNotFound", () =>
+    Effect.gen(function* () {
+      const client = yield* makeClient;
+      const payload = { title: "Rust", description: "About Rust." };
+      assert.deepStrictEqual(
+        yield* client.admin.updateBlog({
+          params: { blog: "rust-notes" },
+          payload,
+        }),
+        { ...rustNotes, ...payload },
+      );
+      assert.deepStrictEqual(
+        yield* client.admin
+          .updateBlog({ params: { blog: missingBlog }, payload })
+          .pipe(Effect.flip),
+        new BlogNotFound({ blog: missingBlog }),
+      );
+    }).pipe(Effect.provide(asAdmin)),
+  );
+
   it.effect("state-changing endpoints need the site's Origin", () =>
     Effect.gen(function* () {
       const client = yield* makeClient;

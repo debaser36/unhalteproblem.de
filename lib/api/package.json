@@ -12,6 +12,7 @@
     "#Api": "./src/Api.ts",
     "#Authentication": "./src/Authentication.ts",
     "#Authorization": "./src/Authorization.ts",
+    "#LargeBody": "./src/LargeBody.ts",
     "#SameOrigin": "./src/SameOrigin.ts",
     "#domain/*": "./src/domain/*.ts",
     "#errors/*": "./src/errors/*.ts",
