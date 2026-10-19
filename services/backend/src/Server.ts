@@ -1,11 +1,11 @@
 import { NodeHttpServer } from "@effect/platform-node";
 import { Api, RequireAdmin, RequireSuperAdmin } from "@unhalteproblem.de/api";
-import { ByteSize, Effect, Layer, Logger } from "effect";
+import { ByteSize, Effect, Layer, Logger, References } from "effect";
 import { HttpIncomingMessage, HttpRouter } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { createServer } from "node:http";
 import * as Authorization from "#auth/Authorization";
-import { LogFormat, ServerConfig } from "#Config";
+import { LogFormat, LogLevelConfig, ServerConfig } from "#Config";
 import { DomainsLive } from "#domains/Domains";
 import { AdminHandlers } from "#http/Admin";
 import { AccountHandlers } from "#http/Account";
@@ -73,9 +73,13 @@ const HttpServerLive = Layer.unwrap(
 const LoggerLive = Layer.unwrap(
   Effect.gen(function* () {
     const format = yield* LogFormat;
-    return Logger.layer([
-      format === "json" ? Logger.consoleJson : Logger.consolePretty(),
-    ]);
+    const level = yield* LogLevelConfig;
+    return Layer.mergeAll(
+      Logger.layer([
+        format === "json" ? Logger.consoleJson : Logger.consolePretty(),
+      ]),
+      Layer.succeed(References.MinimumLogLevel, level),
+    );
   }),
 );
 

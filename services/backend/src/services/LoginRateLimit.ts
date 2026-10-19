@@ -1,5 +1,6 @@
 import { Context, type Duration, Effect, Layer, Schema } from "effect";
 import { RateLimiter } from "effect/persistence";
+import { LoginRateLimitConfig } from "#Config";
 
 /** The client, or all clients together, started too many logins. */
 export class LoginRateLimitExceeded extends Schema.TaggedError<
@@ -14,16 +15,6 @@ interface Options {
   readonly globalLimit: number;
   readonly window: Duration.Input;
 }
-
-// Every login start writes a row that lives for 10 minutes, so this bounds
-// the size of `auth_login_attempts` however the endpoint is called (scripts,
-// cross-site <img> tags). Generous enough for people retrying or opening
-// several tabs; nginx's limit_req sits in front of it.
-const defaults: Options = {
-  limit: 30,
-  globalLimit: 3000,
-  window: "10 minutes",
-};
 
 const make = Effect.fn("LoginRateLimit.make")(function* (options: Options) {
   const limiter = yield* RateLimiter.RateLimiter;
@@ -62,9 +53,13 @@ export class LoginRateLimit extends Context.Service<
     ) => Effect.Effect<void, LoginRateLimitExceeded>;
   }
 >()("@unhalteproblem.de/backend/LoginRateLimit") {
-  static readonly layer = Layer.effect(LoginRateLimit, make(defaults)).pipe(
-    Layer.provide(RateLimiterMemory),
-  );
+  /** The limits from `LOGIN_RATE_LIMIT*` (see `LoginRateLimitConfig`). */
+  static readonly layer = Layer.effect(
+    LoginRateLimit,
+    Effect.gen(function* () {
+      return yield* make(yield* LoginRateLimitConfig);
+    }),
+  ).pipe(Layer.provide(RateLimiterMemory));
 
   /** Fixed limits with a fresh in-memory store, for tests. */
   static readonly layerWith = (options: Options) =>

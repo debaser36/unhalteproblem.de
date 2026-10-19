@@ -4,6 +4,8 @@ import {
   ContactRetentionConfig,
   DatabaseConfig,
   KeycloakAdminConfig,
+  LogLevelConfig,
+  LoginRateLimitConfig,
   MailConfig,
   OidcConfig,
   PublicUrlConfig,
@@ -250,6 +252,40 @@ describe("KeycloakAdminConfig", () => {
       assert.isTrue(
         Exit.isSuccess(exit) &&
           exit.value.clientId === "unhalteproblem-backend-admin",
+      );
+    }),
+  );
+});
+
+describe("LoginRateLimitConfig and LogLevelConfig", () => {
+  it.effect("keep the previous behaviour by default", () =>
+    Effect.gen(function* () {
+      const limits = yield* load(LoginRateLimitConfig, {});
+      assert.isTrue(
+        Exit.isSuccess(limits) &&
+          limits.value.limit === 30 &&
+          limits.value.globalLimit === 3000 &&
+          Duration.toMillis(limits.value.window) === 600_000,
+      );
+      const level = yield* load(LogLevelConfig, {});
+      assert.isTrue(Exit.isSuccess(level) && level.value === "Info");
+    }),
+  );
+
+  it.effect.each([
+    { LOGIN_RATE_LIMIT: "0" },
+    { LOGIN_RATE_LIMIT_GLOBAL: "-1" },
+    { LOGIN_RATE_LIMIT_WINDOW: "0 seconds" },
+  ])("reject %o", (env) =>
+    Effect.gen(function* () {
+      assert.isTrue(Exit.isFailure(yield* load(LoginRateLimitConfig, env)));
+    }),
+  );
+
+  it.effect("rejects an unknown log level", () =>
+    Effect.gen(function* () {
+      assert.isTrue(
+        Exit.isFailure(yield* load(LogLevelConfig, { LOG_LEVEL: "Loud" })),
       );
     }),
   );

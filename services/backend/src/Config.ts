@@ -18,6 +18,12 @@ export const ServerConfig = Config.all({
   host: Config.String("HOST").pipe(Config.withDefault("127.0.0.1")),
 });
 
+/** The least severe level that is logged; `Debug` adds the probe requests. */
+export const LogLevelConfig = Config.Literals(
+  ["Debug", "Info", "Warn", "Error"],
+  "LOG_LEVEL",
+).pipe(Config.withDefault("Info" as const));
+
 /** `pretty` for development, `json` for the container's log collector. */
 export const LogFormat = Config.Literals(["pretty", "json"], "LOG_FORMAT").pipe(
   Config.withDefault("pretty"),
@@ -48,6 +54,25 @@ export const ContactRateLimitConfig = Config.all({
   ),
   window: Config.schema(PositiveDuration, "CONTACT_RATE_LIMIT_WINDOW").pipe(
     Config.withDefault(Duration.hours(1)),
+  ),
+});
+
+/**
+ * How often a client, and all clients together, may start a login per window.
+ * Every login start writes a row that lives for 10 minutes, so this bounds
+ * the size of `auth_login_attempts` however the endpoint is called (scripts,
+ * cross-site <img> tags). The defaults are generous for people retrying or
+ * opening several tabs; nginx's `limit_req` sits in front of it.
+ */
+export const LoginRateLimitConfig = Config.all({
+  limit: Config.schema(PositiveInt, "LOGIN_RATE_LIMIT").pipe(
+    Config.withDefault(30),
+  ),
+  globalLimit: Config.schema(PositiveInt, "LOGIN_RATE_LIMIT_GLOBAL").pipe(
+    Config.withDefault(3000),
+  ),
+  window: Config.schema(PositiveDuration, "LOGIN_RATE_LIMIT_WINDOW").pipe(
+    Config.withDefault(Duration.minutes(10)),
   ),
 });
 
