@@ -123,6 +123,21 @@ export const OidcConfig = Config.all({
 });
 
 /**
+ * The Keycloak client that deletes users when they delete their account. A
+ * client of its own, never the login client above: that one has its secret in
+ * every login, and should not also be allowed to delete users. In Keycloak it
+ * has "Client authentication" and "Service accounts roles" on, every login
+ * flow off, and the service account holds only `manage-users` of the
+ * `realm-management` client. It lives in the realm of `OIDC_ISSUER`.
+ */
+export const KeycloakAdminConfig = Config.all({
+  clientId: Config.NonEmptyString("KEYCLOAK_ADMIN_CLIENT_ID").pipe(
+    Config.withDefault("unhalteproblem-backend-admin"),
+  ),
+  clientSecret: Config.Redacted("KEYCLOAK_ADMIN_CLIENT_SECRET"),
+});
+
+/**
  * Where the website and this backend are reachable from browsers. The API
  * URL is the backend behind nginx's `/api/` prefix; the login callback is
  * `<PUBLIC_API_URL>/auth/callback`.

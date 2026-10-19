@@ -13,7 +13,7 @@ import {
   HttpClientRequest,
   type HttpClientResponse,
 } from "effect/http";
-import { OidcConfig } from "#Config";
+import { KeycloakAdminConfig, OidcConfig } from "#Config";
 
 /**
  * Keycloak's admin API did not do what was asked. `reason` is a short code
@@ -155,15 +155,21 @@ export class KeycloakAdmin extends Context.Service<
   ): Layer.Layer<KeycloakAdmin, never, HttpClient.HttpClient> =>
     Layer.effect(KeycloakAdmin, make(options));
 
-  /** The configured realm (`OIDC_*`), over `fetch`. */
+  /** The realm of `OIDC_ISSUER`, as the client of `KEYCLOAK_ADMIN_*`, over `fetch`. */
   static readonly layer = Layer.unwrap(
     Effect.gen(function* () {
-      const config = yield* OidcConfig;
-      return KeycloakAdmin.layerWith({
-        issuer: config.issuer,
-        clientId: config.clientId,
-        clientSecret: config.clientSecret,
-      });
+      const { issuer, clientId: loginClientId } = yield* OidcConfig;
+      const admin = yield* KeycloakAdminConfig;
+      // The point of the separate client: refuse to run with the login one,
+      // whatever the environment says.
+      if (admin.clientId === loginClientId) {
+        return yield* Effect.die(
+          new Error(
+            "KEYCLOAK_ADMIN_CLIENT_ID must be another client than OIDC_CLIENT_ID",
+          ),
+        );
+      }
+      return KeycloakAdmin.layerWith({ issuer, ...admin });
     }),
   ).pipe(Layer.provide(FetchHttpClient.layer));
 }

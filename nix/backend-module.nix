@@ -18,6 +18,7 @@
 #         };
 #         # Secrets: a root-only file outside the Nix store with lines like
 #         #   OIDC_CLIENT_SECRET=...
+#         #   KEYCLOAK_ADMIN_CLIENT_SECRET=...
 #         #   POSTGRES_PASSWORD=...
 #         # e.g. config.sops.secrets.<name>.path (sops-nix) or
 #         # config.age.secrets.<name>.path (agenix).
@@ -60,7 +61,12 @@ let
   image = self.packages.${pkgs.stdenv.hostPlatform.system}.backend-image;
 
   # Variables that must never be written to the world-readable Nix store.
-  secretVariables = [ "OIDC_CLIENT_SECRET" "POSTGRES_PASSWORD" "SMTP_PASSWORD" ];
+  secretVariables = [
+    "OIDC_CLIENT_SECRET"
+    "KEYCLOAK_ADMIN_CLIENT_SECRET"
+    "POSTGRES_PASSWORD"
+    "SMTP_PASSWORD"
+  ];
 
   # Restores a dump into a scratch database and checks it (nix/verify-backup.sh).
   verifyBackup = pkgs.writeShellApplication {
@@ -132,7 +138,7 @@ in
         HOST, PORT and LOG_FORMAT are set by the image.
 
         These values are written to the world-readable Nix store, so secrets
-        (OIDC_CLIENT_SECRET, POSTGRES_PASSWORD) go into
+        (OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET, POSTGRES_PASSWORD, SMTP_PASSWORD) go into
         {option}`environmentFiles` instead.
 
         POSTGRES_HOST defaults to localhost, which inside the container is
@@ -151,7 +157,7 @@ in
       description = ''
         Environment files (`NAME=value` per line) read by the container
         runtime on the host when the container starts, so they can be
-        root-only. This is where secrets belong: OIDC_CLIENT_SECRET
+        root-only. This is where secrets belong: OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET
         (required) and POSTGRES_PASSWORD (if the database uses password
         authentication). Provide them outside the Nix store, e.g. with
         sops-nix (`config.sops.secrets.<name>.path`) or agenix

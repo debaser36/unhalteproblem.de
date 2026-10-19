@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer, Redacted } from "effect";
+import { Cause, ConfigProvider, Effect, Exit, Layer, Redacted } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { KeycloakAdmin, KeycloakAdminFailed } from "./KeycloakAdmin.ts";
@@ -155,6 +155,40 @@ describe("KeycloakAdmin.deleteUser", () => {
       );
       const error = yield* run(port, "someone").pipe(Effect.flip);
       assert.strictEqual(error.reason, "token:transport");
+    }),
+  );
+});
+
+describe("KeycloakAdmin.layer", () => {
+  const build = (env: Record<string, string>) =>
+    Layer.build(KeycloakAdmin.layer).pipe(
+      Effect.scoped,
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env }))),
+      Effect.exit,
+    );
+
+  it.effect("refuses to be the login client", () =>
+    Effect.gen(function* () {
+      const exit = yield* build({
+        OIDC_CLIENT_SECRET: "login",
+        KEYCLOAK_ADMIN_CLIENT_ID: "unhalteproblem-backend",
+        KEYCLOAK_ADMIN_CLIENT_SECRET: "admin",
+      });
+      assert.isTrue(Exit.isFailure(exit));
+      assert.include(
+        Exit.isFailure(exit) ? Cause.pretty(exit.cause) : "",
+        "must be another client",
+      );
+    }),
+  );
+
+  it.effect("starts with a client of its own", () =>
+    Effect.gen(function* () {
+      const exit = yield* build({
+        OIDC_CLIENT_SECRET: "login",
+        KEYCLOAK_ADMIN_CLIENT_SECRET: "admin",
+      });
+      assert.isTrue(Exit.isSuccess(exit));
     }),
   );
 });

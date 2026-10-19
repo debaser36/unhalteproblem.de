@@ -3,6 +3,7 @@ import { ConfigProvider, Duration, Effect, Exit, Option } from "effect";
 import {
   ContactRetentionConfig,
   DatabaseConfig,
+  KeycloakAdminConfig,
   MailConfig,
   OidcConfig,
   PublicUrlConfig,
@@ -234,6 +235,21 @@ describe("MailConfig addresses", () => {
     Effect.gen(function* () {
       assert.isTrue(
         Exit.isFailure(yield* load(MailConfig, { ...base, ...env })),
+      );
+    }),
+  );
+});
+
+describe("KeycloakAdminConfig", () => {
+  it.effect("needs the secret and defaults the client id", () =>
+    Effect.gen(function* () {
+      assert.isTrue(Exit.isFailure(yield* load(KeycloakAdminConfig, {})));
+      const exit = yield* load(KeycloakAdminConfig, {
+        KEYCLOAK_ADMIN_CLIENT_SECRET: "s3cret",
+      });
+      assert.isTrue(
+        Exit.isSuccess(exit) &&
+          exit.value.clientId === "unhalteproblem-backend-admin",
       );
     }),
   );
