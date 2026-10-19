@@ -8,7 +8,7 @@ import { MailFailed, Mailer } from "./Mailer.ts";
  * A minimal SMTP server: accepts one mail per connection and records what
  * came in DATA.
  */
-const smtpServer = (rejectRecipient = false) =>
+const smtpServer = (rejectRecipient = false, rejectData = false) =>
   Effect.acquireRelease(
     Effect.callback<{ readonly server: Server; readonly mails: Array<string> }>(
       (resume) => {
@@ -24,7 +24,11 @@ const smtpServer = (rejectRecipient = false) =>
                   inData = false;
                   mails.push(data);
                   data = "";
-                  socket.write("250 queued\r\n");
+                  socket.write(
+                    rejectData
+                      ? "550 5.7.1 Message from visitor@example.org rejected by owner@example.org policy\r\n"
+                      : "250 queued\r\n",
+                  );
                 } else {
                   data += line;
                 }

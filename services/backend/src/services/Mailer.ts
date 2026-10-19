@@ -18,15 +18,21 @@ export interface Mail {
 
 /**
  * The mail could not be handed to the server. `reason` is a short code for
- * the log and for `outbox.last_error`; it never quotes the mail.
+ * the log and for `outbox.last_error`; it never quotes the mail. `detail` is
+ * the server's own explanation, for the log only (see `smtpDetail`).
  */
 export class MailFailed extends Schema.TaggedError<
   MailFailed,
   { readonly brand: unique symbol }
->()("MailFailed", { reason: Schema.String }) {
+>()("MailFailed", {
+  reason: Schema.String,
+  detail: Schema.optionalKey(Schema.String),
+}) {
   // What logs show for the error: the code, not an empty message.
   override get message() {
-    return `SMTP failed (${this.reason})`;
+    return this.detail === undefined
+      ? `SMTP failed (${this.reason})`
+      : `SMTP failed (${this.reason}): ${this.detail}`;
   }
 }
 
@@ -49,6 +55,23 @@ const smtpReason = (error: unknown): string => {
     .filter((part): part is string => part !== undefined)
     .map((part) => part.slice(0, 30));
   return parts.length === 0 ? "smtp" : parts.join(":");
+};
+
+/**
+ * What the server said, for the log: the reply text of a rejection ('550 5.7.1
+ * Message rejected: …') is what tells you why. Servers may quote the
+ * addresses in it, so anything that looks like one is replaced, and it is cut
+ * short. It stays out of `outbox.last_error`.
+ */
+const smtpDetail = (error: unknown): string | undefined => {
+  if (typeof error !== "object" || error === null) return undefined;
+  const response = (error as Record<string, unknown>)["response"];
+  if (typeof response !== "string" || response === "") return undefined;
+  return response
+    .replace(/[^\s<>"',;:()]+@[^\s<>"',;:()]+/g, "<address>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
 };
 
 /** Sends mail. */
@@ -111,7 +134,13 @@ export class Mailer extends Context.Service<
               },
               // The error text can quote the recipient or the server's
               // answer; only its code is kept.
-              catch: (error) => new MailFailed({ reason: smtpReason(error) }),
+              catch: (error) => {
+                const detail = smtpDetail(error);
+                return new MailFailed({
+                  reason: smtpReason(error),
+                  ...(detail === undefined ? {} : { detail }),
+                });
+              },
             });
           }),
         });
