@@ -17,6 +17,7 @@ catalog:
   "tsx": "4.21.0"
   "effect": "4.0.5"
   "@effect/tsgo": ^0.53.0
+  "@effect/atom-react": "4.0.5"
   "@effect/opentelemetry": "4.0.5"
   "@effect/platform-node": "4.0.5"
   "@effect/sql-pg": "4.0.5"

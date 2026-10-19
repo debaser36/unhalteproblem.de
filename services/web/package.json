@@ -4,9 +4,13 @@
   "version": "0.0.1",
   "type": "module",
   "imports": {
-    "#components/*": "./src/components/*.tsx",
-    "#lib/*": "./src/lib/*.ts",
-    "#styles/*": "./src/styles/*"
+    "#api/*": "./src/api/*",
+    "#app/*": "./src/app/*",
+    "#editor/*": "./src/editor/*",
+    "#features/*": "./src/features/*",
+    "#lib/*": "./src/lib/*",
+    "#styles/*": "./src/styles/*",
+    "#ui/*": "./src/ui/*"
   },
   "scripts": {
     "preinstall": "only-allow pnpm",
@@ -18,22 +22,38 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "framer-motion": "^14.2.0",
+    "@effect/atom-react": "catalog:",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "@tiptap/extension-code-block-lowlight": "^3.32.0",
+    "@tiptap/extension-highlight": "^3.32.0",
+    "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/extension-list": "^3.32.0",
+    "@tiptap/extension-subscript": "^3.32.0",
+    "@tiptap/extension-superscript": "^3.32.0",
+    "@tiptap/extension-text-align": "^3.32.0",
+    "@tiptap/extensions": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "@unhalteproblem.de/api": "workspace:*",
+    "effect": "catalog:",
+    "lowlight": "^3.3.0",
     "lucide-react": "^1.56.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-router-dom": "^7.18.4",
-    "tailwindcss": "^4.3.3"
+    "react-router": "^7.18.4"
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/react-router-dom": "^5.3.3",
     "@vitejs/plugin-react": "^6.1.2",
     "only-allow": "^1.2.2",
     "oxlint": "catalog:",
+    "tailwindcss": "^4.3.3",
     "typescript": "catalog:",
     "vite": "^8.3.4",
     "vitest": "catalog:"
