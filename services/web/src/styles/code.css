@@ -1,0 +1,75 @@
+/* Syntax colors for code blocks (lowlight emits highlight.js classes). */
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-type {
+  color: #c792ea;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+  color: var(--accent);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-variable.constant_ {
+  color: #f78c6c;
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--accent-2);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--fg);
+}
+
+.hljs-meta,
+.hljs-tag,
+.hljs-name {
+  color: #ffcb6b;
+}
+
+.hljs-deletion {
+  color: var(--danger);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
+
+[data-theme="light"] .hljs-keyword,
+[data-theme="light"] .hljs-selector-tag,
+[data-theme="light"] .hljs-built_in,
+[data-theme="light"] .hljs-type {
+  color: #7c3aed;
+}
+
+[data-theme="light"] .hljs-number,
+[data-theme="light"] .hljs-literal {
+  color: #c2410c;
+}
+
+[data-theme="light"] .hljs-meta,
+[data-theme="light"] .hljs-tag,
+[data-theme="light"] .hljs-name {
+  color: #a16207;
+}

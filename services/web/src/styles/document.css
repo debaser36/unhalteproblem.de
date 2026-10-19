@@ -1,0 +1,232 @@
+/*
+ * Typography of rich documents (posts, project write-ups). The same class
+ * styles the read-only view and the editor, so editing in place looks
+ * exactly like the published page.
+ */
+.doc {
+  color: var(--fg-soft);
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  overflow-wrap: break-word;
+}
+
+.doc:focus {
+  outline: none;
+}
+
+.doc > * + * {
+  margin-top: 1.1em;
+}
+
+.doc h1,
+.doc h2,
+.doc h3,
+.doc h4 {
+  color: var(--fg);
+  font-weight: 650;
+  line-height: 1.25;
+  margin-top: 2em;
+  scroll-margin-top: 6rem;
+}
+
+.doc h1 {
+  font-size: 2rem;
+}
+.doc h2 {
+  font-size: 1.55rem;
+}
+.doc h3 {
+  font-size: 1.25rem;
+}
+.doc h4 {
+  font-size: 1.05rem;
+}
+
+.doc h2::before {
+  content: "## ";
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.doc a {
+  color: var(--accent-2);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent-2) 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.doc a:hover {
+  text-decoration-color: var(--accent-2);
+}
+
+.doc strong {
+  color: var(--fg);
+  font-weight: 650;
+}
+
+.doc mark {
+  background: var(--warning-soft);
+  color: var(--fg);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.doc ul,
+.doc ol {
+  padding-left: 1.4em;
+}
+
+.doc ul {
+  list-style: none;
+}
+
+.doc ul:not([data-type="taskList"]) > li {
+  position: relative;
+}
+
+.doc ul:not([data-type="taskList"]) > li::before {
+  content: "›";
+  position: absolute;
+  left: -1.1em;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.doc ol {
+  list-style: decimal;
+}
+
+.doc ol > li::marker {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.doc li > p {
+  margin: 0.25em 0;
+}
+
+.doc ul[data-type="taskList"] {
+  padding-left: 0.2em;
+}
+
+.doc ul[data-type="taskList"] li {
+  display: flex;
+  gap: 0.6em;
+  align-items: flex-start;
+}
+
+.doc ul[data-type="taskList"] li > label {
+  margin-top: 0.35em;
+  user-select: none;
+}
+
+.doc ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.doc input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1em;
+  height: 1em;
+}
+
+.doc blockquote {
+  border-left: 2px solid var(--accent);
+  background: linear-gradient(90deg, var(--accent-soft), transparent 70%);
+  padding: 0.4em 1.1em;
+  color: var(--fg);
+  font-style: italic;
+  border-radius: 0 6px 6px 0;
+}
+
+.doc hr {
+  border: 0;
+  height: 1px;
+  margin: 2.5em 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--border-strong),
+    transparent
+  );
+}
+
+.doc code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+  color: var(--fg);
+}
+
+.doc pre {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.65;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1em 1.25em;
+  overflow-x: auto;
+  position: relative;
+}
+
+.doc pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  color: var(--fg-soft);
+}
+
+.doc pre[data-language]::after {
+  content: attr(data-language);
+  position: absolute;
+  top: 0.5em;
+  right: 0.8em;
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.doc img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.8em auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.doc img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
+.doc [style*="text-align: center"] {
+  text-align: center;
+}
+
+/* Editor-only affordances. */
+.doc .is-editor-empty:first-child::before,
+.doc .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.doc.ProseMirror {
+  min-height: 12rem;
+  caret-color: var(--accent);
+}
+
+.doc .ProseMirror-gapcursor::after {
+  border-top-color: var(--accent);
+}
