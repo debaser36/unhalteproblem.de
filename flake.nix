@@ -135,15 +135,21 @@
             # /ready also checks the database. An unhealthy container shows up
             # in `podman ps` (nothing restarts it for that alone). Durations
             # are in nanoseconds.
+            #
+            # Podman runs the first check the moment the container starts, as a
+            # systemd unit; a failure then, while the backend is still
+            # migrating, would make `nixos-rebuild switch` report a failed unit.
+            # So the probe retries for 10 seconds (20 x 500 ms) before it fails,
+            # and the timeout leaves room for that.
             Healthcheck = {
               Test = [
                 "CMD"
                 "${pkgs.nodejs-slim_26}/bin/node"
                 "-e"
-                "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+                "(async()=>{for(let i=0;i<20;i++){try{const r=await fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/ready');if(r.ok)process.exit(0)}catch{}await new Promise(r=>setTimeout(r,500))}process.exit(1)})()"
               ];
               Interval = 30000000000;
-              Timeout = 5000000000;
+              Timeout = 15000000000;
               StartPeriod = 20000000000;
               Retries = 3;
             };
