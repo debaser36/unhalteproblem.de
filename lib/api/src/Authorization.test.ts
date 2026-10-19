@@ -29,7 +29,8 @@ import {
   Authorized,
   RequireRoles,
 } from "./Authorization.ts";
-import type { Role, User } from "#domain/Auth";
+import { blogEditorRole, type Role, type User } from "#domain/Auth";
+import type { BlogSlug } from "#domain/Blog";
 import { Forbidden } from "#errors/Forbidden";
 import { Unauthorized } from "#errors/Unauthorized";
 
@@ -68,6 +69,24 @@ describe("Authorized", () => {
     assert.strictEqual(
       Authorized("superAdmin", "normalUser", "admin", "normalUser").key,
       "@unhalteproblem.de/api/Authorized(admin,normalUser,superAdmin)",
+    );
+  });
+
+  it("keys blog editor roles by their slug", () => {
+    assert.strictEqual(
+      Authorized(blogEditorRole("rust-notes"), "admin").key,
+      "@unhalteproblem.de/api/Authorized(admin,blogEditor:rust-notes)",
+    );
+    // A literal role keeps its literal type, but is the same service.
+    assert.strictEqual<unknown>(
+      Authorized(blogEditorRole("rust-notes")),
+      Authorized("blogEditor:rust-notes"),
+    );
+    // Same type, but distinct services: the proof for one subblog never
+    // provides the one for another at runtime.
+    assert.notStrictEqual(
+      Authorized(blogEditorRole("rust-notes")),
+      Authorized(blogEditorRole("go-notes")),
     );
   });
 
@@ -301,6 +320,27 @@ describe("requirement types", () => {
     expectTypeOf(Authorized("superAdmin", "admin", "admin")).toEqualTypeOf(
       Authorized("admin", "superAdmin"),
     );
+  });
+
+  it("blog editor roles are typed by their template", () => {
+    const slug: BlogSlug = "rust-notes";
+    const editor = Effect.gen(function* () {
+      const { roles } = yield* Authorized(blogEditorRole(slug));
+      return roles;
+    });
+    expectTypeOf(editor).toEqualTypeOf<
+      Effect.Effect<
+        Arr.NonEmptyReadonlyArray<`blogEditor:${string}`>,
+        never,
+        Authorized<`blogEditor:${string}`>
+      >
+    >();
+    expectTypeOf(RequireRoles("admin", blogEditorRole(slug))).toEqualTypeOf<
+      RequireRoles<"admin" | `blogEditor:${string}`>
+    >();
+    expectTypeOf<Role>().toEqualTypeOf<
+      "normalUser" | "admin" | "superAdmin" | `blogEditor:${string}`
+    >();
   });
 
   it("all-of is several requirements", () => {

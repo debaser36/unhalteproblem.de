@@ -1,5 +1,6 @@
 import { Subject } from "@unhalteproblem.de/oidc";
-import { Schema, SchemaTransformation } from "effect";
+import { type BlogSlug, BlogSlugMaxLength, BlogSlugPart } from "#domain/Blog";
+import { Option, Schema, SchemaTransformation } from "effect";
 
 /** Length limit of `ReturnPath`, generous for any real page URL. */
 export const ReturnPathMaxLength = 2048;
@@ -53,30 +54,93 @@ export const LoginQuery = Schema.Struct({
 export type LoginQuery = typeof LoginQuery.Type;
 
 /**
+ * The roles that are not scoped to anything: `normalUser`, `admin` and
+ * `superAdmin` (see `Role`).
+ */
+export const GlobalRole = Schema.Literals([
+  "normalUser",
+  "admin",
+  "superAdmin",
+]).annotate({
+  identifier: "GlobalRole",
+  description: "A role that is not scoped to a subblog.",
+});
+export type GlobalRole = typeof GlobalRole.Type;
+
+/** The prefix of every `BlogEditorRole`. */
+const BLOG_EDITOR_ROLE_PREFIX = "blogEditor:";
+
+// The whole role, for JSON Schema: the pattern a template literal exports
+// covers only its literal parts and turns `BlogSlug` into "any string", so
+// the slug rule is repeated here. Decoding checks `BlogSlug` itself too.
+const BLOG_EDITOR_ROLE_PATTERN = /^blogEditor:[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+
+/**
+ * The role of an editor of one subblog, `blogEditor:<slug>` with a
+ * `BlogSlug`, e.g. `blogEditor:rust-notes`. Build it with `blogEditorRole`
+ * and read the slug back with `blogOfEditorRole`.
+ */
+export const BlogEditorRole = Schema.TemplateLiteral([
+  BLOG_EDITOR_ROLE_PREFIX,
+  BlogSlugPart,
+])
+  // The pattern first: its JSON Schema `pattern` clashes with the template
+  // literal's and goes into an `allOf`; the annotations below land on the
+  // last check, which so stays at the top level.
+  .check(
+    Schema.isPattern(BLOG_EDITOR_ROLE_PATTERN, {
+      expected:
+        '"blogEditor:" followed by a blog slug, e.g. "blogEditor:rust-notes"',
+    }),
+    Schema.isMaxLength(BLOG_EDITOR_ROLE_PREFIX.length + BlogSlugMaxLength),
+  )
+  .annotate({
+    identifier: "BlogEditorRole",
+    description:
+      "Edits the posts of one subblog: `blogEditor:<slug>`, e.g. " +
+      "`blogEditor:rust-notes`.",
+  });
+export type BlogEditorRole = typeof BlogEditorRole.Type;
+
+/** The `BlogEditorRole` for the subblog `slug`. */
+export const blogEditorRole = (slug: BlogSlug): BlogEditorRole =>
+  `${BLOG_EDITOR_ROLE_PREFIX}${slug}`;
+
+/**
+ * The subblog whose posts `role` lets the user edit: its slug for a
+ * `BlogEditorRole`, `None` for every other role.
+ */
+export const blogOfEditorRole = (role: Role): Option.Option<BlogSlug> =>
+  role.startsWith(BLOG_EDITOR_ROLE_PREFIX)
+    ? Option.some(role.slice(BLOG_EDITOR_ROLE_PREFIX.length))
+    : Option.none();
+
+/**
  * An authorization role. Roles are stored in the backend's database, not in
  * Keycloak.
  *
  * - `normalUser`: every registered user; granted at registration.
  * - `admin`: administers the website.
  * - `superAdmin`: the highest level of administration.
+ * - `blogEditor:<slug>` (`BlogEditorRole`): edits the posts of the subblog
+ *   `<slug>`, and only that one; one such role per subblog.
  *
- * Roles are flat: none implies another, so a requirement that admins and
- * super admins both meet names both (see `Authorized` and `RequireRoles`).
- * A user can hold several roles at once.
+ * Every role, `blogEditor:<slug>` included, is granted and revoked by
+ * superAdmins. Roles are flat: none implies another (`blogEditor:a` neither
+ * implies nor is implied by `admin` or `blogEditor:b`), so a requirement that
+ * admins and super admins both meet names both (see `Authorized` and
+ * `RequireRoles`). A user can hold several roles at once.
  *
  * Adding a role is a contract change and needs a database migration in the
  * backend as well, since the backend stores roles by these names. Removing
  * or renaming one is breaking.
  */
-export const Role = Schema.Literals([
-  "normalUser",
-  "admin",
-  "superAdmin",
-]).annotate({
+export const Role = Schema.Union([GlobalRole, BlogEditorRole]).annotate({
   identifier: "Role",
   description:
-    "An authorization role. Roles are flat (none implies another) and a " +
-    "user can hold several.",
+    "An authorization role: `normalUser`, `admin`, `superAdmin` or " +
+    "`blogEditor:<slug>` (edits the posts of the subblog `<slug>` only). " +
+    "Roles are flat (none implies another) and a user can hold several.",
 });
 export type Role = typeof Role.Type;
 

@@ -1,6 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
-import { DateTime, Exit, Schema } from "effect";
+import { DateTime, Exit, Option, Schema } from "effect";
 import {
+  BlogEditorRole,
+  blogEditorRole,
+  blogOfEditorRole,
   LoginErrorReason,
   LoginQuery,
   ReturnPath,
@@ -9,6 +12,7 @@ import {
   SessionInfo,
   User,
 } from "./Auth.ts";
+import { BlogSlugMaxLength } from "./Blog.ts";
 
 const char = (codePoint: number) => String.fromCodePoint(codePoint);
 // U+0021-U+007E without "\" (U+005C).
@@ -139,6 +143,78 @@ describe("Role", () => {
     assert.isTrue(is("superAdmin"));
     assert.isFalse(is("root"));
     assert.isFalse(is("Admin"));
+  });
+
+  it("accepts blog editor roles", () => {
+    assert.deepStrictEqual(
+      Schema.decodeExit(Role)("blogEditor:rust-notes"),
+      Exit.succeed("blogEditor:rust-notes"),
+    );
+  });
+});
+
+describe("BlogEditorRole", () => {
+  const decode = Schema.decodeUnknownExit(BlogEditorRole);
+  const decodeRole = Schema.decodeUnknownExit(Role);
+  const longestSlug = "a".repeat(BlogSlugMaxLength);
+
+  it.each([
+    ["a one-word slug", "blogEditor:rust"],
+    ["a slug with hyphens and digits", "blogEditor:2026-year-in-review"],
+    ["the longest slug", `blogEditor:${longestSlug}`],
+  ])("accepts %s", (_, role) => {
+    assert.deepStrictEqual(decode(role), Exit.succeed(role as BlogEditorRole));
+    assert.deepStrictEqual(decodeRole(role), Exit.succeed(role as Role));
+  });
+
+  it.each([
+    ["the prefix alone", "blogEditor:"],
+    ["the prefix without a colon", "blogEditor"],
+    ["an uppercase slug", "blogEditor:Rust-Notes"],
+    ["an underscore in the slug", "blogEditor:rust_notes"],
+    ["a space in the slug", "blogEditor:rust notes"],
+    ["a slash in the slug", "blogEditor:rust/notes"],
+    ["a second colon", "blogEditor:rust:notes"],
+    ["a leading hyphen", "blogEditor:-rust"],
+    ["a doubled hyphen", "blogEditor:rust--notes"],
+    ["a slug one character too long", `blogEditor:${longestSlug}a`],
+    ["a differently cased prefix", "BlogEditor:rust"],
+    ["leading whitespace", " blogEditor:rust"],
+    ["a global role", "admin"],
+  ])("rejects %s", (_, role) => {
+    assert.isTrue(Exit.isFailure(decode(role)));
+    if (role !== "admin") assert.isTrue(Exit.isFailure(decodeRole(role)));
+  });
+
+  it("exports the slug rule to JSON Schema", () => {
+    const { schema, definitions } = Schema.toJsonSchemaDocument(BlogEditorRole);
+    // The template literal's own pattern has "any string" for the slug; the
+    // `allOf` pattern carries the slug rule.
+    assert.deepStrictEqual(
+      { schema, definitions },
+      {
+        schema: { $ref: "#/$defs/BlogEditorRole" },
+        definitions: {
+          BlogEditorRole: {
+            type: "string",
+            pattern: "^blogEditor:[\\s\\S]*?$",
+            allOf: [{ pattern: "^blogEditor:[a-z0-9]+(?:-[a-z0-9]+)*$" }],
+            maxLength: "blogEditor:".length + BlogSlugMaxLength,
+            description:
+              "Edits the posts of one subblog: `blogEditor:<slug>`, e.g. " +
+              "`blogEditor:rust-notes`.",
+          },
+        },
+      },
+    );
+  });
+
+  it("is built from and read back to a slug", () => {
+    const role = blogEditorRole("rust-notes");
+    assert.strictEqual(role, "blogEditor:rust-notes");
+    assert.deepStrictEqual(blogOfEditorRole(role), Option.some("rust-notes"));
+    assert.deepStrictEqual(blogOfEditorRole("admin"), Option.none());
+    assert.deepStrictEqual(blogOfEditorRole("superAdmin"), Option.none());
   });
 });
 

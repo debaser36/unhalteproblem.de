@@ -37,6 +37,10 @@ export {
   UserPageQuery,
 } from "#domain/Admin";
 export {
+  BlogEditorRole,
+  blogEditorRole,
+  blogOfEditorRole,
+  GlobalRole,
   LoginErrorParam,
   LoginErrorReason,
   LoginQuery,
@@ -46,6 +50,7 @@ export {
   SessionInfo,
   User,
 } from "#domain/Auth";
+export { BlogSlug, BlogSlugMaxLength } from "#domain/Blog";
 export {
   ContactEmail,
   ContactMessage,

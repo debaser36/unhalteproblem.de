@@ -28,7 +28,7 @@ import {
   UserId,
   type UserPageQuery,
 } from "#domain/Admin";
-import type { Role } from "#domain/Auth";
+import { blogEditorRole, type Role } from "#domain/Auth";
 import { AlreadyRestricted } from "#errors/AlreadyRestricted";
 import { Forbidden } from "#errors/Forbidden";
 import { NotRestricted } from "#errors/NotRestricted";
@@ -164,6 +164,23 @@ describe("admin endpoints in the OpenAPI document", () => {
       readonly format?: string;
     };
     assert.strictEqual(userId.format, "uuid");
+  });
+
+  it("documents the global and the blog editor roles", () => {
+    const { description: _, ...role } = spec.components.schemas["Role"] as {
+      readonly description?: string;
+    };
+    assert.deepStrictEqual(role, {
+      anyOf: [
+        { $ref: "#/components/schemas/GlobalRole" },
+        { $ref: "#/components/schemas/BlogEditorRole" },
+      ],
+    });
+    assert.deepStrictEqual(
+      (spec.components.schemas["GlobalRole"] as { readonly enum?: unknown })
+        .enum,
+      ["normalUser", "admin", "superAdmin"],
+    );
   });
 
   it("documents limit and cursor as optional string query parameters", () => {
@@ -331,6 +348,9 @@ const adaCursorEncoded = Schema.encodeSync(UserCursor)(adaCursor);
 const base64Url = (text: string) =>
   btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 
+// The decoded role of the last `grantRole` call.
+let lastGrantedRole: Role | undefined;
+
 // The decoded query of the last `listUsers` call.
 let lastQuery: UserPageQuery | undefined;
 
@@ -395,7 +415,11 @@ const AdminHandlers = HttpApiBuilder.group(Api, "admin", (handlers) =>
         };
       }),
     )
-    .handle("grantRole", ({ params }) => notFound(params.userId))
+    .handle("grantRole", ({ params }) =>
+      Effect.sync(() => {
+        lastGrantedRole = params.role;
+      }).pipe(Effect.andThen(notFound(params.userId))),
+    )
     .handle("revokeRole", ({ params }) =>
       Effect.gen(function* () {
         yield* notFound(params.userId);
@@ -806,6 +830,27 @@ layer(
     }).pipe(Effect.provide(asSuperAdmin)),
   );
 
+  it.effect("grantRole takes a blog editor role as the path parameter", () =>
+    Effect.gen(function* () {
+      const client = yield* makeClient;
+      lastGrantedRole = undefined;
+      const response = yield* client.admin.grantRole({
+        params: { userId: adaId, role: blogEditorRole("rust-notes") },
+        responseMode: "response-only",
+      });
+      assert.strictEqual(response.status, 204);
+      assert.strictEqual(lastGrantedRole, "blogEditor:rust-notes");
+
+      for (const role of ["blogEditor:", "blogEditor:Rust", "blogEditor:a_b"]) {
+        lastGrantedRole = undefined;
+        const exit = yield* client.admin
+          .grantRole({ params: { userId: adaId, role: role as Role } })
+          .pipe(Effect.exit);
+        assert.isTrue(Exit.isFailure(exit));
+        assert.isUndefined(lastGrantedRole);
+      }
+    }).pipe(Effect.provide(asSuperAdmin)),
+  );
   it.effect("state-changing endpoints need the site's Origin", () =>
     Effect.gen(function* () {
       const client = yield* makeClient;

@@ -441,9 +441,12 @@ Without it the outbox messages end up dead after their attempts
 ## Authorization
 
 Users have roles: `normalUser`, `admin` and `superAdmin` (`Role` in
-`@unhalteproblem.de/api`). They are flat, so no role includes another, and a
-user can hold several. Every user gets `normalUser` at registration. They are
-stored in `user_roles` and read on every authenticated request, in the same
+`@unhalteproblem.de/api`), and `blogEditor:<slug>`, which lets its holder
+edit the posts of the subblog `<slug>` (lowercase letters and digits in
+groups joined by hyphens, at most 64 characters). superAdmins grant and
+revoke it through the admin API like any other role. Roles are flat, so no
+role includes another, and a user can hold several. Every user gets
+`normalUser` at registration. Roles are stored in `user_roles` and read on every authenticated request, in the same
 query as the session (`#auth/SessionAccess`; into
 `CurrentUser` and `GET /auth/session`), so a granted or revoked role counts
 from the user's next request.
@@ -501,7 +504,8 @@ SELECT user_id, role, 'granted', granted_at FROM granted;
 
 A new role needs a migration that changes the `user_roles_role_check` and
 `user_role_changes_role_check` constraints, and the `Role` schema in the
-contract.
+contract. A new `blogEditor:<slug>` role for another subblog needs neither:
+the constraints accept any well-formed slug (since migration 0012).
 
 ## Administration
 
