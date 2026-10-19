@@ -19,6 +19,7 @@ import {
 import * as Authorization from "#auth/Authorization";
 import { pkceChallenge } from "#auth/Secrets";
 import { DomainsLive } from "#domains/Domains";
+import { AccountHandlers } from "#http/Account";
 import { AdminHandlers } from "#http/Admin";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
@@ -30,11 +31,13 @@ import { LogoutTokens } from "#repositories/LogoutTokens";
 import { Sessions } from "#repositories/Sessions";
 import { ContactRateLimit } from "#services/ContactRateLimit";
 import { LoginRateLimit } from "#services/LoginRateLimit";
+import { KeycloakAdmin } from "#services/KeycloakAdmin";
 import { Mailer } from "#services/Mailer";
 import { CodeExchangeFailed, OidcProvider } from "#services/OidcProvider";
 import { Readiness } from "#services/Readiness";
 import { TokenVerifier } from "#services/TokenVerifier";
 import { DatabaseTest } from "./Database.ts";
+import { makeRecordingKeycloak } from "./KeycloakAdmin.ts";
 
 /**
  * The whole backend as an HTTP app on a fresh in-memory database, with a
@@ -79,6 +82,8 @@ export interface AppOptions {
   readonly sid?: string | null;
   /** Where the owner's mails go; by default nowhere (see `makeRecordingMailer`). */
   readonly mailer?: Layer.Layer<Mailer>;
+  /** Stands in for Keycloak's admin API; by default it accepts everything (see `makeRecordingKeycloak`). */
+  readonly keycloak?: Layer.Layer<KeycloakAdmin>;
   /** Login starts allowed per client. */
   readonly loginLimit?: number;
 }
@@ -166,6 +171,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
       LogoutTokens.layer,
       DomainsLive.pipe(
         Layer.provide(options.mailer ?? Mailer.layerDisabled),
+        Layer.provide(options.keycloak ?? makeRecordingKeycloak().layer),
         Layer.provideMerge(Sessions.layer),
       ),
     ).pipe(Layer.provideMerge(DatabaseTest)),
@@ -176,6 +182,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     SystemHandlers,
     ContactHandlers,
     AdminHandlers,
+    AccountHandlers,
   ).pipe(
     Layer.provide([
       SameOriginLive,

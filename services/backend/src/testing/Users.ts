@@ -2,6 +2,7 @@ import { Authorized, type Role } from "@unhalteproblem.de/api";
 import { Effect, Layer, Option, PubSub } from "effect";
 import { SqlClient } from "effect/sql";
 import { DomainEvents } from "#cqrs/DomainEvent";
+import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
 import type { User } from "#domains/users/User";
 import { type Login, UserCommands } from "#domains/users/UserCommands";
@@ -44,6 +45,7 @@ export const UsersTest = Layer.mergeAll(
   Layer.provideMerge(
     Layer.mergeAll(
       AuditRepository.layer,
+      Outbox.layer,
       UserRepository.layer,
       ModerationRepository.layer,
       Sessions.layer,

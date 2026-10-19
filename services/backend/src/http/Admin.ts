@@ -55,6 +55,7 @@ const toAdminUser = ({
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
   lastLoginAt: user.lastLoginAt,
+  deletedAt: Option.getOrNull(user.deletedAt),
   roles,
   restriction: Option.getOrNull(Option.map(restriction, toRestriction)),
 });

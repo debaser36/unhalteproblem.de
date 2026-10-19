@@ -1,9 +1,14 @@
 import type { Subject } from "@unhalteproblem.de/oidc";
+import { AccountDeletionNotAllowed } from "@unhalteproblem.de/api";
 import { Context, DateTime, Effect, Layer, Option } from "effect";
 import * as Command from "#cqrs/Command";
 import * as DomainEvent from "#cqrs/DomainEvent";
+import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
+import { AuditCommands } from "#domains/audit/AuditCommands";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
+import { Sessions } from "#repositories/Sessions";
+import { DeleteKeycloakUser } from "./AccountDeletion.ts";
 import * as User from "./User.ts";
 import { UserRepository } from "./UserRepository.ts";
 
@@ -16,6 +21,9 @@ export interface Login {
 const make = Effect.gen(function* () {
   const users = yield* UserRepository;
   const moderation = yield* ModerationCommands;
+  const audit = yield* AuditCommands;
+  const outbox = yield* Outbox;
+  const sessions = yield* Sessions;
   const transaction = yield* Transaction;
 
   const newId = Effect.sync(() => crypto.randomUUID());
@@ -49,10 +57,39 @@ const make = Effect.gen(function* () {
           new Error("User missing after a conflicting insert"),
         );
       }
+      // A deleted account stays deleted: a login that slipped in while the
+      // identity provider was still removing the user must not bring the
+      // profile back. The callback refuses these before it gets here.
+      if (Option.isSome(existing.value.deletedAt)) return existing.value;
       const loggedIn = User.logIn(existing.value, login.profile, now);
       yield* users.update(loggedIn.user);
       yield* DomainEvent.record(...loggedIn.events);
       return loggedIn.user;
+    }, Command.boundary(transaction)),
+
+    deleteAccount: Effect.fn("UserCommands.deleteAccount")(function* (
+      subject: typeof Subject.Type,
+    ) {
+      const now = yield* DateTime.now;
+      const found = yield* users.findBySubjectForUpdate(subject);
+      if (Option.isNone(found)) {
+        // Every session belongs to a user who has logged in.
+        return yield* Effect.die(new Error("Deleting the account of nobody"));
+      }
+      const user = found.value;
+      if (Option.isSome(user.deletedAt)) return;
+      yield* moderation.releaseUser(user.id, now);
+      yield* users.update(User.anonymise(user, now));
+      yield* sessions.deleteByUser(subject);
+      yield* audit.record({
+        action: "account_deleted",
+        actor: Option.some(user.id),
+        target: Option.some(user.id),
+      });
+      // In the same transaction, so the identity provider is told exactly
+      // when the account is gone here, and again and again until it did it.
+      yield* outbox.enqueue(DeleteKeycloakUser, { subject });
+      yield* DomainEvent.record(new User.AccountDeleted({ userId: user.id }));
     }, Command.boundary(transaction)),
   });
 });
@@ -69,8 +106,18 @@ export class UserCommands extends Context.Service<
      * `UserProfileChanged`.
      */
     readonly syncFromLogin: (login: Login) => Effect.Effect<User.User>;
+    /**
+     * Deletes the account of the user with this OIDC `sub` (their own, from
+     * their session): clears the profile, removes the roles, ends all
+     * sessions and has the identity provider delete the user (outbox, with
+     * retries). Records `AccountDeleted` and an audit entry. Does nothing for
+     * an account already deleted. Refused for a superAdmin.
+     */
+    readonly deleteAccount: (
+      subject: typeof Subject.Type,
+    ) => Effect.Effect<void, AccountDeletionNotAllowed>;
   }
 >()("@unhalteproblem.de/backend/domains/users/UserCommands") {
-  /** Needs `UserRepository`, `ModerationCommands` and `Transaction`. */
+  /** Needs `UserRepository`, `ModerationCommands`, `AuditCommands`, `Outbox`, `Sessions` and `Transaction`. */
   static readonly layer = Layer.effect(UserCommands, make);
 }

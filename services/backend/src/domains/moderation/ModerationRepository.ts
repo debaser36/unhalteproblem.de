@@ -142,9 +142,11 @@ const make = Effect.gen(function* () {
           SELECT r.role FROM user_roles r
           WHERE r.user_id = u.id ORDER BY r.role
         ) AS roles,
-        EXISTS (
-          SELECT 1 FROM user_restrictions x
-          WHERE x.user_id = u.id AND x.lifted_at IS NULL
+        (
+          u.deleted_at IS NOT NULL OR EXISTS (
+            SELECT 1 FROM user_restrictions x
+            WHERE x.user_id = u.id AND x.lifted_at IS NULL
+          )
         ) AS restricted
       FROM users u
       WHERE u.subject = ${subject}
@@ -275,7 +277,11 @@ const make = Effect.gen(function* () {
   });
 });
 
-/** What decides about a user's requests: their roles, and whether they are restricted. */
+/**
+ * What decides about a user's requests: their roles, and whether they are
+ * blocked. `restricted` is true for a user with an active restriction and for
+ * one who deleted their account: neither may log in or use a session.
+ */
 export interface Access {
   readonly roles: ReadonlyArray<Role>;
   readonly restricted: boolean;

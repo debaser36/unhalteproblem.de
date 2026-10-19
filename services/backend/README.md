@@ -249,6 +249,7 @@ action, the acting and the affected user (our ids), and a short qualifier
 | --------------------------------------- | ------------------------------------------------------------------------------- |
 | `role_granted`, `role_revoked`          | by the moderation command, in its transaction; only if it changed something     |
 | `user_restricted`, `restriction_lifted` | by the moderation command, in its transaction                                   |
+| `account_deleted`                       | by `UserCommands.deleteAccount`, in its transaction                             |
 | `login`                                 | by the login callback, before the session is created (no entry, no session)     |
 | `logout`, `login_refused`               | by `POST /auth/logout` and the login callback; best effort, a failure is logged |
 
@@ -342,6 +343,8 @@ Keycloak client settings (`OIDC_CLIENT_ID`):
 - Back-channel logout URL: `<PUBLIC_API_URL>/auth/backchannel-logout`, with
   "Backchannel logout session required" on.
 - Web origins: none needed (the browser never calls Keycloak with `fetch`).
+- Service accounts roles on, with `manage-users` from `realm-management`, for
+  the deletion of accounts (see "Account deletion").
 
 `/auth/register` needs "User registration" on in the realm's login
 settings. Whatever Keycloak requires at registration (email verification,
@@ -352,6 +355,43 @@ protection against bot sign-ups (verify email, a captcha in the
 registration flow, brute force detection) belongs in the realm. Until a
 user has verified it, `email` is whatever they typed: never grant anything
 based on it unless `emailVerified` is true.
+
+## Account deletion
+
+`POST /account/delete` (session and the website's `Origin`, like the admin
+writes) lets users delete their own account. `UserCommands.deleteAccount`
+does it in one transaction:
+
+- the user's row stays as a **tombstone**: username, name and email are
+  cleared, `email_verified` is false, `deleted_at` is set (a database check
+  makes sure a deleted row is cleared). The id and the Keycloak `sub` stay,
+  because the audit log and restrictions point at the id and the `sub` tells
+  a login during the next step that this account is gone;
+- all their roles are removed (logged in the role change log as revoked, with
+  no actor), all their sessions are deleted, and the response clears the
+  session cookie;
+- an `account_deleted` audit entry is written and an outbox message
+  `account.delete-keycloak-user` is enqueued. The consumer then calls
+  Keycloak's admin API (`DELETE /admin/realms/<realm>/users/<sub>`) with the
+  backend client's service account; a user that is gone already counts as
+  deleted, and a failure is retried with backoff (see "Outbox").
+
+A deleted account is treated like a restricted one: no session works and a
+login ends in `login_error=restricted`, until Keycloak has deleted the user
+(after which they could register anew, as a new user). Admins still see the
+tombstone in the user list (`deletedAt`). **A superAdmin cannot delete their
+account** (409 `AccountDeletionNotAllowed`): another superAdmin has to revoke
+their role first, so the site never loses its last one by accident. Nothing
+can undo a deletion; restore from a backup if it was a mistake. Restriction
+notes an admin wrote about the user stay, as do the role change log and the
+audit log (ids only): they are records about what admins did.
+
+Keycloak setup for the deletion: in the backend's client (`OIDC_CLIENT_ID`)
+turn on "Service accounts roles", and give the service account the
+`manage-users` role of the `realm-management` client (tab "Service account
+roles"). Without it the outbox messages end up dead after their attempts
+(`SELECT topic, attempts, last_error FROM outbox WHERE dead_at IS NOT NULL`,
+`last_error` is `delete:403` or `token:401`), and the Keycloak user remains.
 
 ## Authorization
 

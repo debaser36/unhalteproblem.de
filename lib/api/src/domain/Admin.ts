@@ -104,7 +104,8 @@ export type Restriction = typeof Restriction.Type;
 /**
  * A user as admins see it: every stored field, the current roles and the
  * active restriction. Fields without a value are `null` rather than
- * missing, so every field is always present.
+ * missing, so every field is always present. Users who deleted their
+ * account remain as tombstones, marked by `deletedAt` (see there).
  */
 export const AdminUser = Schema.Struct({
   id: UserId,
@@ -122,6 +123,13 @@ export const AdminUser = Schema.Struct({
   /** When the profile last changed. */
   updatedAt: IsoDateTimeUtc,
   lastLoginAt: IsoDateTimeUtc,
+  /**
+   * When the user deleted their account; `null` for a live account. A
+   * deleted user stays in the list as an anonymised tombstone: no
+   * `username`, `name` or `email`, no `roles`, and they cannot log in.
+   * Admins cannot restrict them meaningfully.
+   */
+  deletedAt: Schema.NullOr(IsoDateTimeUtc),
   /** The current roles. */
   roles: Schema.Array(Role),
   /** The active restriction; `null` if the account is not restricted. */
@@ -130,7 +138,9 @@ export const AdminUser = Schema.Struct({
   identifier: "AdminUser",
   description:
     "A user with all stored fields, roles and the active restriction, as " +
-    "admins see it.",
+    "admins see it. A non-null `deletedAt` marks an anonymised tombstone " +
+    "of a deleted account: no username, name, email or roles, no login, " +
+    "and no meaningful restriction.",
 });
 export type AdminUser = typeof AdminUser.Type;
 

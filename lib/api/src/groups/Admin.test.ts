@@ -242,7 +242,10 @@ describe("admin endpoint middleware", () => {
 
   it("puts SameOrigin exactly on the state-changing admin endpoints", () => {
     const withSameOrigin = [...middlewares]
-      .filter(([, keys]) => keys.includes(SameOrigin.key))
+      .filter(
+        ([name, keys]) =>
+          name.startsWith("admin.") && keys.includes(SameOrigin.key),
+      )
       .map(([name]) => name)
       .sort();
     assert.deepStrictEqual(withSameOrigin, [...stateChanging].sort());
@@ -316,6 +319,7 @@ const ada = {
   createdAt: t0,
   updatedAt: t0,
   lastLoginAt: t1,
+  deletedAt: null,
   roles: ["normalUser"] as Array<Role>,
   restriction: null,
 };
@@ -552,6 +556,7 @@ layer(
             createdAt: "2026-01-01T12:00:00.000Z",
             updatedAt: "2026-01-01T12:00:00.000Z",
             lastLoginAt: "2026-02-01T10:00:00.000Z",
+            deletedAt: null,
             roles: ["normalUser"],
             restriction: null,
           },

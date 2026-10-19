@@ -272,6 +272,15 @@ export const AuthHandlers = HttpApiBuilder.group(
           expiresAt: DateTime.addDuration(now, maxAge),
         })
         .pipe(Effect.orDie);
+      // A restriction or a deletion that committed between the check above and
+      // this insert has already ended the sessions it knew of, but not this
+      // one, whose row would sit there with the profile claims until it
+      // expires. Look again now that it exists: whichever side commits last
+      // sees the other, so the session survives only for a user in good standing.
+      if ((yield* moderation.accessOf(claims.sub)).restricted) {
+        yield* sessions.delete(hashSecret(sessionCookie)).pipe(Effect.orDie);
+        return yield* fail("restricted", "account blocked during the login");
+      }
       yield* Effect.logInfo("Login succeeded").pipe(
         Effect.annotateLogs({ userId: claims.sub }),
       );

@@ -31,6 +31,7 @@ describe("OpenAPI document", () => {
 
   it("exposes exactly the contract's paths and operations", () => {
     assert.deepStrictEqual(Object.keys(spec.paths).sort(), [
+      "/account/delete",
       "/admin/users",
       "/admin/users/{userId}",
       "/admin/users/{userId}/restriction",
@@ -68,6 +69,7 @@ describe("OpenAPI document", () => {
       "/auth/callback": { get: "auth.callback" },
       "/auth/logout": { post: "auth.logout" },
       "/auth/backchannel-logout": { post: "auth.backchannelLogout" },
+      "/account/delete": { post: "account.deleteAccount" },
       "/admin/users": { get: "admin.listUsers" },
       "/admin/users/{userId}": { get: "admin.getUser" },
       "/admin/users/{userId}/restriction": { post: "admin.restrictUser" },

@@ -24,7 +24,8 @@ const make = Effect.gen(function* () {
   // another would triple the database round trips of every request. The
   // lateral subquery is `ModerationRepository.accessOf` for the session's
   // user (a test keeps the two in agreement); a user we have no row for
-  // gets no roles and is not restricted, as there.
+  // gets no roles and is not restricted, as there. `restricted` also covers
+  // an account its user deleted (a tombstone).
   const find = SqlSchema.findOneOption({
     Request: Schema.Struct({
       idHash: Schema.Uint8Array,
@@ -43,9 +44,11 @@ const make = Effect.gen(function* () {
             SELECT r.role FROM user_roles r
             WHERE r.user_id = u.id ORDER BY r.role
           ) AS roles,
-          EXISTS (
-            SELECT 1 FROM user_restrictions x
-            WHERE x.user_id = u.id AND x.lifted_at IS NULL
+          (
+            u.deleted_at IS NOT NULL OR EXISTS (
+              SELECT 1 FROM user_restrictions x
+              WHERE x.user_id = u.id AND x.lifted_at IS NULL
+            )
           ) AS restricted
         FROM users u
         WHERE u.subject = s.user_id

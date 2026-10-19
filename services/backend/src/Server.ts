@@ -8,6 +8,7 @@ import * as Authorization from "#auth/Authorization";
 import { LogFormat, ServerConfig } from "#Config";
 import { DomainsLive } from "#domains/Domains";
 import { AdminHandlers } from "#http/Admin";
+import { AccountHandlers } from "#http/Account";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
 import { ContactHandlers } from "#http/Contact";
@@ -20,6 +21,7 @@ import { Sessions } from "#repositories/Sessions";
 import { AuthCleanup } from "#services/AuthCleanup";
 import { ContactRateLimit } from "#services/ContactRateLimit";
 import { DatabaseLive } from "#services/Database";
+import { KeycloakAdmin } from "#services/KeycloakAdmin";
 import { LoginRateLimit } from "#services/LoginRateLimit";
 import { Mailer } from "#services/Mailer";
 import { OidcProvider } from "#services/OidcProvider";
@@ -32,7 +34,7 @@ const Repositories = Layer.mergeAll(
   LoginAttempts.layer,
   LogoutTokens.layer,
   DomainsLive.pipe(
-    Layer.provide(Mailer.layer),
+    Layer.provide([Mailer.layer, KeycloakAdmin.layer]),
     Layer.provideMerge(Sessions.layer),
   ),
 ).pipe(Layer.provideMerge(DatabaseLive));
@@ -53,6 +55,7 @@ const Handlers = Layer.mergeAll(
   ContactHandlers,
   AuthHandlers,
   AdminHandlers,
+  AccountHandlers,
 ).pipe(
   Layer.provide([ContactRateLimit.layer, Readiness.layer]),
   Layer.provideMerge(AuthServices),

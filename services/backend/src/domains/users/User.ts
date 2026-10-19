@@ -1,12 +1,6 @@
 import type { Role } from "@unhalteproblem.de/api";
 import { Subject } from "@unhalteproblem.de/oidc";
-import {
-  Array as Arr,
-  type DateTime,
-  Equal,
-  type Option,
-  Schema,
-} from "effect";
+import { Array as Arr, type DateTime, Equal, Option, Schema } from "effect";
 import { Model } from "effect/schema";
 
 /** Our own id of a user, independent of the identity provider. */
@@ -35,6 +29,12 @@ export class User extends Model.Class<User>("User")({
   /** When the profile last changed. */
   updatedAt: Schema.DateTimeUtcFromDate,
   lastLoginAt: Schema.DateTimeUtcFromDate,
+  /**
+   * When the user deleted their account. Such a user is a tombstone: the
+   * profile is cleared, the roles are gone and they can no longer log in,
+   * but the row stays for the ids that point at it (audit log, restrictions).
+   */
+  deletedAt: Schema.OptionFromNullOr(Schema.DateTimeUtcFromDate),
 }) {}
 
 /** The profile as Keycloak reports it at login. */
@@ -71,7 +71,7 @@ export class UserProfileChanged extends Schema.TaggedClass<
   fields: Schema.NonEmptyArray(ProfileField),
 }) {}
 
-export type UserEvent = UserRegistered | UserProfileChanged;
+export type UserEvent = UserRegistered | UserProfileChanged | AccountDeleted;
 
 // Errors
 
@@ -105,6 +105,7 @@ export const register = (input: {
     createdAt: input.now,
     updatedAt: input.now,
     lastLoginAt: input.now,
+    deletedAt: Option.none(),
   }),
   roles: initialRoles,
   events: [new UserRegistered({ userId: input.id })],
@@ -131,3 +132,25 @@ export const logIn = (
       : [],
   };
 };
+
+/** The user deleted their account; their personal data is gone. */
+export class AccountDeleted extends Schema.TaggedClass<
+  AccountDeleted,
+  { readonly brand: unique symbol }
+>()("AccountDeleted", { userId: UserId }) {}
+
+/**
+ * The tombstone of a user who deletes their account: no profile, and
+ * `deletedAt` set. Their `subject` stays, so a login while the identity
+ * provider is still deleting the account is recognised and refused.
+ */
+export const anonymise = (user: User, now: DateTime.Utc): User =>
+  new User({
+    ...user,
+    username: Option.none(),
+    name: Option.none(),
+    email: Option.none(),
+    emailVerified: false,
+    updatedAt: now,
+    deletedAt: Option.some(now),
+  });

@@ -1,4 +1,5 @@
 import { Layer } from "effect";
+import { KeycloakUserDeletion } from "./AccountDeletion.ts";
 import { UserCommands } from "./UserCommands.ts";
 import { UserDirectory } from "./UserDirectory.ts";
 import { UserEventLog } from "./UserEventLog.ts";
@@ -13,8 +14,8 @@ import { UserRepository } from "./UserRepository.ts";
  * - `UsersLive` provides `UserCommands` and `UserQueries` and runs the
  *   event log; it needs `ModerationCommands` and `ModerationQueries`.
  *
- * Both need a migrated `SqlClient`; `UsersLive` also `Transaction` and
- * `DomainEvents`. The repository stays internal to each.
+ * Both need a migrated `SqlClient`; `UsersLive` also `Transaction`,
+ * `DomainEvents`, `Outbox`, `AuditCommands`, `Sessions` and `KeycloakAdmin`. The repository stays internal to each.
  */
 export const UserDirectoryLive = UserDirectory.layer.pipe(
   Layer.provide(UserRepository.layer),
@@ -24,4 +25,5 @@ export const UsersLive = Layer.mergeAll(
   UserCommands.layer,
   UserQueries.layer,
   UserEventLog,
+  KeycloakUserDeletion,
 ).pipe(Layer.provide(UserRepository.layer));

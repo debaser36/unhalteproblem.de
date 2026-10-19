@@ -1,4 +1,5 @@
 import {
+  AccountDeletionNotAllowed,
   AlreadyRestricted,
   Authorized,
   Forbidden,
@@ -60,7 +61,9 @@ const make = Effect.gen(function* () {
     const actorId = actorUser.value.id;
     const locked = yield* users.lockForUpdate([actorId, targetId]);
     const target = locked.find((user) => user.id === targetId);
-    if (target === undefined) {
+    // A user who deleted their account is gone as far as moderators are
+    // concerned: nothing may grant them roles or restrict them.
+    if (target === undefined || Option.isSome(target.deletedAt)) {
       return yield* new UserNotFound({ userId: targetId });
     }
     const roles = yield* moderation.rolesOfUsers([actorId, targetId]);
@@ -83,6 +86,29 @@ const make = Effect.gen(function* () {
       },
       Command.boundary(transaction),
     ),
+
+    releaseUser: Effect.fn("ModerationCommands.releaseUser")(function* (
+      userId: UserId,
+      at: DateTime.Utc,
+    ) {
+      const roles =
+        (yield* moderation.rolesOfUsers([userId])).get(userId) ?? [];
+      // The last superAdmin can't go: the site must keep one. Not even by
+      // leaving; they ask another superAdmin to revoke the role first.
+      if (roles.includes("superAdmin")) {
+        return yield* new AccountDeletionNotAllowed({ reason: "superAdmin" });
+      }
+      for (const role of roles) {
+        yield* moderation.revokeRole(userId, role);
+        yield* moderation.recordRoleChange({
+          userId,
+          role,
+          change: "revoked",
+          by: Option.none(),
+          at,
+        });
+      }
+    }, Command.boundary(transaction)),
 
     grantRole: Effect.fn("ModerationCommands.grantRole")(function* (
       userId: UserId,
@@ -271,6 +297,17 @@ export class ModerationCommands extends Context.Service<
       userId: UserId,
       at: DateTime.Utc,
     ) => Effect.Effect<void>;
+    /**
+     * Removes every role of a user who deletes their account, logged as
+     * revoked with no actor. Refused for a superAdmin. Like
+     * `grantInitialRoles` it takes no proof and is for one caller,
+     * `UserCommands.deleteAccount`, which acts for the user themselves and
+     * joins its transaction.
+     */
+    readonly releaseUser: (
+      userId: UserId,
+      at: DateTime.Utc,
+    ) => Effect.Effect<void, AccountDeletionNotAllowed>;
     /**
      * Grants a role (superAdmins only). Granting a held role changes
      * nothing; otherwise it is logged and `RoleGranted` recorded.

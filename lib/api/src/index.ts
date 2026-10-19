@@ -13,6 +13,7 @@ export {
 } from "./Authorization.ts";
 export { SameOrigin } from "./SameOrigin.ts";
 
+export { AccountGroup } from "#groups/Account";
 export { AdminGroup, RequireAdmin, RequireSuperAdmin } from "#groups/Admin";
 export { AuthGroup } from "#groups/Auth";
 export { ContactGroup } from "#groups/Contact";
@@ -54,6 +55,7 @@ export {
 } from "#domain/ContactMessage";
 export { HealthStatus, ReadyStatus } from "#domain/Health";
 
+export { AccountDeletionNotAllowed } from "#errors/AccountDeletionNotAllowed";
 export { AlreadyRestricted } from "#errors/AlreadyRestricted";
 export { Forbidden } from "#errors/Forbidden";
 export { NotRestricted } from "#errors/NotRestricted";

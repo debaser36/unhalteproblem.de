@@ -412,6 +412,7 @@ describe("admin listUsers", () => {
       const listed = byId.get(target.id) ?? {};
       assert.deepStrictEqual(Object.keys(listed).sort(), [
         "createdAt",
+        "deletedAt",
         "email",
         "emailVerified",
         "id",
@@ -430,6 +431,7 @@ describe("admin listUsers", () => {
         // The provider sends no name: null, not missing.
         name: null,
         email: "ada@example.org",
+        deletedAt: null,
         emailVerified: true,
         roles: ["normalUser"],
         restriction,

@@ -30,6 +30,7 @@ import {
 } from "./Moderation.ts";
 import { UserId, UserNotFound } from "#domains/users/User";
 import { UserQueries } from "#domains/users/UserQueries";
+import { UserCommands } from "#domains/users/UserCommands";
 import { ModerationCommands } from "./ModerationCommands.ts";
 import { ModerationQueries } from "./ModerationQueries.ts";
 
@@ -1152,6 +1153,40 @@ describe("moderation in UserQueries", () => {
           .getDetails(unknownId)
           .pipe(asAdmin(admin), Effect.flip);
         assert.deepStrictEqual(error, new UserNotFound({ userId: unknownId }));
+      }),
+    );
+  });
+});
+
+describe("moderation of deleted accounts", () => {
+  layer(UsersTest, { timeout: "30 seconds" })((it) => {
+    it.effect("treats a user who deleted their account as not found", () =>
+      Effect.gen(function* () {
+        const commands = yield* ModerationCommands;
+        const users = yield* UserCommands;
+        const root = yield* member("admin", "superAdmin");
+        const gone = yield* member();
+        yield* users.deleteAccount(gone.subject);
+
+        const errors = [
+          yield* commands
+            .grantRole(gone.user.id, "superAdmin")
+            .pipe(asSuperAdmin(root), Effect.flip),
+          yield* commands
+            .revokeRole(gone.user.id, "admin")
+            .pipe(asSuperAdmin(root), Effect.flip),
+          yield* commands
+            .restrict(gone.user.id, "x")
+            .pipe(asAdmin(root), Effect.flip),
+          yield* commands
+            .liftRestriction(gone.user.id, Option.none())
+            .pipe(asAdmin(root), Effect.flip),
+        ];
+        for (const error of errors) {
+          assert.instanceOf(error, UserNotFound);
+        }
+        // Nothing was granted: the tombstone has no roles.
+        assert.deepStrictEqual(yield* rolesOf(gone), []);
       }),
     );
   });

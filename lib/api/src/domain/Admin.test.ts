@@ -48,6 +48,7 @@ const adminUser: typeof AdminUser.Encoded = {
   createdAt: "2026-01-01T12:00:00.000Z",
   updatedAt: "2026-01-02T12:00:00.000Z",
   lastLoginAt: "2026-01-03T12:00:00.000Z",
+  deletedAt: null,
   roles: ["normalUser"],
   restriction: activeRestriction,
 };
@@ -149,14 +150,24 @@ describe("Restriction", () => {
 });
 
 describe("AdminUser", () => {
-  it("round-trips with nulls and with an active restriction", () => {
+  it("round-trips with nulls, an active restriction and as a tombstone", () => {
     const unrestricted = {
       ...adminUser,
       username: null,
       email: null,
       restriction: null,
     };
-    for (const encoded of [adminUser, unrestricted]) {
+    const tombstone = {
+      ...adminUser,
+      username: null,
+      name: null,
+      email: null,
+      emailVerified: false,
+      deletedAt: "2026-03-01T12:00:00.000Z",
+      roles: [],
+      restriction: null,
+    };
+    for (const encoded of [adminUser, unrestricted, tombstone]) {
       const decoded = Schema.decodeSync(AdminUser)(encoded);
       assert.deepStrictEqual(Schema.encodeSync(AdminUser)(decoded), encoded);
     }
@@ -168,6 +179,13 @@ describe("AdminUser", () => {
     assert.isTrue(Exit.isFailure(decode(withoutName)));
     const { restriction: __, ...withoutRestriction } = adminUser;
     assert.isTrue(Exit.isFailure(decode(withoutRestriction)));
+    const { deletedAt: ___, ...withoutDeletedAt } = adminUser;
+    assert.isTrue(Exit.isFailure(decode(withoutDeletedAt)));
+  });
+
+  it("rejects a malformed deletedAt", () => {
+    const decode = Schema.decodeUnknownExit(AdminUser);
+    assert.isTrue(Exit.isFailure(decode({ ...adminUser, deletedAt: "soon" })));
   });
 
   it("rejects an OIDC subject as id and an empty subject", () => {

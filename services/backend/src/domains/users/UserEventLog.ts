@@ -1,6 +1,6 @@
 import { Effect, Match, Schema } from "effect";
 import * as DomainEvent from "#cqrs/DomainEvent";
-import { UserProfileChanged, UserRegistered } from "./User.ts";
+import { AccountDeleted, UserProfileChanged, UserRegistered } from "./User.ts";
 
 /**
  * Logs the users domain's events. Only ids and field names: profile values
@@ -8,7 +8,7 @@ import { UserProfileChanged, UserRegistered } from "./User.ts";
  */
 export const UserEventLog = DomainEvent.subscriber(
   "UserEventLog",
-  Schema.Union([UserRegistered, UserProfileChanged]),
+  Schema.Union([UserRegistered, UserProfileChanged, AccountDeleted]),
   (event) =>
     Match.valueTags(event, {
       UserRegistered: ({ userId }) =>
@@ -17,5 +17,7 @@ export const UserEventLog = DomainEvent.subscriber(
         Effect.logInfo("User profile changed").pipe(
           Effect.annotateLogs({ userId, fields: fields.join(",") }),
         ),
+      AccountDeleted: ({ userId }) =>
+        Effect.logInfo("Account deleted").pipe(Effect.annotateLogs({ userId })),
     }),
 );

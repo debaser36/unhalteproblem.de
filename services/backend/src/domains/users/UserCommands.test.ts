@@ -6,6 +6,7 @@ import { Sessions } from "#repositories/Sessions";
 import { KernelTest, login, published, UsersTest } from "#testing/Users";
 import { UserProfileChanged, UserRegistered } from "./User.ts";
 import { UserCommands } from "./UserCommands.ts";
+import { Outbox } from "#cqrs/Outbox";
 import { AuditCommands } from "#domains/audit/AuditCommands";
 import { AuditRepository } from "#domains/audit/AuditRepository";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
@@ -30,6 +31,13 @@ const ConcurrentFirstLoginTest = Layer.mergeAll(
         AuditCommands.layer.pipe(Layer.provide(AuditRepository.layer)),
       ),
       Layer.provide([ModerationRepository.layer, Sessions.layer]),
+    ),
+  ),
+  Layer.provide(
+    Layer.mergeAll(
+      AuditCommands.layer.pipe(Layer.provide(AuditRepository.layer)),
+      Outbox.layer,
+      Sessions.layer,
     ),
   ),
   Layer.provide(
