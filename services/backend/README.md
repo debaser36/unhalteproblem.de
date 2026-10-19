@@ -296,6 +296,24 @@ the mail is retried with backoff (see "Outbox"); a mail may rarely arrive
 twice, which is why it carries a stable `Message-ID`. Without `SMTP_HOST` the
 messages are stored only, and a warning without content is logged for each.
 
+If the mails don't arrive, look at the outbox and the log:
+`SELECT id, attempts, last_error, available_at, dead_at FROM outbox WHERE topic = 'contact.send-mail'`.
+`last_error` is `MailFailed:` and a code, `<code>[:<SMTP reply>[:<command>]]`
+(the same appears in the log line "Outbox message failed"; never the text the
+server answered, since that quotes addresses):
+
+| Code                               | Usually                                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `ECONNECTION`, `ETIMEDOUT`, `EDNS` | host or port wrong, firewall (Oracle Cloud blocks outgoing port 25: use 587 or 465), no DNS                |
+| `ESOCKET`                          | TLS mismatch: port 465 needs `SMTP_SECURITY=tls`, port 587 `starttls`                                      |
+| `EAUTH:535:…`                      | wrong `SMTP_USER` or `SMTP_PASSWORD` (some providers need an app password)                                 |
+| `EENVELOPE:…:MAIL FROM`            | the provider doesn't allow `SMTP_FROM` as sender (often it must be the login address or a verified domain) |
+| `EENVELOPE:…:RCPT TO`              | the provider refuses `CONTACT_MAIL_TO`                                                                     |
+
+A message is retried with backoff and ends up dead (`dead_at`) after ten
+attempts. After fixing the setting and restarting, run the failed ones again:
+`UPDATE outbox SET attempts = 0, available_at = now(), last_error = NULL, dead_at = NULL, locked_until = NULL WHERE topic = 'contact.send-mail'`.
+
 The table holds names, addresses and free text. Nothing logs them (not even
 the outbox: its payload is the message id), and a job deletes messages older
 than `CONTACT_RETENTION` once an hour. Read the stored ones with

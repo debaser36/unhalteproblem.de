@@ -23,7 +23,33 @@ export interface Mail {
 export class MailFailed extends Schema.TaggedError<
   MailFailed,
   { readonly brand: unique symbol }
->()("MailFailed", { reason: Schema.String }) {}
+>()("MailFailed", { reason: Schema.String }) {
+  // What logs show for the error: the code, not an empty message.
+  override get message() {
+    return `SMTP failed (${this.reason})`;
+  }
+}
+
+/**
+ * A short code for what nodemailer reports, for logs and `outbox.last_error`:
+ * its error code (`EAUTH`, `ECONNECTION`, `ETIMEDOUT`, `ESOCKET`, `EDNS`,
+ * `EENVELOPE`, …), the SMTP reply code (`535`) and the command that failed
+ * (`AUTH PLAIN`, `RCPT TO`). Never the reply text: servers quote the
+ * addresses in it.
+ */
+const smtpReason = (error: unknown): string => {
+  if (typeof error !== "object" || error === null) return "smtp";
+  const field = (name: string): string | undefined => {
+    const value = (error as Record<string, unknown>)[name];
+    return typeof value === "string" || typeof value === "number"
+      ? String(value)
+      : undefined;
+  };
+  const parts = [field("code"), field("responseCode"), field("command")]
+    .filter((part): part is string => part !== undefined)
+    .map((part) => part.slice(0, 30));
+  return parts.length === 0 ? "smtp" : parts.join(":");
+};
 
 /** Sends mail. */
 export class Mailer extends Context.Service<
@@ -85,16 +111,7 @@ export class Mailer extends Context.Service<
               },
               // The error text can quote the recipient or the server's
               // answer; only its code is kept.
-              catch: (error) =>
-                new MailFailed({
-                  reason:
-                    typeof error === "object" &&
-                    error !== null &&
-                    "code" in error &&
-                    typeof error.code === "string"
-                      ? error.code
-                      : "smtp",
-                }),
+              catch: (error) => new MailFailed({ reason: smtpReason(error) }),
             });
           }),
         });

@@ -164,7 +164,7 @@ describe("contact domain", () => {
         const [row] = yield* sql<{
           readonly lastError: string;
         }>`SELECT last_error FROM outbox`;
-        assert.strictEqual(row?.lastError, "MailFailed");
+        assert.strictEqual(row?.lastError, "MailFailed:ECONNREFUSED");
         assert.deepStrictEqual(sent, []);
 
         up = true;

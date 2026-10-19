@@ -23,7 +23,12 @@ import { KeycloakAdminConfig, OidcConfig } from "#Config";
 export class KeycloakAdminFailed extends Schema.TaggedError<
   KeycloakAdminFailed,
   { readonly brand: unique symbol }
->()("KeycloakAdminFailed", { reason: Schema.String }) {}
+>()("KeycloakAdminFailed", { reason: Schema.String }) {
+  // What logs show for the error: the code, not an empty message.
+  override get message() {
+    return `Keycloak admin API failed (${this.reason})`;
+  }
+}
 
 /** What the token endpoint answers; everything but the token is ignored. */
 const TokenResponse = Schema.Struct({

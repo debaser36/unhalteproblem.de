@@ -78,6 +78,12 @@ const Claimed = Schema.Struct({
  * What a failed attempt leaves in `outbox.last_error`: the kind of failure,
  * never its text. Errors tend to quote the data they failed on (an address,
  * a message body). The full cause goes to the log.
+ *
+ * The one addition is a `reason` string, for the error types whose `reason`
+ * is a short code by design (`MailFailed`: `EAUTH:535:AUTH PLAIN`,
+ * `KeycloakAdminFailed`: `delete:403`), so that a failing handler can be
+ * diagnosed from the table. An error whose `reason` could hold personal data
+ * must not be used in an outbox handler.
  */
 const reasonOf = (cause: Cause.Cause<unknown>): string => {
   const error = Cause.findError(cause);
@@ -86,7 +92,12 @@ const reasonOf = (cause: Cause.Cause<unknown>): string => {
     Predicate.hasProperty(error.success, "_tag") &&
     typeof error.success._tag === "string"
   ) {
-    return error.success._tag;
+    const reason = Predicate.hasProperty(error.success, "reason")
+      ? error.success.reason
+      : undefined;
+    return typeof reason === "string"
+      ? `${error.success._tag}:${reason.slice(0, 100)}`
+      : error.success._tag;
   }
   return Cause.hasDies(cause) ? "defect" : "failed";
 };

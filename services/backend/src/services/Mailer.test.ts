@@ -8,48 +8,53 @@ import { MailFailed, Mailer } from "./Mailer.ts";
  * A minimal SMTP server: accepts one mail per connection and records what
  * came in DATA.
  */
-const smtpServer = Effect.acquireRelease(
-  Effect.callback<{ readonly server: Server; readonly mails: Array<string> }>(
-    (resume) => {
-      const mails: Array<string> = [];
-      const server = createServer((socket) => {
-        let data = "";
-        let inData = false;
-        socket.write("220 test ESMTP\r\n");
-        socket.on("data", (chunk) => {
-          for (const line of chunk.toString().split(/(?<=\r\n)/)) {
-            if (inData) {
-              if (line === ".\r\n") {
-                inData = false;
-                mails.push(data);
-                data = "";
-                socket.write("250 queued\r\n");
+const smtpServer = (rejectRecipient = false) =>
+  Effect.acquireRelease(
+    Effect.callback<{ readonly server: Server; readonly mails: Array<string> }>(
+      (resume) => {
+        const mails: Array<string> = [];
+        const server = createServer((socket) => {
+          let data = "";
+          let inData = false;
+          socket.write("220 test ESMTP\r\n");
+          socket.on("data", (chunk) => {
+            for (const line of chunk.toString().split(/(?<=\r\n)/)) {
+              if (inData) {
+                if (line === ".\r\n") {
+                  inData = false;
+                  mails.push(data);
+                  data = "";
+                  socket.write("250 queued\r\n");
+                } else {
+                  data += line;
+                }
+              } else if (/^EHLO/i.test(line)) {
+                socket.write("250 test\r\n");
+              } else if (/^DATA/i.test(line)) {
+                inData = true;
+                socket.write("354 go ahead\r\n");
+              } else if (rejectRecipient && /^RCPT/i.test(line)) {
+                socket.write(
+                  "550 5.1.1 owner@example.org mailbox unavailable\r\n",
+                );
+              } else if (/^QUIT/i.test(line)) {
+                socket.end("221 bye\r\n");
               } else {
-                data += line;
+                socket.write("250 ok\r\n");
               }
-            } else if (/^EHLO/i.test(line)) {
-              socket.write("250 test\r\n");
-            } else if (/^DATA/i.test(line)) {
-              inData = true;
-              socket.write("354 go ahead\r\n");
-            } else if (/^QUIT/i.test(line)) {
-              socket.end("221 bye\r\n");
-            } else {
-              socket.write("250 ok\r\n");
             }
-          }
+          });
         });
-      });
-      server.listen(0, "127.0.0.1", () =>
-        resume(Effect.succeed({ server, mails })),
-      );
-    },
-  ),
-  ({ server }) =>
-    Effect.callback<void>((resume) => {
-      server.close(() => resume(Effect.void));
-    }),
-);
+        server.listen(0, "127.0.0.1", () =>
+          resume(Effect.succeed({ server, mails })),
+        );
+      },
+    ),
+    ({ server }) =>
+      Effect.callback<void>((resume) => {
+        server.close(() => resume(Effect.void));
+      }),
+  );
 
 const settings = (port: number): MailSettings => ({
   host: "127.0.0.1",
@@ -67,7 +72,7 @@ describe("Mailer.layerSmtp", () => {
   it.live("sends a mail to the owner with a stable message id", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const { server, mails } = yield* smtpServer;
+        const { server, mails } = yield* smtpServer();
         const port = (server.address() as { port: number }).port;
         yield* Effect.gen(function* () {
           const mailer = yield* Mailer;
@@ -98,7 +103,7 @@ describe("Mailer.layerSmtp", () => {
         // A port nothing listens on: bind one, then close it.
         const port = yield* Effect.scoped(
           Effect.gen(function* () {
-            const { server } = yield* smtpServer;
+            const { server } = yield* smtpServer();
             return (server.address() as { port: number }).port;
           }),
         );
@@ -111,7 +116,7 @@ describe("Mailer.layerSmtp", () => {
           });
         }).pipe(withMailer(port), Effect.flip);
         assert.instanceOf(error, MailFailed);
-        assert.match(error.reason, /^[A-Z_]+$/);
+        assert.match(error.reason, /^[A-Z_]+(:[A-Za-z0-9 ]+)*$/);
       }),
   );
 });
