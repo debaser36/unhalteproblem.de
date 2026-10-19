@@ -132,9 +132,9 @@
             ExposedPorts."3000/tcp" = { };
             User = "65534:65534";
             # The image has no shell or curl, so the probe is Node itself.
-            # /ready also checks the database; with the module's restart
-            # policy an unhealthy container shows up in `podman ps` and
-            # `systemctl status`. Durations are in nanoseconds.
+            # /ready also checks the database. An unhealthy container shows up
+            # in `podman ps` (nothing restarts it for that alone). Durations
+            # are in nanoseconds.
             Healthcheck = {
               Test = [
                 "CMD"

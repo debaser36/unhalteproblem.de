@@ -166,7 +166,7 @@ in
       description = ''
         nginx virtual host that gets a /api/ location proxying to the backend
         (the /api prefix is stripped), with rate limits on /api/contact,
-        /api/auth/login and /api/auth/callback. The virtual host itself (TLS,
+        /api/auth/login, /api/auth/callback and /api/ready. The virtual host itself (TLS,
         root) is configured elsewhere. null leaves nginx alone.
       '';
     };
@@ -271,6 +271,9 @@ in
             limit_req_status 429;
           '';
         };
+        # /ready runs a query on every call: same limit as the login routes.
+        # The container's own healthcheck calls the backend directly.
+        "= /api/ready" = authRateLimited "/ready";
         "= /api/auth/login" = authRateLimited "/auth/login";
         "= /api/auth/callback" = authRateLimited "/auth/callback";
       };
@@ -295,9 +298,14 @@ in
       # Only after that succeeded are old dumps deleted, so a run that fails
       # (the unit shows up as failed in `systemctl --failed`) never costs a
       # working backup.
+      # A run missed because the machine was off happens when it is back.
+      systemd.timers.unhalteproblem-backup.timerConfig.Persistent = true;
+
       systemd.services.unhalteproblem-backup = {
         description = "Dump and verify the unhalteproblem database";
         startAt = cfg.backup.startAt;
+        after = [ "postgresql.service" ];
+        requires = [ "postgresql.service" ];
         path = [ config.services.postgresql.package pkgs.coreutils pkgs.findutils ];
         serviceConfig = {
           Type = "oneshot";
@@ -313,9 +321,21 @@ in
 
           pg_dump --format=custom --file="$partial" "$db"
           mv "$partial" "$dir/$db-$stamp.dump"
-          ${verifyBackup}/bin/unhalteproblem-verify-backup "$dir/$db-$stamp.dump"
 
-          find "$dir" -maxdepth 1 -name '*.dump' -mtime +${toString cfg.backup.keepDays} -delete
+          # It must restore and hold as many migrations as the live database.
+          # A dump that doesn't is renamed, so that the newest `*.dump` is
+          # always one that was proven, and the unit fails.
+          expected=$(psql --no-psqlrc --tuples-only --no-align --dbname "$db" \
+            --command "SELECT count(*) FROM effect_sql_migrations")
+          if ! ${verifyBackup}/bin/unhalteproblem-verify-backup \
+            "$dir/$db-$stamp.dump" postgres "$expected"; then
+            mv "$dir/$db-$stamp.dump" "$dir/$db-$stamp.dump.failed"
+            echo "backup $db-$stamp failed verification" >&2
+            exit 1
+          fi
+
+          find "$dir" -maxdepth 1 \( -name '*.dump' -o -name '*.dump.failed' \) \
+            -mtime +${toString cfg.backup.keepDays} -delete
         '';
       };
     })
