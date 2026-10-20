@@ -68,7 +68,7 @@ const make = Effect.gen(function* () {
     Request: Schema.Void,
     Result: DatabaseFacts,
     execute: () => sql`
-      SELECT version() AS postgres_version,
+      SELECT current_setting('server_version') AS postgres_version,
              current_database() AS database_name,
              pg_database_size(current_database())::float8 AS database_bytes,
              pg_postmaster_start_time() AS started_at,
@@ -92,7 +92,7 @@ const make = Effect.gen(function* () {
       SELECT relname AS name,
              n_live_tup::float8 AS estimated_rows,
              pg_total_relation_size(relid)::float8 AS total_bytes,
-             pg_relation_size(relid)::float8 AS table_bytes,
+             pg_table_size(relid)::float8 AS table_bytes,
              pg_indexes_size(relid)::float8 AS index_bytes,
              seq_scan::float8 AS sequential_scans,
              idx_scan::float8 AS index_scans,
