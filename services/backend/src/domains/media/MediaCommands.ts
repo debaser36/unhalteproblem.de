@@ -5,6 +5,7 @@ import { Transaction } from "#cqrs/Transaction";
 import type { UserId } from "#domains/users/User";
 import {
   detectContentType,
+  InvalidUpload,
   isTooLarge,
   MediaId,
   type MediaScope,
@@ -24,6 +25,8 @@ const make = Effect.gen(function* () {
       readonly bytes: Uint8Array;
       readonly uploadedBy: UserId;
     }) {
+      // An empty file is a broken upload, not a big one.
+      if (upload.bytes.length === 0) return yield* new InvalidUpload();
       if (isTooLarge(upload.bytes)) return yield* new MediaTooLarge();
       const contentType = detectContentType(upload.bytes);
       if (Option.isNone(contentType)) return yield* new UnsupportedMedia();
@@ -52,12 +55,15 @@ const make = Effect.gen(function* () {
 export class MediaCommands extends Context.Service<
   MediaCommands,
   {
-    /** Stores an uploaded image; fails if it is empty, too large or not an image we serve. */
+    /** Stores an uploaded image; fails if it is empty (400), too large (413) or not an image we serve (415). */
     readonly store: (upload: {
       readonly scope: MediaScope;
       readonly bytes: Uint8Array;
       readonly uploadedBy: UserId;
-    }) => Effect.Effect<StoredMedia, MediaTooLarge | UnsupportedMedia>;
+    }) => Effect.Effect<
+      StoredMedia,
+      InvalidUpload | MediaTooLarge | UnsupportedMedia
+    >;
   }
 >()("@unhalteproblem.de/backend/domains/media/MediaCommands") {
   /** Needs `MediaRepository` and `Transaction`. */

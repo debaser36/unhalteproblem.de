@@ -12,7 +12,11 @@ import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
 import { blogScope, type StoredMedia } from "#domains/media/Media";
 import { MediaCommands } from "#domains/media/MediaCommands";
-import type { MediaTooLarge, UnsupportedMedia } from "#domains/media/Media";
+import type {
+  InvalidUpload,
+  MediaTooLarge,
+  UnsupportedMedia,
+} from "#domains/media/Media";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import {
   BlogCreated,
@@ -354,7 +358,7 @@ export class BlogCommands extends Context.Service<
       bytes: Uint8Array,
     ) => Effect.Effect<
       StoredMedia,
-      MediaTooLarge | UnsupportedMedia,
+      InvalidUpload | MediaTooLarge | UnsupportedMedia,
       EditorProof
     >;
   }

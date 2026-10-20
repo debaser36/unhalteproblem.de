@@ -49,6 +49,7 @@ export class StoredMedia extends Model.Class<StoredMedia>("StoredMedia")({
 
 // Errors: the contract's, so they map to their status codes as they are.
 export {
+  InvalidUpload,
   MediaNotFound,
   MediaTooLarge,
   UnsupportedMedia,
@@ -99,4 +100,4 @@ export const detectContentType = (
 };
 
 export const isTooLarge = (bytes: Uint8Array) =>
-  bytes.length === 0 || bytes.length > MediaLimits.maxBytes;
+  bytes.length > MediaLimits.maxBytes;

@@ -63,8 +63,8 @@ describe("detectContentType", () => {
 });
 
 describe("isTooLarge", () => {
-  it("allows 1 byte to 5 MiB", () => {
-    assert.isTrue(isTooLarge(new Uint8Array(0)));
+  it("allows up to 5 MiB (an empty file is refused as invalid instead)", () => {
+    assert.isFalse(isTooLarge(new Uint8Array(0)));
     assert.isFalse(isTooLarge(new Uint8Array(1)));
     assert.isFalse(isTooLarge(new Uint8Array(MediaLimits.maxBytes)));
     assert.isTrue(isTooLarge(new Uint8Array(MediaLimits.maxBytes + 1)));
@@ -112,7 +112,7 @@ describe("MediaCommands and MediaQueries", () => {
   );
 
   it.effect.each([
-    ["an empty file", new Uint8Array(0), "MediaTooLarge"],
+    ["an empty file", new Uint8Array(0), "InvalidUpload"],
     [
       "more than 5 MiB",
       new Uint8Array(MediaLimits.maxBytes + 1).fill(0x89),
