@@ -1,8 +1,4 @@
-import {
-  Api,
-  type AuditLogEntryId,
-  type OutboxMessageId,
-} from "@unhalteproblem.de/api";
+import { Api, AuditLogEntryId, OutboxMessageId } from "@unhalteproblem.de/api";
 import { Effect, Option } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { AuditQueries } from "#domains/audit/AuditQueries";
@@ -50,13 +46,13 @@ export const AdminInsightsHandlers = HttpApiBuilder.group(
       .handle("listOutbox", ({ query }) =>
         operations.outbox(query.state, query.limit).pipe(
           Effect.map((rows) =>
-            rows.map((row) => ({ ...row, id: row.id as OutboxMessageId })),
+            rows.map((row) => ({ ...row, id: OutboxMessageId.make(row.id) })),
           ),
           noStore,
         ),
       )
       .handle("retryOutboxMessage", ({ params }) =>
-        operationCommands.retryOutboxMessage(params.messageId),
+        operationCommands.retryOutboxMessage(params.messageId).pipe(noStore),
       )
       .handle("listAuditLog", ({ query }) =>
         audit
@@ -73,10 +69,10 @@ export const AdminInsightsHandlers = HttpApiBuilder.group(
             Effect.map(({ entries, next }) => ({
               entries: entries.map((entry) => ({
                 ...entry,
-                id: entry.id as AuditLogEntryId,
+                id: AuditLogEntryId.make(entry.id),
               })),
               nextCursor: Option.getOrNull(
-                Option.map(next, (id) => ({ id: id as AuditLogEntryId })),
+                Option.map(next, (id) => ({ id: AuditLogEntryId.make(id) })),
               ),
             })),
             noStore,
@@ -103,7 +99,7 @@ export const AdminInsightsHandlers = HttpApiBuilder.group(
           ),
       )
       .handle("deleteContactMessage", ({ params }) =>
-        contactCommands.delete(params.messageId),
+        contactCommands.delete(params.messageId).pipe(noStore),
       );
   }),
 );
