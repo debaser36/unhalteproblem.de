@@ -12,7 +12,7 @@ import {
 } from "effect/http-api";
 import { Api } from "#Api";
 import { Authentication, CurrentUser, SessionCookie } from "#Authentication";
-import type { RequireRoles } from "#Authorization";
+import { RequireBlogEditor, type RequireRoles } from "#Authorization";
 import { UserId } from "#domain/Admin";
 import { type AuditLogEntry, AuditLogEntryId } from "#domain/Audit";
 import type { Role } from "#domain/Auth";
@@ -110,6 +110,12 @@ describe("admin insights endpoints in the OpenAPI document", () => {
         "account_deleted",
         "outbox_retried",
         "contact_message_deleted",
+        "blog_created",
+        "blog_updated",
+        "post_deleted",
+        "project_created",
+        "project_updated",
+        "project_deleted",
       ],
     );
     for (const name of ["AuditLogEntryId", "OutboxMessageId"]) {
@@ -338,6 +344,7 @@ layer(
           // Not used by this group, but the test server builds every
           // middleware of the API.
           requireRolesStub(RequireSuperAdmin),
+          Layer.succeed(RequireBlogEditor, (httpEffect) => httpEffect),
           SameOriginStub,
           Layer.succeed(LargeBody, (httpEffect) => httpEffect),
         ),

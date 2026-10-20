@@ -17,6 +17,11 @@ import { Effect, Schema, SchemaGetter } from "effect";
  *   topic.
  * - `contact_message_deleted`: an admin deleted a contact message; no
  *   target and no detail (the message is personal data).
+ * - `blog_created`, `blog_updated`: an admin created or edited a blog;
+ *   `detail` is its slug.
+ * - `post_deleted`: an admin deleted a blog post; `detail` is its id.
+ * - `project_created`, `project_updated`, `project_deleted`: an admin
+ *   created, edited or deleted a project; `detail` is its slug.
  */
 export const AuditAction = Schema.Literals([
   "login",
@@ -29,6 +34,12 @@ export const AuditAction = Schema.Literals([
   "account_deleted",
   "outbox_retried",
   "contact_message_deleted",
+  "blog_created",
+  "blog_updated",
+  "post_deleted",
+  "project_created",
+  "project_updated",
+  "project_deleted",
 ]).annotate({
   identifier: "AuditAction",
   description: "What an audit log entry records.",

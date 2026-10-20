@@ -28,7 +28,7 @@ const entry: typeof AuditLogEntry.Encoded = {
 };
 
 describe("AuditAction", () => {
-  it("lists the backend's actions and the admin insights ones", () => {
+  it("lists every action the backend writes", () => {
     assert.deepStrictEqual(AuditAction.literals, [
       "login",
       "logout",
@@ -40,6 +40,12 @@ describe("AuditAction", () => {
       "account_deleted",
       "outbox_retried",
       "contact_message_deleted",
+      "blog_created",
+      "blog_updated",
+      "post_deleted",
+      "project_created",
+      "project_updated",
+      "project_deleted",
     ]);
   });
 });
