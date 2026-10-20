@@ -74,6 +74,20 @@ export const routes: Array<RouteObject> = [
             ),
           },
           {
+            path: "projects/~new",
+            ...page(
+              () => import("#features/projects/ProjectEditPage.tsx"),
+              (m) => m.ProjectEditPage,
+            ),
+          },
+          {
+            path: "projects/~edit/:projectId",
+            ...page(
+              () => import("#features/projects/ProjectEditPage.tsx"),
+              (m) => m.ProjectEditPage,
+            ),
+          },
+          {
             path: "projects/:project",
             ...page(
               () => import("#features/projects/ProjectPage.tsx"),
