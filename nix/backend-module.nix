@@ -285,11 +285,11 @@ in
         "= /api/ready" = authRateLimited "/ready";
         "= /api/auth/login" = authRateLimited "/auth/login";
         "= /api/auth/callback" = authRateLimited "/auth/callback";
-        # Saving a post (512 KiB of JSON) and uploading an image (5 MiB) need
-        # more than the 32k of every other route; the backend enforces the
-        # exact limits per endpoint. A regex location can't proxy_pass with a
-        # URI, so the /api prefix is stripped by a rewrite instead.
-        "~ ^/api/blogs/[^/]+/manage/" = {
+        # Saving a post or project (512 KiB of JSON) and uploading an image
+        # (5 MiB) need more than the 32k of every other route; the backend
+        # enforces the exact limits per endpoint. A regex location can't
+        # proxy_pass with a URI, so the /api prefix is stripped by a rewrite.
+        "~ ^/api/(blogs/[^/]+/manage|admin/projects)(/|$)" = {
           proxyPass = backendUrl "";
           extraConfig = proxyHeaders + ''
             client_max_body_size 6m;
