@@ -47,6 +47,7 @@ const AuthServices = Layer.mergeAll(
   AuthenticationLive,
   SameOriginLive,
   LargeBodyLive,
+  Authorization.blogEditorMiddleware,
   Authorization.middleware(RequireAdmin),
   Authorization.middleware(RequireSuperAdmin),
   OidcProvider.layer,

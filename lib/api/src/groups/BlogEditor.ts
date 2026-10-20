@@ -1,4 +1,5 @@
 import { Authentication } from "#Authentication";
+import { RequireBlogEditor } from "#Authorization";
 import {
   BlogSlug,
   ManagedPost,
@@ -69,19 +70,22 @@ const editorRule =
 /**
  * Editing the posts of a subblog, in place on the website. Every endpoint
  * requires a session (`Authentication`, 401) and the editor role of the
- * subblog in the path, `blogEditor:<blog>`. The role depends on the path,
- * so it is no middleware: the backend handler checks it
- * (`Authorization.provide(blogEditorRole(blog))`) and answers 403
- * `Forbidden`, which every endpoint therefore declares. The state-changing
- * endpoints also require `SameOrigin` (403 `Forbidden`), and those taking a
- * whole post `LargeBody` (a larger body limit).
+ * subblog in the path, `blogEditor:<blog>` (`RequireBlogEditor`, 403
+ * `Forbidden`). The state-changing endpoints also require `SameOrigin`
+ * (403 `Forbidden`), and those taking a whole post `LargeBody` (a larger
+ * body limit). `RequireBlogEditor` provides no proof; the handlers still
+ * provide `Authorized(blogEditorRole(blog))` themselves.
  *
  * Posts are addressed by id here, because editors may change the slug.
  *
- * Middleware order: the endpoint's own middlewares run inside the group's
- * `Authentication`, which is added after the endpoints so it runs first.
- * On an endpoint, `SameOrigin` is added last, so the origin is checked
- * before `LargeBody` lets a larger body in.
+ * Middleware order: the middleware added later is the outer one and runs
+ * first, and `HttpApi` decodes the path parameters and the payload inside
+ * all of them. The group adds `RequireBlogEditor` and then `Authentication`
+ * after the endpoints; on an endpoint, `SameOrigin` is added after
+ * `LargeBody`. The runtime order is therefore Authentication (401) →
+ * RequireBlogEditor (403) → SameOrigin (403) → LargeBody → payload →
+ * handler: only an editor of the subblog, from the website's origin, gets
+ * the server to read a body, and only then a large one.
  */
 export class BlogEditorGroup extends HttpApiGroup.make("blogEditor")
   .add(
@@ -241,8 +245,12 @@ export class BlogEditorGroup extends HttpApiGroup.make("blogEditor")
         }),
       ),
   )
-  // Protects every endpoint above; added after them, so it runs before
-  // their own middlewares and answers 401 before any 403.
+  // Both protect every endpoint above and are added after them, so they
+  // run before the endpoints' own `SameOrigin` and `LargeBody` and before
+  // the payload is read. `Authentication` comes last: it runs first,
+  // answers 401 before any 403, and provides the `CurrentUser` that
+  // `RequireBlogEditor` needs.
+  .middleware(RequireBlogEditor)
   .middleware(Authentication)
   .annotateMerge(
     OpenApi.annotations({

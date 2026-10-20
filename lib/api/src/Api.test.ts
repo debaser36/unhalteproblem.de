@@ -19,6 +19,7 @@ import {
   LargeBody,
   RateLimited,
   RequireAdmin,
+  RequireBlogEditor,
   RequireSuperAdmin,
   SameOrigin,
   ServiceUnavailable,
@@ -348,6 +349,7 @@ const AdminMiddlewareStubs = Layer.mergeAll(
   Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
   Layer.succeed(SameOrigin, () => unusedMiddleware),
   Layer.succeed(LargeBody, () => unusedMiddleware),
+  Layer.succeed(RequireBlogEditor, () => unusedMiddleware),
 );
 
 const makeClient = HttpApiTest.groups(Api, ["system", "contact", "auth"]);

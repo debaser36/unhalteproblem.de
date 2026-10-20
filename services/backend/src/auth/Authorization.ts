@@ -1,12 +1,16 @@
 import {
   type Authorization,
   Authorized,
+  BlogSlug,
+  blogEditorRole,
   CurrentUser,
   Forbidden,
+  RequireBlogEditor,
   type RequireRoles,
   type Role,
 } from "@unhalteproblem.de/api";
-import { Array as Arr, Effect, Layer } from "effect";
+import { Array as Arr, Effect, Layer, Option, Schema } from "effect";
+import { HttpRouter } from "effect/http";
 import type { NonEmptyReadonlyArray } from "effect/Array";
 
 /**
@@ -93,3 +97,27 @@ export const middleware = <Roles extends Role>(
       Effect.provideService(httpEffect, requireRoles.authorized, authorization),
     ),
   );
+
+/**
+ * The implementation of the contract's `RequireBlogEditor`: lets a request
+ * to `/blogs/:blog/manage/...` through only if the current user holds
+ * `blogEditor:<blog>`. It runs before the payload is read, so nobody else
+ * can make the server read a large post body (`LargeBody`). It provides no
+ * proof: the handlers still provide `Authorized(blogEditorRole(blog))` with
+ * `provide`, which checks the same role again for the typed requirement.
+ * A path whose `:blog` is not a valid slug names no subblog anyone edits:
+ * 403 as well.
+ */
+export const blogEditorMiddleware = Layer.succeed(
+  RequireBlogEditor,
+  (httpEffect) =>
+    Effect.gen(function* () {
+      const { blog } = yield* HttpRouter.params;
+      const slug = decodeBlogSlug(blog);
+      if (Option.isNone(slug)) return yield* new Forbidden();
+      yield* authorize(blogEditorRole(slug.value));
+      return yield* httpEffect;
+    }),
+);
+
+const decodeBlogSlug = Schema.decodeUnknownOption(BlogSlug);

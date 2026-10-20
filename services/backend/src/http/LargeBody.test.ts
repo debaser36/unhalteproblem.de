@@ -73,6 +73,30 @@ describe("large bodies", () => {
     }),
   );
 
+  it.effect(
+    "someone without the subblog's editor role gets 403 before the body is read",
+    () =>
+      Effect.gen(function* () {
+        const app = yield* makeBlogApp({ maxBodyKibibytes: 32 });
+        yield* app.createBlog("alpha");
+        yield* app.createBlog("beta");
+        // An editor, but of another subblog: logged in and same-origin,
+        // which used to be enough to have a large body read and decoded.
+        const other = yield* app.editor("other", "beta");
+        const { expect } = app;
+        yield* expect(403, other.cookie, "POST", "/blogs/alpha/manage/posts", {
+          body: postInput("long", { content: largeDocument(100) }),
+        });
+        const posts = yield* app.sql(
+          (sql) =>
+            sql<{
+              readonly count: number;
+            }>`SELECT count(*)::int AS count FROM blog_posts`,
+        );
+        assert.strictEqual(posts[0]?.count, 0);
+      }),
+  );
+
   it.effect("the larger limit is for saving posts only", () =>
     Effect.gen(function* () {
       const { call, admin } = yield* setup;

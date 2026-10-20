@@ -10,6 +10,7 @@ import {
 } from "effect/http-api";
 import { Api } from "#Api";
 import { Authentication, CurrentUser, SessionCookie } from "#Authentication";
+import { RequireBlogEditor } from "#Authorization";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 import type { Role } from "#domain/Auth";
 import { AccountDeletionNotAllowed } from "#errors/AccountDeletionNotAllowed";
@@ -157,6 +158,7 @@ const AdminMiddlewareStubs = Layer.mergeAll(
   Layer.succeed(RequireAdmin, () => unusedMiddleware),
   Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
   Layer.succeed(LargeBody, () => unusedMiddleware),
+  Layer.succeed(RequireBlogEditor, () => unusedMiddleware),
 );
 
 const makeClient = HttpApiTest.groups(Api, ["account"]);

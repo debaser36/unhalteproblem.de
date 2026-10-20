@@ -20,7 +20,7 @@ import {
 } from "effect/http-api";
 import { Api } from "#Api";
 import { Authentication, CurrentUser, SessionCookie } from "#Authentication";
-import { type RequireRoles } from "#Authorization";
+import { RequireBlogEditor, type RequireRoles } from "#Authorization";
 import {
   type Restriction,
   UserCursor,
@@ -571,8 +571,11 @@ layer(
           requireRolesStub(RequireAdmin),
           requireRolesStub(RequireSuperAdmin),
           SameOriginStub,
-          // Only the blog editor group uses it.
+          // Only the blog editor group uses them.
           Layer.succeed(LargeBody, () => Effect.die("not used by admin")),
+          Layer.succeed(RequireBlogEditor, () =>
+            Effect.die("not used by admin"),
+          ),
         ),
       ),
     ),

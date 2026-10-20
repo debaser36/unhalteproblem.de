@@ -303,6 +303,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     Layer.provide([
       SameOriginLive,
       LargeBodyLive,
+      Authorization.blogEditorMiddleware,
       Authorization.middleware(RequireAdmin),
       Authorization.middleware(RequireSuperAdmin),
       Layer.succeed(OidcProvider, makeProvider(options)),

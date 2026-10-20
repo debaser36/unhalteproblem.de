@@ -2,7 +2,12 @@
 // middlewares, and an encoding round trip through the in-memory client.
 import { assert, describe, it, layer } from "@effect/vitest";
 import { DateTime, Effect, Layer, Redacted } from "effect";
-import { HttpClientRequest, HttpServer, HttpServerResponse } from "effect/http";
+import {
+  HttpClientRequest,
+  HttpRouter,
+  HttpServer,
+  HttpServerResponse,
+} from "effect/http";
 import {
   HttpApi,
   HttpApiBuilder,
@@ -12,6 +17,7 @@ import {
 } from "effect/http-api";
 import { Api } from "#Api";
 import { Authentication, CurrentUser, SessionCookie } from "#Authentication";
+import { RequireBlogEditor } from "#Authorization";
 import {
   type ManagedPost,
   PostId,
@@ -20,11 +26,13 @@ import {
 } from "#domain/Blog";
 import { emptyDocument } from "#domain/Document";
 import { MediaId } from "#domain/Media";
+import { Forbidden } from "#errors/Forbidden";
 import { PostNotFound } from "#errors/PostNotFound";
 import { Unauthorized } from "#errors/Unauthorized";
 import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
+import { BlogEditorGroup } from "./BlogEditor.ts";
 
 describe("blog endpoints in the OpenAPI document", () => {
   const spec = OpenApi.fromApi(Api);
@@ -227,6 +235,47 @@ describe("blog endpoint middleware", () => {
     assert.isFalse(LargeBody.requiredForClient);
     assert.deepStrictEqual([...LargeBody.error], []);
   });
+
+  it("checks the editor role of every editor endpoint before its body", () => {
+    // `endpoint.middlewares` is in insertion order, inner first; the
+    // builder wraps the handler in that order, so the last one runs first.
+    const runtimeOrder = Object.values(BlogEditorGroup.endpoints).map(
+      (endpoint) => ({
+        name: endpoint.identifier,
+        keys: [...endpoint.middlewares].map((m) => m.key).reverse(),
+      }),
+    );
+    const expected = (keys: Array<string>) => [
+      Authentication.key,
+      RequireBlogEditor.key,
+      ...keys,
+    ];
+    for (const { name, keys } of runtimeOrder) {
+      switch (name) {
+        case "listManagedPosts":
+        case "getManagedPost":
+          assert.deepStrictEqual(keys, expected([]), name);
+          break;
+        case "createPost":
+        case "updatePost":
+          assert.deepStrictEqual(
+            keys,
+            expected([SameOrigin.key, LargeBody.key]),
+            name,
+          );
+          break;
+        default:
+          assert.deepStrictEqual(keys, expected([SameOrigin.key]), name);
+      }
+    }
+    assert.strictEqual(runtimeOrder.length, 8);
+  });
+
+  it("RequireBlogEditor fails with Forbidden and needs no client middleware", () => {
+    assert.deepStrictEqual([...RequireBlogEditor.error], [Forbidden]);
+    assert.isFalse(RequireBlogEditor.requiredForClient);
+    assert.isFalse("security" in RequireBlogEditor);
+  });
 });
 
 // Stub handlers and middleware, only to exercise the contract's encoding and
@@ -328,6 +377,23 @@ const AuthenticationStub = Layer.succeed(Authentication, {
       : Effect.fail(new Unauthorized()),
 });
 
+// The documented implementation: the raw `blog` parameter of the route
+// (the parameters are not decoded yet) against the user's roles.
+const RequireBlogEditorStub = Layer.succeed(RequireBlogEditor, (httpEffect) =>
+  Effect.gen(function* () {
+    const { params } = yield* HttpRouter.RouteContext;
+    const { user } = yield* CurrentUser;
+    const blog = params["blog"];
+    if (
+      blog === undefined ||
+      !user.roles.some((r) => r === `blogEditor:${blog}`)
+    ) {
+      return yield* new Forbidden();
+    }
+    return yield* httpEffect;
+  }),
+);
+
 const unusedMiddleware = Effect.die("not used by these groups");
 
 const asEditor = Layer.mergeAll(
@@ -352,6 +418,7 @@ layer(
           // Pass-through: the stubs check nothing.
           Layer.succeed(SameOrigin, (httpEffect) => httpEffect),
           Layer.succeed(LargeBody, (httpEffect) => httpEffect),
+          RequireBlogEditorStub,
           Layer.succeed(RequireAdmin, () => unusedMiddleware),
           Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
         ),
@@ -437,6 +504,26 @@ layer(
       });
       assert.strictEqual(created.status, "draft");
       assert.deepStrictEqual(created.content, emptyDocument);
+    }).pipe(Effect.provide(asEditor)),
+  );
+
+  it.effect("the editor endpoints answer 403 for another subblog", () =>
+    Effect.gen(function* () {
+      const client = yield* makeClient;
+      const error = yield* client.blogEditor
+        .createPost({
+          params: { blog: "go-notes" },
+          payload: {
+            slug: "next",
+            title: "Next",
+            summary: "",
+            tags: [],
+            coverImage: null,
+            content: emptyDocument,
+          },
+        })
+        .pipe(Effect.flip);
+      assert.instanceOf(error, Forbidden);
     }).pipe(Effect.provide(asEditor)),
   );
 

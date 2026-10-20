@@ -9,6 +9,7 @@ export {
 export {
   type Authorization,
   Authorized,
+  RequireBlogEditor,
   RequireRoles,
 } from "./Authorization.ts";
 export { LargeBody } from "./LargeBody.ts";

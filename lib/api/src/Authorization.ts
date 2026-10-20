@@ -3,7 +3,8 @@
  * layers and services.
  *
  * Definitions only. The backend provides the `Authorized` proofs and
- * implements the `RequireRoles` middlewares; nothing else may.
+ * implements the `RequireRoles` and `RequireBlogEditor` middlewares;
+ * nothing else may.
  *
  * **Requiring roles in code.** `yield* Authorized("admin")` inside an effect
  * adds `Authorized<"admin">` to its requirements. The effect, and every
@@ -188,3 +189,45 @@ export const RequireRoles = <const Roles extends NonEmptyReadonlyArray<Role>>(
   }
   return middleware as RequireRoles<Roles[number]>;
 };
+
+/**
+ * HTTP middleware that lets a request through only if the logged-in user
+ * holds `blogEditor:<blog>` for the `:blog` path parameter of the endpoint,
+ * and answers 403 `Forbidden` otherwise. For endpoints under
+ * `/blogs/:blog/...` whose role depends on the path, which `RequireRoles`
+ * cannot express.
+ *
+ * **It provides nothing.** It is a gate in front of the request body, not
+ * the proof: the handler still provides `Authorized(blogEditorRole(blog))`
+ * itself with the backend's `Authorization.provide` (a cheap second check
+ * of `CurrentUser`'s roles) before calling services that require it.
+ *
+ * **Why a middleware.** `HttpApi` decodes the path parameters and reads and
+ * decodes the payload inside the middlewares, right before the handler. A
+ * role check in the handler alone would let every logged-in user make the
+ * server read and decode a whole body (512 KiB with `LargeBody`, a 5 MiB
+ * upload) before answering 403. So it must run before `LargeBody` and the
+ * payload: in the runtime order Authentication (401) → `RequireBlogEditor`
+ * (403) → `SameOrigin` (403) → `LargeBody` → payload → handler. The
+ * middleware added later is the outer one and runs first, so a group adds
+ * it after the endpoints (whose `SameOrigin` and `LargeBody` it then
+ * wraps) and before `Authentication`:
+ *
+ * ```ts
+ * HttpApiGroup.make("blogEditor")
+ *   .add(...endpoints)
+ *   .middleware(RequireBlogEditor)
+ *   .middleware(Authentication)
+ * ```
+ *
+ * **Implementation (backend).** Because it runs before the parameters are
+ * decoded, it reads the raw `blog` parameter from the router's
+ * `HttpRouter.RouteContext` and compares `blogEditor:<blog>` with
+ * `CurrentUser`'s roles exactly; a missing or non-slug parameter matches no
+ * role and answers 403. Only use it on endpoints with a `:blog` path
+ * parameter. Declares no security scheme and needs no client middleware.
+ */
+export class RequireBlogEditor extends HttpApiMiddleware.Service<
+  RequireBlogEditor,
+  { requires: CurrentUser }
+>()("@unhalteproblem.de/api/RequireBlogEditor", { error: Forbidden }) {}
