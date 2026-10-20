@@ -536,8 +536,9 @@ describe("the outbox", () => {
 
 describe("the audit log", () => {
   /**
-   * The setup's logins (admin, super, user) and `target`'s, then four role
-   * grants by the superAdmin to `user` and to `target`, alternating.
+   * The setup's logins (admin, super, user) and `target`'s, the creation of
+   * the subblog `alpha`, then four role grants by the superAdmin to `user`
+   * and to `target`, alternating.
    */
   const withEntries = Effect.gen(function* () {
     const app = yield* setup;
@@ -579,7 +580,7 @@ describe("the audit log", () => {
         ids,
         [...ids].sort((a, b) => b - a),
       );
-      // Four logins (admin, super, user, target), then four grants.
+      // Four logins (admin, super, user, target), the blog, then four grants.
       assert.deepStrictEqual(
         all.entries.map((entry) => entry["action"]).reverse(),
         [
@@ -587,6 +588,7 @@ describe("the audit log", () => {
           "login",
           "login",
           "login",
+          "blog_created",
           "role_granted",
           "role_granted",
           "role_granted",
@@ -622,8 +624,8 @@ describe("the audit log", () => {
       assert.deepStrictEqual(seen, ids);
 
       // A full last page has no next one.
-      const exact = yield* page(app, "limit=8");
-      assert.strictEqual(exact.entries.length, 8);
+      const exact = yield* page(app, "limit=9");
+      assert.strictEqual(exact.entries.length, 9);
       assert.isNull(exact.nextCursor);
 
       // New entries sort to the front and never shift a page already read.

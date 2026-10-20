@@ -10,6 +10,7 @@ import type { SqlError } from "effect/sql";
 import * as Command from "#cqrs/Command";
 import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
+import { AuditCommands } from "#domains/audit/AuditCommands";
 import { blogScope, type StoredMedia } from "#domains/media/Media";
 import { MediaCommands } from "#domains/media/MediaCommands";
 import type {
@@ -53,6 +54,7 @@ const make = Effect.gen(function* () {
   const repository = yield* BlogRepository;
   const users = yield* UserDirectory;
   const media = yield* MediaCommands;
+  const audit = yield* AuditCommands;
   const transaction = yield* Transaction;
 
   const actorOf = (proof: { readonly user: { readonly id: string } }) =>
@@ -162,6 +164,12 @@ const make = Effect.gen(function* () {
       yield* DomainEvent.record(
         new BlogCreated({ blog: payload.slug, by: actor }),
       );
+      yield* audit.record({
+        action: "blog_created",
+        actor: Option.some(actor),
+        target: Option.none(),
+        detail: payload.slug,
+      });
       return yield* summaryOf(payload.slug);
     }, Command.boundary(transaction)),
 
@@ -169,12 +177,18 @@ const make = Effect.gen(function* () {
       blog: BlogSlug,
       payload: UpdateBlogPayload,
     ) {
-      yield* Authorized("admin");
+      const actor = yield* actorOf(yield* Authorized("admin"));
       const row = yield* blogBySlug(blog);
       const now = yield* DateTime.now;
       yield* repository.updateBlog(
         BlogRow.make({ ...row, ...payload, updatedAt: now }),
       );
+      yield* audit.record({
+        action: "blog_updated",
+        actor: Option.some(actor),
+        target: Option.none(),
+        detail: blog,
+      });
       return yield* summaryOf(blog);
     }, Command.boundary(transaction)),
 
@@ -270,6 +284,12 @@ const make = Effect.gen(function* () {
       yield* lockPost(blogRow, postId);
       yield* repository.deletePost(postId);
       yield* DomainEvent.record(new PostDeleted({ blog, postId, by: actor }));
+      yield* audit.record({
+        action: "post_deleted",
+        actor: Option.some(actor),
+        target: Option.none(),
+        detail: postId,
+      });
     }, Command.boundary(transaction)),
 
     uploadImage: Effect.fn("BlogCommands.uploadImage")(function* (
@@ -347,6 +367,6 @@ export class BlogCommands extends Context.Service<
     >;
   }
 >()("@unhalteproblem.de/backend/domains/blogs/BlogCommands") {
-  /** Needs `BlogRepository`, `UserDirectory`, `MediaCommands` and `Transaction`. */
+  /** Needs `BlogRepository`, `UserDirectory`, `MediaCommands`, `AuditCommands` and `Transaction`. */
   static readonly layer = Layer.effect(BlogCommands, make);
 }

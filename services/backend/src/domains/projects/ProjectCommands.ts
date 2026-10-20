@@ -4,6 +4,7 @@ import type { SqlError } from "effect/sql";
 import * as Command from "#cqrs/Command";
 import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
+import { AuditCommands } from "#domains/audit/AuditCommands";
 import {
   type InvalidUpload,
   type MediaTooLarge,
@@ -46,6 +47,7 @@ const make = Effect.gen(function* () {
   const repository = yield* ProjectRepository;
   const users = yield* UserDirectory;
   const media = yield* MediaCommands;
+  const audit = yield* AuditCommands;
   const transaction = yield* Transaction;
 
   const actor = Effect.flatMap(Authorized("admin"), (proof) =>
@@ -107,6 +109,12 @@ const make = Effect.gen(function* () {
       yield* DomainEvent.record(
         new ProjectSaved({ projectId: id, version: 1, by }),
       );
+      yield* audit.record({
+        action: "project_created",
+        actor: Option.some(by),
+        target: Option.none(),
+        detail: input.slug,
+      });
       return yield* reread(id);
     }, Command.boundary(transaction)),
 
@@ -139,14 +147,26 @@ const make = Effect.gen(function* () {
       yield* DomainEvent.record(
         new ProjectSaved({ projectId: id, version: next, by }),
       );
+      yield* audit.record({
+        action: "project_updated",
+        actor: Option.some(by),
+        target: Option.none(),
+        detail: input.slug,
+      });
       return yield* reread(id);
     }, Command.boundary(transaction)),
 
     delete: Effect.fn("ProjectCommands.delete")(function* (id: ProjectId) {
       const by = yield* actor;
-      yield* lock(id);
+      const project = yield* lock(id);
       yield* repository.delete(id);
       yield* DomainEvent.record(new ProjectDeleted({ projectId: id, by }));
+      yield* audit.record({
+        action: "project_deleted",
+        actor: Option.some(by),
+        target: Option.none(),
+        detail: project.slug,
+      });
     }, Command.boundary(transaction)),
 
     uploadImage: Effect.fn("ProjectCommands.uploadImage")(function* (
@@ -198,6 +218,6 @@ export class ProjectCommands extends Context.Service<
     >;
   }
 >()("@unhalteproblem.de/backend/domains/projects/ProjectCommands") {
-  /** Needs `ProjectRepository`, `UserDirectory`, `MediaCommands` and `Transaction`. */
+  /** Needs `ProjectRepository`, `UserDirectory`, `MediaCommands`, `AuditCommands` and `Transaction`. */
   static readonly layer = Layer.effect(ProjectCommands, make);
 }
