@@ -19,6 +19,7 @@ import addUserDeletedAt from "#migrations/0010_add_user_deleted_at";
 import usersCreatedAtMilliseconds from "#migrations/0011_users_created_at_milliseconds";
 import allowBlogEditorRoles from "#migrations/0012_allow_blog_editor_roles";
 import createBlogsAndMedia from "#migrations/0013_create_blogs_and_media";
+import createProjects from "#migrations/0014_create_projects";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -41,6 +42,7 @@ export const migrations = {
   "0011_users_created_at_milliseconds": usersCreatedAtMilliseconds,
   "0012_allow_blog_editor_roles": allowBlogEditorRoles,
   "0013_create_blogs_and_media": createBlogsAndMedia,
+  "0014_create_projects": createProjects,
 };
 
 /** Loads {@link migrations} in id order. */
