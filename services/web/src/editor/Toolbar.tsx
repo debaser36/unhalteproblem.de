@@ -128,10 +128,11 @@ export function Toolbar({
   };
 
   return (
+    // Sticks below the site header (4rem) and the editor bar above it.
     <div
       role="toolbar"
       aria-label="Formatting"
-      className="sticky top-16 z-30 flex items-center gap-0.5 overflow-x-auto rounded-t-xl border-b border-border bg-surface-2/95 px-2 py-1.5 backdrop-blur"
+      className="sticky top-[calc(4rem+3.3rem)] z-20 flex items-center gap-0.5 overflow-x-auto sm:flex-wrap sm:overflow-visible rounded-t-xl border-b border-border bg-surface-2/95 px-2 py-1.5 backdrop-blur"
     >
       <ToolButton
         label="Undo"
