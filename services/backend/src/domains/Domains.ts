@@ -7,6 +7,7 @@ import { BlogDirectoryLive, BlogsLive } from "./blogs/Blogs.ts";
 import { ContactLive } from "./contact/Contacts.ts";
 import { MediaLive } from "./media/Medias.ts";
 import { ModerationLive } from "./moderation/Moderations.ts";
+import { ProjectsLive } from "./projects/Projects.ts";
 import { UserDirectoryLive, UsersLive } from "./users/Users.ts";
 
 // Moderation acts on users (through their directory), and registering a user
@@ -17,8 +18,10 @@ const Moderation = ModerationLive.pipe(
   Layer.provide([UserDirectoryLive, BlogDirectoryLive]),
 );
 
-// Posts name their authors, and their images live in the media domain.
+// Posts name their authors, posts and projects record who changed them, and
+// their images live in the media domain.
 const Blogs = BlogsLive.pipe(Layer.provide(UserDirectoryLive));
+const Projects = ProjectsLive.pipe(Layer.provide(UserDirectoryLive));
 
 /**
  * Every domain, on one shared `Transaction`, `DomainEvents` and `Outbox`. A
@@ -32,7 +35,12 @@ const Blogs = BlogsLive.pipe(Layer.provide(UserDirectoryLive));
  * Needs a migrated `SqlClient` (`DatabaseLive` or `DatabaseTest`),
  * `Sessions` (restricting a user ends their sessions) and a `Mailer`.
  */
-export const DomainsLive = Layer.mergeAll(UsersLive, ContactLive, Blogs).pipe(
+export const DomainsLive = Layer.mergeAll(
+  UsersLive,
+  ContactLive,
+  Blogs,
+  Projects,
+).pipe(
   Layer.provideMerge(Moderation),
   Layer.provideMerge(MediaLive),
   Layer.provideMerge(AuditLive),

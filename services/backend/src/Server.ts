@@ -16,6 +16,8 @@ import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
 import { LargeBodyLive } from "#http/LargeBody";
 import { MediaHandlers } from "#http/Media";
+import { ProjectAdminHandlers } from "#http/ProjectAdmin";
+import { ProjectsHandlers } from "#http/Projects";
 import { RequestLogging } from "#http/RequestLogging";
 import { SameOriginLive } from "#http/SameOrigin";
 import { SystemHandlers } from "#http/System";
@@ -65,6 +67,8 @@ const Handlers = Layer.mergeAll(
   BlogsHandlers,
   BlogEditorHandlers,
   MediaHandlers,
+  ProjectsHandlers,
+  ProjectAdminHandlers,
 ).pipe(
   Layer.provide([ContactRateLimit.layer, Readiness.layer]),
   Layer.provideMerge(AuthServices),

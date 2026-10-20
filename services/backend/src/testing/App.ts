@@ -29,6 +29,8 @@ import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
 import { LargeBodyLive } from "#http/LargeBody";
 import { MediaHandlers } from "#http/Media";
+import { ProjectAdminHandlers } from "#http/ProjectAdmin";
+import { ProjectsHandlers } from "#http/Projects";
 import { SameOriginLive } from "#http/SameOrigin";
 import { SystemHandlers } from "#http/System";
 import { LoginAttempts } from "#repositories/LoginAttempts";
@@ -299,6 +301,8 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     BlogsHandlers,
     BlogEditorHandlers,
     MediaHandlers,
+    ProjectsHandlers,
+    ProjectAdminHandlers,
   ).pipe(
     Layer.provide([
       SameOriginLive,
