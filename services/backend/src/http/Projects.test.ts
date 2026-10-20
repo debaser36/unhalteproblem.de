@@ -213,8 +213,6 @@ describe("project admin access", () => {
       assert.strictEqual(created.status, 201);
       assert.strictEqual(created.headers.get("cache-control"), "no-store");
       const id = String((yield* json(created))["id"]);
-      // deleteProject (204) doesn't set the header yet; that is being fixed
-      // separately, add it here then.
       for (const [method, path, body] of [
         ["GET", "/admin/projects", undefined],
         ["GET", `/admin/projects/${id}`, undefined],
@@ -224,6 +222,7 @@ describe("project admin access", () => {
           { ...projectInput("mine"), version: 1 },
         ],
         ["POST", "/admin/projects/media", form(png)],
+        ["DELETE", `/admin/projects/${id}`, undefined],
       ] as const) {
         const response = yield* call(admin.cookie, method, path, { body });
         assert.isBelow(response.status, 300, `${method} ${path}`);

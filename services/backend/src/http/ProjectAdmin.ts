@@ -39,7 +39,7 @@ export const ProjectAdminHandlers = HttpApiBuilder.group(
           .pipe(Effect.map(toManagedProject), noStore),
       )
       .handle("deleteProject", ({ params }) =>
-        commands.delete(params.projectId),
+        commands.delete(params.projectId).pipe(noStore),
       )
       .handle("uploadProjectMedia", ({ payload }) =>
         Effect.flatMap(uploadedFile(payload), commands.uploadImage).pipe(
