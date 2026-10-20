@@ -15,10 +15,8 @@ const uploadError = (error: Multipart.MultipartError) =>
  * The bytes of an upload's file part `file` (the contract's `MediaUpload`),
  * read only when the effect runs: run it after the authorization check.
  */
-export const uploadedFile = (
-  parts: Stream.Stream<Multipart.Part, Multipart.MultipartError>,
-) =>
-  Effect.gen(function* () {
+export const uploadedFile = Effect.fn("Upload.uploadedFile")(
+  function* (parts: Stream.Stream<Multipart.Part, Multipart.MultipartError>) {
     const files = yield* parts.pipe(
       Stream.filter(Multipart.isFile),
       Stream.filter((file) => file.key === "file"),
@@ -36,6 +34,6 @@ export const uploadedFile = (
     const bytes = Arr.head(files);
     if (Option.isNone(bytes)) return yield* new InvalidUpload();
     return bytes.value;
-  }).pipe(
-    Effect.catchTag("MultipartError", (error) => Effect.fail(uploadError(error))),
-  );
+  },
+  Effect.catchTag("MultipartError", (error) => Effect.fail(uploadError(error))),
+);
