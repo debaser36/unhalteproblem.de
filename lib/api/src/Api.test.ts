@@ -34,8 +34,14 @@ describe("OpenAPI document", () => {
   it("exposes exactly the contract's paths and operations", () => {
     assert.deepStrictEqual(Object.keys(spec.paths).sort(), [
       "/account/delete",
+      "/admin/audit",
       "/admin/blogs",
       "/admin/blogs/{blog}",
+      "/admin/contact",
+      "/admin/contact/{messageId}",
+      "/admin/database",
+      "/admin/outbox",
+      "/admin/outbox/{messageId}/retry",
       "/admin/projects",
       "/admin/projects/media",
       "/admin/projects/{projectId}",
@@ -136,6 +142,16 @@ describe("OpenAPI document", () => {
         delete: "projectAdmin.deleteProject",
       },
       "/admin/projects/media": { post: "projectAdmin.uploadProjectMedia" },
+      "/admin/database": { get: "adminInsights.databaseOverview" },
+      "/admin/outbox": { get: "adminInsights.listOutbox" },
+      "/admin/outbox/{messageId}/retry": {
+        post: "adminInsights.retryOutboxMessage",
+      },
+      "/admin/audit": { get: "adminInsights.listAuditLog" },
+      "/admin/contact": { get: "adminInsights.listContactMessages" },
+      "/admin/contact/{messageId}": {
+        delete: "adminInsights.deleteContactMessage",
+      },
     });
   });
 
