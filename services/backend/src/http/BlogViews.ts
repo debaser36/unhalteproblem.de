@@ -9,7 +9,11 @@ import type {
 import { mediaUrl } from "@unhalteproblem.de/api";
 import { Option } from "effect";
 import { readingMinutes } from "#domains/blogs/Blog";
-import type { BlogSummary, PostView } from "#domains/blogs/BlogRepository";
+import type {
+  BlogSummary,
+  PostListView,
+  PostView,
+} from "#domains/blogs/BlogRepository";
 import type { StoredMedia } from "#domains/media/Media";
 
 // Translations from the blogs and media domains to the contract.
@@ -20,7 +24,8 @@ export const toPostListItem = ({
   post,
   blog,
   authorName,
-}: PostView): PostListItem => ({
+  words,
+}: PostListView): PostListItem => ({
   id: post.id,
   blog,
   slug: post.slug,
@@ -32,7 +37,7 @@ export const toPostListItem = ({
   publishedAt: Option.getOrElse(post.publishedAt, () => post.updatedAt),
   updatedAt: post.updatedAt,
   author: { name: Option.getOrNull(authorName) },
-  readingMinutes: readingMinutes(post.content),
+  readingMinutes: readingMinutes(words),
 });
 
 export const toPublishedPost = (view: PostView): PublishedPost => ({
@@ -44,7 +49,7 @@ export const toManagedPostListItem = ({
   post,
   blog,
   authorName,
-}: PostView): ManagedPostListItem => ({
+}: PostListView): ManagedPostListItem => ({
   id: post.id,
   blog,
   slug: post.slug,

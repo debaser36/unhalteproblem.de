@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import type { Document } from "@unhalteproblem.de/api";
+import { type Document, documentText } from "@unhalteproblem.de/api";
 import { DateTime, Option } from "effect";
 import { UserId } from "#domains/users/User";
 import {
@@ -10,6 +10,10 @@ import {
   publish,
   readingMinutes,
 } from "./Blog.ts";
+
+// How the repository counts words (in SQL): whitespace-separated runs of text.
+const wordsIn = (document: Document) =>
+  documentText(document).split(/\s+/u).filter(Boolean).length;
 
 const t0 = DateTime.makeUnsafe("2026-01-01T00:00:00Z");
 const t1 = DateTime.makeUnsafe("2026-02-01T00:00:00Z");
@@ -56,7 +60,9 @@ describe("readingMinutes", () => {
     [1100, 5],
   ] as const)("%i words take %i minutes", ([count, minutes]) => {
     assert.strictEqual(
-      readingMinutes(paragraphs(...(count === 0 ? [] : [words(count)]))),
+      readingMinutes(
+        wordsIn(paragraphs(...(count === 0 ? [] : [words(count)]))),
+      ),
       minutes,
     );
   });
@@ -87,17 +93,21 @@ describe("readingMinutes", () => {
       ],
     };
     // 440 words.
-    assert.strictEqual(readingMinutes(document), 2);
+    assert.strictEqual(readingMinutes(wordsIn(document)), 2);
   });
 
   it("a document without text takes no time", () => {
     assert.strictEqual(
-      readingMinutes({ type: "doc", content: [{ type: "paragraph" }] }),
+      readingMinutes(
+        wordsIn({ type: "doc", content: [{ type: "paragraph" }] }),
+      ),
       0,
     );
-    assert.strictEqual(readingMinutes(paragraphs("   ")), 0);
+    assert.strictEqual(readingMinutes(wordsIn(paragraphs("   "))), 0);
     assert.strictEqual(
-      readingMinutes({ type: "doc", content: [{ type: "horizontalRule" }] }),
+      readingMinutes(
+        wordsIn({ type: "doc", content: [{ type: "horizontalRule" }] }),
+      ),
       0,
     );
   });

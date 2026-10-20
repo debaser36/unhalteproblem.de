@@ -13,11 +13,12 @@ import {
   BlogRepository,
   type BlogSummary,
   type FeedPosition,
+  type PostListView,
   type PostView,
 } from "./BlogRepository.ts";
 
 export interface FeedPage {
-  readonly posts: ReadonlyArray<PostView>;
+  readonly posts: ReadonlyArray<PostListView>;
   /** Where the next page starts; none on the last page. */
   readonly next: Option.Option<FeedPosition>;
 }
@@ -137,7 +138,7 @@ export class BlogQueries extends Context.Service<
     /** Every post of the subblog, drafts included; for its editors. */
     readonly listManaged: (
       blog: BlogSlug,
-    ) => Effect.Effect<ReadonlyArray<PostView>, BlogNotFound, EditorProof>;
+    ) => Effect.Effect<ReadonlyArray<PostListView>, BlogNotFound, EditorProof>;
     readonly getManaged: (
       blog: BlogSlug,
       postId: PostId,

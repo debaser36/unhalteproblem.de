@@ -8,6 +8,7 @@ import {
   type PostId,
   PostRow,
   type PostSlug,
+  PostSummaryRow,
 } from "./Blog.ts";
 
 /** A subblog with the numbers of its listing. */
@@ -21,17 +22,25 @@ export const BlogSummary = Schema.Struct({
 });
 export type BlogSummary = typeof BlogSummary.Type;
 
-/** A post with what its listing shows besides the row. */
-export interface PostView {
-  readonly post: PostRow;
+/** A post in a list (without its text), with what the list shows besides. */
+export interface PostListView {
+  readonly post: PostSummaryRow;
   readonly blog: BlogSlug;
   /** The author's display name; none for a deleted or unknown author. */
   readonly authorName: Option.Option<string>;
+  /** Words of the text, for the reading time. */
+  readonly words: number;
+}
+
+/** A whole post, text included. */
+export interface PostView extends PostListView {
+  readonly post: PostRow;
 }
 
 const PostExtras = Schema.Struct({
   blogSlug: BlogSlug,
   authorName: Schema.NullOr(Schema.String),
+  wordCount: Schema.Int,
 });
 
 /** Position in a feed of published posts: newest first, then by id. */
@@ -67,26 +76,53 @@ const make = Effect.gen(function* () {
   `;
   const decodeSummaries = Schema.decodeUnknownEffect(Schema.Array(BlogSummary));
 
-  // The author's name is shown only while their account exists; a deleted
-  // account's tombstone has none anyway.
-  const selectViews = sql`
-    SELECT p.*, b.slug AS blog_slug,
-           CASE WHEN u.deleted_at IS NULL THEN COALESCE(u.name, u.username) END
-             AS author_name
+  // What every post query adds to the row: the subblog's slug, the
+  // author's name (only while their account exists; a deleted account's
+  // tombstone has none anyway), and the number of words of the text,
+  // counted here so that lists never load the documents.
+  const extras = sql`
+    b.slug AS blog_slug,
+    CASE WHEN u.deleted_at IS NULL THEN COALESCE(u.name, u.username) END
+      AS author_name,
+    (SELECT count(*)::int
+       FROM jsonb_path_query(p.content, 'strict $.**.text') AS t(text),
+            regexp_split_to_table(t.text #>> '{}', '\\s+') AS w(word)
+      WHERE w.word <> '') AS word_count
+  `;
+  const from = sql`
     FROM blog_posts p
     JOIN blogs b ON b.id = p.blog_id
     LEFT JOIN users u ON u.id = p.author_id
   `;
-  const decodeRows = Schema.decodeUnknownEffect(Schema.Array(PostRow));
+  // Lists: every column but the content.
+  const selectListViews = sql`
+    SELECT p.id, p.blog_id, p.slug, p.title, p.summary, p.tags,
+           p.cover_media_id, p.status, p.published_at, p.author_id,
+           p.updated_by, p.created_at, p.updated_at, p.version, ${extras}
+    ${from}
+  `;
+  const selectViews = sql`SELECT p.*, ${extras} ${from}`;
+
   const decodeExtras = Schema.decodeUnknownEffect(Schema.Array(PostExtras));
-  const toViews = (rows: ReadonlyArray<unknown>) =>
-    Effect.zipWith(decodeRows(rows), decodeExtras(rows), (rows, extras) =>
-      rows.map((post, index): PostView => ({
-        post,
-        blog: extras[index]!.blogSlug,
-        authorName: Option.fromNullOr(extras[index]!.authorName),
-      })),
-    );
+  const withExtras =
+    <P>(
+      decodeRows: (
+        rows: ReadonlyArray<unknown>,
+      ) => Effect.Effect<ReadonlyArray<P>, Schema.SchemaError>,
+    ) =>
+    (rows: ReadonlyArray<unknown>) =>
+      Effect.zipWith(decodeRows(rows), decodeExtras(rows), (posts, extras) =>
+        posts.map((post, index) => ({
+          post,
+          blog: extras[index]!.blogSlug,
+          authorName: Option.fromNullOr(extras[index]!.authorName),
+          words: extras[index]!.wordCount,
+        })),
+      );
+  const toListViews = withExtras(
+    Schema.decodeUnknownEffect(Schema.Array(PostSummaryRow)),
+  );
+  const toViews = withExtras(Schema.decodeUnknownEffect(Schema.Array(PostRow)));
 
   const findBlog = SqlSchema.findOneOption({
     Request: Schema.String,
@@ -123,7 +159,7 @@ const make = Effect.gen(function* () {
 
     feed: ({ blogId, tag, after, limit }) =>
       sql`
-        ${selectViews}
+        ${selectListViews}
         WHERE p.status = 'published'
         ${Option.isSome(blogId) ? sql`AND p.blog_id = ${blogId.value}` : sql``}
         ${Option.isSome(tag) ? sql`AND p.tags @> ARRAY[${tag.value}]::text[]` : sql``}
@@ -135,7 +171,7 @@ const make = Effect.gen(function* () {
         ORDER BY p.published_at DESC, p.id DESC
         LIMIT ${limit}
       `.pipe(
-        Effect.flatMap(toViews),
+        Effect.flatMap(toListViews),
         dieOnSchemaError,
         Effect.withSpan("BlogRepository.feed"),
       ),
@@ -153,11 +189,11 @@ const make = Effect.gen(function* () {
 
     listOfBlog: (blogId) =>
       sql`
-        ${selectViews}
+        ${selectListViews}
         WHERE p.blog_id = ${blogId}
         ORDER BY p.updated_at DESC, p.id DESC
       `.pipe(
-        Effect.flatMap(toViews),
+        Effect.flatMap(toListViews),
         dieOnSchemaError,
         Effect.withSpan("BlogRepository.listOfBlog"),
       ),
@@ -218,7 +254,7 @@ export class BlogRepository extends Context.Service<
       readonly tag: Option.Option<string>;
       readonly after: Option.Option<FeedPosition>;
       readonly limit: number;
-    }) => Effect.Effect<ReadonlyArray<PostView>, SqlError.SqlError>;
+    }) => Effect.Effect<ReadonlyArray<PostListView>, SqlError.SqlError>;
     readonly findPublished: (
       blogId: BlogId,
       slug: PostSlug,
@@ -226,7 +262,7 @@ export class BlogRepository extends Context.Service<
     /** All posts of a subblog, drafts included, last changed first. */
     readonly listOfBlog: (
       blogId: BlogId,
-    ) => Effect.Effect<ReadonlyArray<PostView>, SqlError.SqlError>;
+    ) => Effect.Effect<ReadonlyArray<PostListView>, SqlError.SqlError>;
     /** A post of the subblog; `lock` keeps it locked until the transaction ends. */
     readonly findPost: (
       blogId: BlogId,

@@ -3,7 +3,6 @@ import {
   BlogSlug,
   BlogTitle,
   Document,
-  documentText,
   MediaId,
   PostId,
   PostSlug,
@@ -56,28 +55,43 @@ const DocumentColumn = Model.Field({
   json: Document,
 });
 
-/** A post as stored. */
-export class PostRow extends Model.Class<PostRow>("PostRow")({
+// Everything about a post but its text: what lists show.
+const postSummaryFields = {
   id: PostId,
-  blogId: BlogId.pipe(Model.FieldExcept(["update", "jsonUpdate"])),
+  blogId: BlogId,
   slug: PostSlug,
   title: PostTitle,
   summary: PostSummary,
   tags: Schema.Array(Tag),
   coverMediaId: Schema.OptionFromNullOr(MediaId),
-  content: DocumentColumn,
   status: PostStatus,
   /** When the post was first published; kept when it goes back to draft. */
   publishedAt: Schema.OptionFromNullOr(Schema.DateTimeUtcFromDate),
+  authorId: Schema.OptionFromNullOr(UserId),
+  updatedBy: Schema.OptionFromNullOr(UserId),
+  createdAt: Schema.DateTimeUtcFromDate,
+  updatedAt: Schema.DateTimeUtcFromDate,
+  version: Schema.Int,
+};
+
+/**
+ * A post without its content, as lists read it: they never load the
+ * documents, which can be large.
+ */
+export const PostSummaryRow = Schema.Struct(postSummaryFields);
+export type PostSummaryRow = typeof PostSummaryRow.Type;
+
+/** A post as stored. */
+export class PostRow extends Model.Class<PostRow>("PostRow")({
+  ...postSummaryFields,
+  blogId: BlogId.pipe(Model.FieldExcept(["update", "jsonUpdate"])),
   authorId: Schema.OptionFromNullOr(UserId).pipe(
     Model.FieldExcept(["update", "jsonUpdate"]),
   ),
-  updatedBy: Schema.OptionFromNullOr(UserId),
   createdAt: Schema.DateTimeUtcFromDate.pipe(
     Model.FieldExcept(["update", "jsonUpdate"]),
   ),
-  updatedAt: Schema.DateTimeUtcFromDate,
-  version: Schema.Int,
+  content: DocumentColumn,
 }) {}
 
 // Errors: the contract's, so they map to their status codes as they are.
@@ -129,11 +143,13 @@ export type BlogEvent =
 /** Reading speed for `readingMinutes`, in words per minute. */
 const WORDS_PER_MINUTE = 220;
 
-/** Minutes a post takes to read: its words at 220 per minute, at least 1 if it has any. */
-export const readingMinutes = (content: Document): number => {
-  const words = documentText(content).split(/\s+/u).filter(Boolean).length;
-  return words === 0 ? 0 : Math.max(1, Math.round(words / WORDS_PER_MINUTE));
-};
+/**
+ * Minutes a post of `words` words takes to read: 220 per minute, at least 1
+ * if it has any. The words are counted by the repository, in SQL, so lists
+ * never load the documents.
+ */
+export const readingMinutes = (words: number): number =>
+  words === 0 ? 0 : Math.max(1, Math.round(words / WORDS_PER_MINUTE));
 
 /**
  * The post, published at `now`: a post published before keeps its first
