@@ -1,5 +1,5 @@
 import type { Subject } from "@unhalteproblem.de/oidc";
-import { Context, Effect, Layer, type Option } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
 import type { SqlError } from "effect/sql";
 import type { User, UserId } from "./User.ts";
 import { UserRepository } from "./UserRepository.ts";
@@ -42,3 +42,20 @@ export class UserDirectory extends Context.Service<
     }),
   );
 }
+
+/**
+ * Our id of the user behind an authorization proof (whose `user.id` is the
+ * session's OIDC subject), for commands that record who acted. Every
+ * session belongs to a user who has logged in since 0002, so a missing one
+ * is a defect.
+ */
+export const actorIdOf = Effect.fnUntraced(function* (proof: {
+  readonly user: { readonly id: string };
+}) {
+  const directory = yield* UserDirectory;
+  const user = yield* directory.findBySubject(proof.user.id);
+  if (Option.isNone(user)) {
+    return yield* Effect.die(new Error("Acting user without a users row"));
+  }
+  return user.value.id;
+});

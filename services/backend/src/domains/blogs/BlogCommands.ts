@@ -6,7 +6,7 @@ import {
   type UpdateBlogPayload,
 } from "@unhalteproblem.de/api";
 import { Context, DateTime, Effect, Layer, Option } from "effect";
-import { SqlError } from "effect/sql";
+import type { SqlError } from "effect/sql";
 import * as Command from "#cqrs/Command";
 import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
@@ -17,7 +17,8 @@ import type {
   MediaTooLarge,
   UnsupportedMedia,
 } from "#domains/media/Media";
-import { UserDirectory } from "#domains/users/UserDirectory";
+import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
+import { isUniqueViolation } from "#repositories/Columns";
 import {
   BlogCreated,
   BlogId,
@@ -45,14 +46,6 @@ import {
   type PostView,
 } from "./BlogRepository.ts";
 
-/** Whether `error` is a violation of the unique constraint `constraint`. */
-const violates =
-  (constraint: string) =>
-  (error: unknown): boolean =>
-    SqlError.isSqlError(error) &&
-    error.reason._tag === "UniqueViolation" &&
-    error.reason.constraint === constraint;
-
 /** The proof that the current user edits the subblog `blog`. */
 const editorOf = (blog: BlogSlug) => Authorized(blogEditorRole(blog));
 
@@ -62,17 +55,8 @@ const make = Effect.gen(function* () {
   const media = yield* MediaCommands;
   const transaction = yield* Transaction;
 
-  /** Our id of the user behind a proof (the session's OIDC subject). */
-  const actorOf = Effect.fnUntraced(function* (proof: {
-    readonly user: { readonly id: string };
-  }) {
-    const user = yield* users.findBySubject(proof.user.id);
-    if (Option.isNone(user)) {
-      // Every session belongs to a user who has logged in since 0002.
-      return yield* Effect.die(new Error("Editor without a user"));
-    }
-    return user.value.id;
-  });
+  const actorOf = (proof: { readonly user: { readonly id: string } }) =>
+    actorIdOf(proof).pipe(Effect.provideService(UserDirectory, users));
 
   const blogBySlug = Effect.fnUntraced(function* (blog: BlogSlug) {
     const row = yield* repository.findBlog(blog);
@@ -118,7 +102,7 @@ const make = Effect.gen(function* () {
     transaction
       .run(save)
       .pipe(
-        Effect.catchIf(violates(postSlugConstraint), () =>
+        Effect.catchIf(isUniqueViolation(postSlugConstraint), () =>
           Effect.fail(new PostSlugTaken({ slug })),
         ),
       );
@@ -171,7 +155,7 @@ const make = Effect.gen(function* () {
           ),
         )
         .pipe(
-          Effect.catchIf(violates(blogSlugConstraint), () =>
+          Effect.catchIf(isUniqueViolation(blogSlugConstraint), () =>
             Effect.fail(new BlogSlugTaken({ blog: payload.slug })),
           ),
         );

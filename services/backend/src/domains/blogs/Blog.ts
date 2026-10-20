@@ -2,7 +2,6 @@ import {
   BlogDescription,
   BlogSlug,
   BlogTitle,
-  Document,
   MediaId,
   PostId,
   PostSlug,
@@ -14,6 +13,7 @@ import {
 import { DateTime, Option, Schema } from "effect";
 import { Model } from "effect/schema";
 import { UserId } from "#domains/users/User";
+import { DocumentColumn } from "#repositories/Columns";
 
 /**
  * Subblogs and their posts. A subblog (`blogs`) is created and renamed by
@@ -45,15 +45,6 @@ export class BlogRow extends Model.Class<BlogRow>("BlogRow")({
   ),
   updatedAt: Schema.DateTimeUtcFromDate,
 }) {}
-
-// jsonb comes back parsed; it's written as JSON text, which Postgres
-// converts to jsonb (as in `Session.claims`).
-const DocumentColumn = Model.Field({
-  select: Document,
-  insert: Schema.fromJsonString(Document),
-  update: Schema.fromJsonString(Document),
-  json: Document,
-});
 
 // Everything about a post but its text: what lists show.
 const postSummaryFields = {
