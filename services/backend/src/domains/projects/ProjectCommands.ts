@@ -161,7 +161,13 @@ const make = Effect.gen(function* () {
   });
 });
 
-/** The commands of the projects domain; all of them for admins. */
+/**
+ * The commands of the projects domain; all of them for admins.
+ *
+ * @effect-expect-leaking Authorized<"admin">
+ * Requiring the proof in every method is the point: whoever calls one
+ * must have checked the role (see "Authorization" in the README).
+ */
 export class ProjectCommands extends Context.Service<
   ProjectCommands,
   {
