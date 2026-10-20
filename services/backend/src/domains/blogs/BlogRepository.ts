@@ -95,12 +95,11 @@ const make = Effect.gen(function* () {
   });
 
   return BlogRepository.of({
-    listSummaries: () =>
-      summaries(Option.none()).pipe(
-        Effect.flatMap(decodeSummaries),
-        dieOnSchemaError,
-        Effect.withSpan("BlogRepository.listSummaries"),
-      ),
+    listSummaries: summaries(Option.none()).pipe(
+      Effect.flatMap(decodeSummaries),
+      dieOnSchemaError,
+      Effect.withSpan("BlogRepository.listSummaries"),
+    ),
 
     findSummary: (slug) =>
       summaries(Option.some(slug)).pipe(
@@ -193,7 +192,7 @@ export class BlogRepository extends Context.Service<
   BlogRepository,
   {
     /** Every subblog, by title. */
-    readonly listSummaries: () => Effect.Effect<
+    readonly listSummaries: Effect.Effect<
       ReadonlyArray<BlogSummary>,
       SqlError.SqlError
     >;

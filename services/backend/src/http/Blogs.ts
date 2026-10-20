@@ -28,7 +28,7 @@ export const BlogsHandlers = HttpApiBuilder.group(
         );
     return handlers
       .handle("listBlogs", () =>
-        queries.listBlogs().pipe(
+        queries.listBlogs.pipe(
           Effect.map((blogs) => blogs.map(toBlog)),
           revalidate,
         ),

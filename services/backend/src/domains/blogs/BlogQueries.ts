@@ -54,9 +54,10 @@ const make = Effect.gen(function* () {
   });
 
   return BlogQueries.of({
-    listBlogs: Effect.fn("BlogQueries.listBlogs")(function* () {
-      return yield* repository.listSummaries();
-    }, Query.boundary),
+    listBlogs: repository.listSummaries.pipe(
+      Query.boundary,
+      Effect.withSpan("BlogQueries.listBlogs"),
+    ),
 
     getBlog: Effect.fn("BlogQueries.getBlog")(function* (blog: BlogSlug) {
       const summary = yield* repository.findSummary(blog);
@@ -118,7 +119,7 @@ type EditorProof = Authorized<`blogEditor:${string}`>;
 export class BlogQueries extends Context.Service<
   BlogQueries,
   {
-    readonly listBlogs: () => Effect.Effect<ReadonlyArray<BlogSummary>>;
+    readonly listBlogs: Effect.Effect<ReadonlyArray<BlogSummary>>;
     readonly getBlog: (
       blog: BlogSlug,
     ) => Effect.Effect<BlogSummary, BlogNotFound>;
