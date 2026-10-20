@@ -30,7 +30,7 @@ import { AutoTextarea } from "#ui/AutoTextarea.tsx";
 import { Button } from "#ui/Button.tsx";
 import { Dialog } from "#ui/Dialog.tsx";
 import { Field, Input } from "#ui/Field.tsx";
-import { useToast } from "#ui/Toast.tsx";
+import { useToast } from "#ui/toasts.ts";
 import {
   createPost,
   deletePost,
@@ -52,7 +52,7 @@ const messages = {
 };
 
 /** Uploads an image for the posts of `blog` and returns it. */
-export const useUploadImage = (blog: BlogSlug) => {
+const useUploadImage = (blog: BlogSlug) => {
   const upload = useAtomSet(uploadMedia, { mode: "promiseExit" });
   return useCallback(
     async (file: File) => {
@@ -102,9 +102,11 @@ export function PostEditor({
   const [slugEdited, setSlugEdited] = useState(post !== null);
   const [tags, setTags] = useState(post?.tags.join(", ") ?? "");
   const [cover, setCover] = useState<MediaId | null>(post?.coverImage ?? null);
-  const content = useRef<JSONContent>(
+  // The editor reads its content once; the ref follows the edits for saving.
+  const [initialContent] = useState(() =>
     toEditorContent(post?.content ?? emptyDocument),
   );
+  const content = useRef<JSONContent>(initialContent);
   const [dirty, setDirty] = useState(post === null);
   const [busy, setBusy] = useState<"save" | "status" | "delete">();
   const [error, setError] = useState<string>();
@@ -350,7 +352,7 @@ export function PostEditor({
       />
 
       <RichDocument
-        content={content.current}
+        content={initialContent}
         editable
         placeholder="Start writing… (Markdown shortcuts like ## or ``` work)"
         uploadImage={async (file) => (await uploadImage(file)).url}

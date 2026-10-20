@@ -25,7 +25,7 @@ import {
 import { type ReactNode, useRef, useState } from "react";
 import { cn } from "#lib/cn.ts";
 import { Spinner } from "#ui/Spinner.tsx";
-import { useToast } from "#ui/Toast.tsx";
+import { useToast } from "#ui/toasts.ts";
 import { codeLanguages } from "./extensions.ts";
 import { LinkDialog } from "./LinkDialog.tsx";
 

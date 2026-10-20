@@ -13,7 +13,7 @@ import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { Dialog } from "#ui/Dialog.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
-import { useToast } from "#ui/Toast.tsx";
+import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 import {
   auditKey,

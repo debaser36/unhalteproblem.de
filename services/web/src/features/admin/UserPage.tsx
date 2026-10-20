@@ -22,7 +22,7 @@ import { Badge } from "#ui/Badge.tsx";
 import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { Field, Input, Select, Textarea } from "#ui/Field.tsx";
-import { useToast } from "#ui/Toast.tsx";
+import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 import {
   grantRole,

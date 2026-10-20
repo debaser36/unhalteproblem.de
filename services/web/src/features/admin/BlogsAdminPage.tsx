@@ -19,7 +19,7 @@ import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
 import { Field, Input, Textarea } from "#ui/Field.tsx";
-import { useToast } from "#ui/Toast.tsx";
+import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 
 const createBlog = ApiClient.mutation("admin", "createBlog");

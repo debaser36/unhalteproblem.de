@@ -4,6 +4,9 @@ import { GithubIcon } from "#ui/GithubIcon.tsx";
 import { site } from "./site.ts";
 import { sections } from "./navigation.ts";
 
+// The year the page was loaded in; the footer needs no live clock.
+const year = new Date().getFullYear();
+
 export function Footer() {
   return (
     <footer className="border-t border-border bg-surface/50">
@@ -12,8 +15,8 @@ export function Footer() {
         className="flex flex-col gap-6 py-10 text-sm text-muted sm:flex-row sm:items-center sm:justify-between"
       >
         <p className="font-mono">
-          <span className="text-accent">exit 0</span> · ©{" "}
-          {new Date().getFullYear()} {site.owner} · {site.domain}
+          <span className="text-accent">exit 0</span> · © {year} {site.owner} ·{" "}
+          {site.domain}
         </p>
         <nav
           aria-label="Footer"

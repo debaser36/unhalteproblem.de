@@ -13,7 +13,9 @@ export const useUnsavedChangesWarning = (dirty: boolean) => {
 /** Runs `save` on Ctrl+S / Cmd+S instead of the browser's "save page". */
 export const useSaveShortcut = (save: () => void) => {
   const latest = useRef(save);
-  latest.current = save;
+  useEffect(() => {
+    latest.current = save;
+  });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "s") {

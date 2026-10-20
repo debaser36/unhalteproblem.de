@@ -4,7 +4,7 @@ import { AsyncResult } from "effect/reactivity";
 import { blogOfEditorRole } from "@unhalteproblem.de/api";
 import { Option } from "effect";
 import { currentPath, hasRole, loginUrl, sessionAtom } from "#api/session.ts";
-import { buttonClass } from "#ui/Button.tsx";
+import { buttonClass } from "#ui/buttonClass.ts";
 import { Menu, MenuButton, MenuLink, MenuSeparator } from "#ui/Menu.tsx";
 import { Skeleton } from "#ui/Skeleton.tsx";
 

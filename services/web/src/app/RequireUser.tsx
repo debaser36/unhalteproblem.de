@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { AsyncResult } from "effect/reactivity";
 import { currentPath, loginUrl, sessionAtom } from "#api/session.ts";
 import { Alert } from "#ui/Alert.tsx";
-import { buttonClass } from "#ui/Button.tsx";
+import { buttonClass } from "#ui/buttonClass.ts";
 import { Container } from "#ui/Container.tsx";
 import { Loading } from "#ui/Spinner.tsx";
 

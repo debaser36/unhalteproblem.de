@@ -1,5 +1,5 @@
 import { Menu, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { cn } from "#lib/cn.ts";
 import { Button } from "#ui/Button.tsx";
@@ -21,8 +21,13 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
-  // Navigating closes the mobile menu.
-  useEffect(() => setOpen(false), [location.pathname]);
+  // Navigating closes the mobile menu: adjusting state while rendering,
+  // as React recommends for state derived from a changed value.
+  const [path, setPath] = useState(location.pathname);
+  if (path !== location.pathname) {
+    setPath(location.pathname);
+    setOpen(false);
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-bg/75 backdrop-blur-md">

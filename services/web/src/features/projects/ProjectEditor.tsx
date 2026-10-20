@@ -30,7 +30,7 @@ import { AutoTextarea } from "#ui/AutoTextarea.tsx";
 import { Button } from "#ui/Button.tsx";
 import { Dialog } from "#ui/Dialog.tsx";
 import { Field, Input, Select } from "#ui/Field.tsx";
-import { useToast } from "#ui/Toast.tsx";
+import { useToast } from "#ui/toasts.ts";
 import {
   createProject,
   deleteProject,
@@ -105,9 +105,11 @@ export function ProjectEditor({
   const [cover, setCover] = useState<MediaId | null>(
     project?.coverImage ?? null,
   );
-  const content = useRef<JSONContent>(
+  // The editor reads its content once; the ref follows the edits for saving.
+  const [initialContent] = useState(() =>
     toEditorContent(project?.content ?? emptyDocument),
   );
+  const content = useRef<JSONContent>(initialContent);
   const [dirty, setDirty] = useState(project === null);
   const [busy, setBusy] = useState<"save" | "delete">();
   const [error, setError] = useState<string>();
@@ -389,7 +391,7 @@ export function ProjectEditor({
       />
 
       <RichDocument
-        content={content.current}
+        content={initialContent}
         editable
         placeholder="The story: why, how, what you learned…"
         uploadImage={async (file) => (await uploadImage(file)).url}

@@ -10,7 +10,7 @@ import { Badge } from "#ui/Badge.tsx";
 import { Button } from "#ui/Button.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
 import { Table, Td, Th } from "#ui/Table.tsx";
-import { useToast } from "#ui/Toast.tsx";
+import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 import {
   auditKey,

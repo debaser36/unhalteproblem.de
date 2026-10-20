@@ -16,20 +16,21 @@ const lines = [
  * problem (German: Halteproblem).
  */
 export function Hero() {
-  const [shown, setShown] = useState(0);
   const total = lines.join("\n").length;
+  // Without motion, the whole loop is there at once.
+  const [reduced] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  const [shown, setShown] = useState(reduced ? total : 0);
 
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setShown(total);
-      return;
-    }
+    if (reduced) return;
     const timer = setInterval(
       () => setShown((n) => (n >= total ? n : n + 1)),
       35,
     );
     return () => clearInterval(timer);
-  }, [total]);
+  }, [reduced, total]);
 
   const typed = lines.join("\n").slice(0, shown);
 
