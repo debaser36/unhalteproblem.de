@@ -34,7 +34,7 @@ const setup = Effect.gen(function* () {
   const app = yield* makeBlogApp({ maxBodyKibibytes: 32 });
   yield* app.createBlog("alpha");
   const editor = yield* app.editor("ed", "alpha");
-  const count = (table: "blog_posts" | "media") =>
+  const count = (table: "blog_posts" | "media" | "projects") =>
     app
       .sql(
         (sql) => sql<{ readonly count: number }>`
@@ -97,7 +97,50 @@ describe("large bodies", () => {
       }),
   );
 
-  it.effect("the larger limit is for saving posts only", () =>
+  it.effect(
+    "a project of about 100 KB saves beyond the global 32 KiB limit",
+    () =>
+      Effect.gen(function* () {
+        const { expect, admin, count } = yield* setup;
+        const project = (content: unknown) => ({
+          slug: "long",
+          title: "Long",
+          summary: "",
+          tags: [],
+          status: "active",
+          featured: false,
+          position: 0,
+          repoUrl: null,
+          liveUrl: null,
+          coverImage: null,
+          content,
+          published: true,
+        });
+        const content = largeDocument(100);
+        assert.isAbove(JSON.stringify(project(content)).length, 100_000);
+
+        const created = yield* expect(
+          201,
+          admin.cookie,
+          "POST",
+          "/admin/projects",
+          { body: project(content) },
+        );
+        assert.deepStrictEqual(created["content"], content);
+        const longer = largeDocument(120);
+        const updated = yield* expect(
+          200,
+          admin.cookie,
+          "PUT",
+          `/admin/projects/${String(created["id"])}`,
+          { body: { ...project(longer), version: 1 } },
+        );
+        assert.deepStrictEqual(updated["content"], longer);
+        assert.strictEqual(yield* count("projects"), 1);
+      }),
+  );
+
+  it.effect("the larger limit is for saving posts and projects only", () =>
     Effect.gen(function* () {
       const { call, admin } = yield* setup;
       // Read, the body would be refused with 400 (the description is too
