@@ -15,10 +15,13 @@ export type PageAtom = (
 export function PostList({
   page,
   showBlog = false,
+  paged = true,
   empty,
 }: {
   readonly page: PageAtom;
   readonly showBlog?: boolean;
+  /** Offers "load more" after the last page; off for a teaser. */
+  readonly paged?: boolean;
   readonly empty: ReactNode;
 }) {
   const [cursors, setCursors] = useState<ReadonlyArray<PostCursor | undefined>>(
@@ -35,7 +38,7 @@ export function PostList({
             first={index === 0}
             empty={empty}
             onMore={
-              index === cursors.length - 1
+              paged && index === cursors.length - 1
                 ? (next) => setCursors((all) => [...all, next])
                 : undefined
             }
