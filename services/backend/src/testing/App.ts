@@ -5,8 +5,9 @@ import {
   IdToken,
   type TokenResponse,
 } from "@unhalteproblem.de/oidc";
-import { Effect, Layer, Redacted, Schema } from "effect";
-import { HttpRouter, HttpServer } from "effect/http";
+import { NodeHttpServer } from "@effect/platform-node";
+import { ByteSize, Context, Effect, Layer, Redacted, Schema } from "effect";
+import { HttpIncomingMessage, HttpRouter, HttpServer } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 import {
@@ -42,6 +43,7 @@ import { Readiness } from "#services/Readiness";
 import { TokenVerifier } from "#services/TokenVerifier";
 import { DatabaseTest } from "./Database.ts";
 import { makeRecordingKeycloak } from "./KeycloakAdmin.ts";
+import { createServer, request as httpRequest } from "node:http";
 
 /**
  * The whole backend as an HTTP app on a fresh in-memory database, with a
@@ -90,6 +92,13 @@ export interface AppOptions {
   readonly keycloak?: Layer.Layer<KeycloakAdmin>;
   /** Login starts allowed per client. */
   readonly loginLimit?: number;
+  /**
+   * Serves the app over a real Node HTTP server on an ephemeral port, with
+   * this request body limit in KiB (as `Server.ts` sets it), instead of a web
+   * handler. Only the Node server enforces body limits, so tests of them
+   * need this.
+   */
+  readonly maxBodyKibibytes?: number;
 }
 
 /**
@@ -161,6 +170,106 @@ export type AppRequest = (
   init?: RequestInit,
 ) => Effect.Effect<Response>;
 
+/** Requests to `app` through a web handler, which enforces no body limit. */
+const webRequest = <E>(app: Layer.Layer<never, E, HttpRouter.HttpRouter>) =>
+  Effect.map(
+    Effect.acquireRelease(
+      Effect.sync(() => HttpRouter.toWebHandler(app, { disableLogger: true })),
+      ({ dispose }) => Effect.promise(dispose),
+    ),
+    ({ handler }): AppRequest =>
+      (path, init) =>
+        Effect.promise(() => handler(new Request(`${api}${path}`, init))),
+  );
+
+/**
+ * Requests to `app`, served by a Node HTTP server on an ephemeral port with
+ * the body limit `maxBodyKibibytes`. Redirects are not followed, as with the web
+ * handler.
+ */
+const nodeRequest = Effect.fnUntraced(function* <E>(
+  app: Layer.Layer<never, E, HttpRouter.HttpRouter>,
+  maxBodyKibibytes: number,
+) {
+  const context = yield* Layer.build(
+    HttpRouter.serve(app, {
+      disableLogger: true,
+      disableListenLog: true,
+    }).pipe(
+      Layer.provideMerge(NodeHttpServer.layer(createServer, { port: 0 })),
+      Layer.provide(
+        Layer.succeed(
+          HttpIncomingMessage.MaxBodySize,
+          ByteSize.kibibytes(maxBodyKibibytes),
+        ),
+      ),
+    ),
+  ).pipe(Effect.orDie);
+  const address = Context.get(context, HttpServer.HttpServer).address;
+  if (!("port" in address)) {
+    return yield* Effect.die(new Error("Test server without a TCP port"));
+  }
+  const base = `http://127.0.0.1:${address.port}`;
+  const request: AppRequest = (path, init = {}) =>
+    Effect.promise(() => sendNode(`${base}${path}`, init));
+  return request;
+});
+
+/**
+ * Sends a request with `node:http` instead of `fetch`: when the server
+ * answers early (a body over the limit) and closes the connection, `fetch`
+ * fails with ECONNRESET, while this still returns the response. Bodies are
+ * strings or bytes, as `#testing/*` sends them.
+ */
+const sendNode = (url: string, init: RequestInit) =>
+  new Promise<Response>((resolve, reject) => {
+    const body =
+      init.body === undefined || init.body === null
+        ? undefined
+        : typeof init.body === "string"
+          ? Buffer.from(init.body)
+          : init.body instanceof Uint8Array
+            ? Buffer.from(init.body)
+            : undefined;
+    if (init.body != null && body === undefined) {
+      return reject(new Error("Only string and byte bodies are supported"));
+    }
+    const headers = new Headers(init.headers);
+    if (body !== undefined) headers.set("content-length", String(body.length));
+    let answered = false;
+    const outgoing = httpRequest(
+      url,
+      { method: init.method ?? "GET", headers: Object.fromEntries(headers) },
+      (incoming) => {
+        answered = true;
+        const chunks: Array<Buffer> = [];
+        incoming.on("data", (chunk: Buffer) => chunks.push(chunk));
+        incoming.on("error", reject);
+        incoming.on("end", () => {
+          const responseHeaders = new Headers();
+          const raw = incoming.rawHeaders;
+          for (let index = 0; index < raw.length; index += 2) {
+            responseHeaders.append(raw[index]!, raw[index + 1]!);
+          }
+          const status = incoming.statusCode ?? 500;
+          const empty = status === 204 || status === 304;
+          resolve(
+            new Response(empty ? null : Buffer.concat(chunks), {
+              status,
+              headers: responseHeaders,
+            }),
+          );
+        });
+      },
+    );
+    // Writing the rest of a refused body fails once the server has closed;
+    // the response has arrived by then.
+    outgoing.on("error", (error) => {
+      if (!answered) reject(error);
+    });
+    outgoing.end(body);
+  });
+
 /**
  * The backend's HTTP app with a fresh in-memory database, and the services
  * behind it (database, repositories, domains) for checking stored state.
@@ -221,12 +330,10 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     Layer.provide(handlers),
     Layer.provide(HttpServer.layerServices),
   );
-  const { handler } = yield* Effect.acquireRelease(
-    Effect.sync(() => HttpRouter.toWebHandler(app, { disableLogger: true })),
-    ({ dispose }) => Effect.promise(dispose),
-  );
-  const request: AppRequest = (path, init) =>
-    Effect.promise(() => handler(new Request(`${api}${path}`, init)));
+  const request: AppRequest =
+    options.maxBodyKibibytes === undefined
+      ? yield* webRequest(app)
+      : yield* nodeRequest(app, options.maxBodyKibibytes);
   /** Runs SQL on the app's database; a failure fails the test. */
   const sql = <A>(
     statement: (sql: SqlClient.SqlClient) => Effect.Effect<A, unknown>,
