@@ -12,7 +12,7 @@ import {
 } from "effect/http-api";
 import { Api } from "#Api";
 import { Authentication, CurrentUser, SessionCookie } from "#Authentication";
-import type { RequireRoles } from "#Authorization";
+import { RequireBlogEditor, type RequireRoles } from "#Authorization";
 import type { Role } from "#domain/Auth";
 import { emptyDocument } from "#domain/Document";
 import {
@@ -339,6 +339,10 @@ layer(
           SameOriginStub,
           // Pass-through: the stub checks nothing.
           Layer.succeed(LargeBody, (httpEffect) => httpEffect),
+          // Only the blog editor group uses it.
+          Layer.succeed(RequireBlogEditor, () =>
+            Effect.die("not used by projects"),
+          ),
         ),
       ),
     ),

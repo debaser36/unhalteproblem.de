@@ -5,6 +5,7 @@ import * as Command from "#cqrs/Command";
 import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
 import {
+  type InvalidUpload,
   type MediaTooLarge,
   projectsScope,
   type StoredMedia,
@@ -192,7 +193,7 @@ export class ProjectCommands extends Context.Service<
       bytes: Uint8Array,
     ) => Effect.Effect<
       StoredMedia,
-      MediaTooLarge | UnsupportedMedia,
+      InvalidUpload | MediaTooLarge | UnsupportedMedia,
       Authorized<"admin">
     >;
   }
