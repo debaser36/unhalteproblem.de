@@ -11,19 +11,27 @@ import { Schema } from "effect";
 import { Multipart } from "effect/http";
 import { HttpApiSchema } from "effect/http-api";
 
+// Room for what the multipart parser counts besides the file's bytes.
+const headroom = 16 * 1024;
+
 /**
  * Payload of an upload: a multipart form with one file part `file`,
- * streamed to the handler. The limits stop the parser before more than one
- * part or more than 5 MiB of file are read; 16 KiB on top cover the part
- * headers and boundaries.
+ * streamed to the handler. The limits stop the parser early, before more
+ * than one part or much more than 5 MiB are read.
+ *
+ * They are not the 5 MiB limit itself: the parser counts a part's headers
+ * towards `maxFileSize`, so a file of exactly `MediaLimits.maxBytes` needs
+ * 16 KiB on top for them, and `maxTotalSize` adds another 16 KiB for the
+ * boundaries. The backend enforces exactly `MediaLimits.maxBytes` on the
+ * file's content when it stores it (413 `MediaTooLarge`).
  */
 export const MediaUpload = Schema.Struct({
   file: Multipart.SingleFileSchema,
 }).pipe(
   HttpApiSchema.asMultipartStream({
     maxParts: 1,
-    maxFileSize: MediaLimits.maxBytes,
-    maxTotalSize: MediaLimits.maxBytes + 16 * 1024,
+    maxFileSize: MediaLimits.maxBytes + headroom,
+    maxTotalSize: MediaLimits.maxBytes + 2 * headroom,
   }),
 );
 

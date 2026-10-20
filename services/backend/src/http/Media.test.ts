@@ -136,12 +136,7 @@ describe("uploading and serving images", () => {
     }),
   );
 
-  // Known bug: the multipart parser counts a part's headers towards
-  // `maxFileSize`, which `uploadMedia` sets to exactly `MediaLimits.maxBytes`,
-  // so a file of exactly 5 MiB (allowed by the contract and the database) is
-  // refused with 413. Turn this into `it.effect` once the contract allows for
-  // the part headers.
-  it.effect.fails("accepts exactly 5 MiB", () =>
+  it.effect("accepts exactly 5 MiB", () =>
     Effect.gen(function* () {
       const app = yield* setup;
       const response = yield* app.upload(form(pngOfSize(MediaLimits.maxBytes)));
