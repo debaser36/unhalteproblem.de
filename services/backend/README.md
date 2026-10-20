@@ -160,7 +160,7 @@ are restored too; those that expired meanwhile are cleaned up as usual.
 
 Business logic lives in domains under `src/domains/<domain>/`, built on a
 small kernel in `src/cqrs/`. The domains are `users`, `moderation`,
-`audit`, `contact`, `blogs` and `media`.
+`audit`, `contact`, `blogs`, `projects` and `media`.
 
 | Kernel (`#cqrs/*`) | Purpose                                                                                                                                                                                                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -361,7 +361,8 @@ one that might be created later).
   contract's `Document` schema: a whitelist of node types, marks and
   attributes, links only to http(s), mailto or the site itself, images only
   from `/api/media/<id>`. No HTML is ever stored. Saving a post may send up
-  to 512 KiB (`LargeBody`); nginx allows it on `/api/blogs/*/manage/`.
+  to 512 KiB (`LargeBody`); nginx allows it on `/api/blogs/*/manage/` and
+  `/api/admin/projects`.
 - **Authors.** A post names its author (`users.name`, else the username)
   while their account exists; a deleted account's posts stay, without a
   name.
@@ -369,12 +370,28 @@ one that might be created later).
 Look at the posts of a subblog with
 `SELECT p.slug, p.status, p.published_at, p.version FROM blog_posts p JOIN blogs b ON b.id = p.blog_id WHERE b.slug = '…' ORDER BY p.updated_at DESC`.
 
+## Projects
+
+The projects page shows the owner's projects (`projects`, domain
+`projects`): a write-up each (a `Document`, like posts), links to the source
+(`repoUrl`) and to the project itself (`liveUrl`), tags, a status (`active`,
+`completed`, `archived`) and an optional cover. Admins write them in place
+on the website (`/admin/projects`, `RequireAdmin`, writes with the website's
+`Origin`); only published ones are public (`GET /projects`,
+`GET /projects/:project`). The page lists featured projects first, then by
+`position` (ascending), then the most recently changed. Saves carry the
+version they started from, as for posts (409 `ProjectEditConflict`).
+Images go to the media store with the scope `projects`
+(`POST /admin/projects/media`). URLs must be absolute http(s) URLs without
+credentials; the database checks the scheme as well.
+
 ## Media
 
 Images for posts are uploaded with `POST /blogs/:blog/manage/media`
 (multipart, one part `file`, at most 5 MiB) and stored in Postgres
 (`media`, domain `media`), with the scope they were uploaded for
-(`blog:<slug>`). The type is detected from the content (PNG, JPEG, GIF,
+(`blog:<slug>`; project images, uploaded with `POST /admin/projects/media`,
+get `projects`). The type is detected from the content (PNG, JPEG, GIF,
 WebP, AVIF; 415 otherwise), never taken from the client; SVG is refused on
 purpose, since it can carry script. `media.sha256` must be the SHA-256 of
 the data (a check).
