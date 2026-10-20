@@ -1474,7 +1474,7 @@ describe("DatabaseTest", () => {
         // No foreign keys: the log outlives users and never blocks deleting
         // one.
         assert.deepStrictEqual(yield* describeConstraints(sql, "audit_log"), [
-          "audit_log_action_check: CHECK ((action = ANY (ARRAY['login'::text, 'logout'::text, 'login_refused'::text, 'role_granted'::text, 'role_revoked'::text, 'user_restricted'::text, 'restriction_lifted'::text, 'account_deleted'::text, 'outbox_retried'::text, 'contact_message_deleted'::text])))",
+          "audit_log_action_check: CHECK ((action = ANY (ARRAY['login'::text, 'logout'::text, 'login_refused'::text, 'role_granted'::text, 'role_revoked'::text, 'user_restricted'::text, 'restriction_lifted'::text, 'account_deleted'::text, 'outbox_retried'::text, 'contact_message_deleted'::text, 'blog_created'::text, 'blog_updated'::text, 'post_deleted'::text, 'project_created'::text, 'project_updated'::text, 'project_deleted'::text])))",
           "audit_log_detail_check: CHECK (((char_length(detail) >= 1) AND (char_length(detail) <= 100)))",
           "audit_log_id_pkey: PRIMARY KEY (id)",
         ]);
@@ -2828,6 +2828,68 @@ describe("0015_audit_admin_insights", () => {
             ('2026-01-04T00:00:00Z', 'contact_message_deleted', gen_random_uuid(), NULL)
         `;
       }).pipe(Effect.provide(DatabaseBefore0015)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0016_audit_content_changes", () => {
+  // Runs the migrations up to 0015 first, so the log has rows (including
+  // actions added by 0015) before the check is replaced.
+  const DatabaseBefore0016 = databaseUpTo(15);
+
+  it.effect(
+    "keeps the existing entries and validates the replaced check",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, target_id, detail)
+          VALUES
+            ('2026-01-01T00:00:00Z', 'login', gen_random_uuid(), NULL, NULL),
+            ('2026-01-02T00:00:00Z', 'outbox_retried', gen_random_uuid(), NULL, 'mail')
+        `;
+        // Not allowed before 0016.
+        const before = yield* sql`
+          INSERT INTO audit_log (at, action, detail)
+          VALUES ('2026-01-03T00:00:00Z', 'blog_created', 'rust-notes')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(16) });
+        assert.deepStrictEqual(applied, [[16, "audit_content_changes"]]);
+
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["login", "outbox_retried"],
+        );
+
+        // Same name, and validated (not NOT VALID).
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conrelid = 'audit_log'::regclass
+            AND conname = 'audit_log_action_check'
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "audit_log_action_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, detail)
+          VALUES
+            ('2026-01-03T00:00:00Z', 'blog_created', gen_random_uuid(), 'rust-notes'),
+            ('2026-01-04T00:00:00Z', 'blog_updated', gen_random_uuid(), 'rust-notes'),
+            ('2026-01-05T00:00:00Z', 'post_deleted', gen_random_uuid(), gen_random_uuid()::text),
+            ('2026-01-06T00:00:00Z', 'project_created', gen_random_uuid(), 'website'),
+            ('2026-01-07T00:00:00Z', 'project_updated', gen_random_uuid(), 'website'),
+            ('2026-01-08T00:00:00Z', 'project_deleted', gen_random_uuid(), 'website')
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0016)),
     { timeout: 30_000 },
   );
 });

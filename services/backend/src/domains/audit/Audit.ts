@@ -16,6 +16,12 @@ export const AuditAction = Schema.Literals([
   "account_deleted",
   "outbox_retried",
   "contact_message_deleted",
+  "blog_created",
+  "blog_updated",
+  "post_deleted",
+  "project_created",
+  "project_updated",
+  "project_deleted",
 ]);
 export type AuditAction = typeof AuditAction.Type;
 

@@ -25,6 +25,7 @@ const migrationNames = [
   "create_blogs_and_media",
   "create_projects",
   "audit_admin_insights",
+  "audit_content_changes",
 ];
 
 interface OutboxFields {
@@ -224,16 +225,17 @@ describe("admin insights access", () => {
     }),
   );
 
-  it.effect("read responses must not be cached", () =>
+  it.effect("responses must not be cached", () =>
     Effect.gen(function* () {
       const app = yield* setup;
       const { outboxId, contactId } = yield* withRows(app);
-      // The reads only: the two 204 writes don't set the header yet; that
-      // is being fixed separately, add them here then.
-      const reads = endpoints(outboxId, contactId).filter(
-        (endpoint) => endpoint.method === "GET",
-      );
-      for (const endpoint of reads) {
+      // The reads first: the writes retry and delete the rows they read.
+      const all = endpoints(outboxId, contactId);
+      const ordered = [
+        ...all.filter((endpoint) => endpoint.method === "GET"),
+        ...all.filter((endpoint) => endpoint.method !== "GET"),
+      ];
+      for (const endpoint of ordered) {
         const response = yield* app.call(
           app.admin.cookie,
           endpoint.method,
