@@ -131,6 +131,7 @@ export const BlogEditorHandlers = HttpApiBuilder.group(
             Effect.fail(new PostNotFound({ post: params.postId })),
           ),
           asEditorOf(params.blog),
+          noStore,
         ),
       )
       .handle("uploadMedia", ({ params, payload }) =>

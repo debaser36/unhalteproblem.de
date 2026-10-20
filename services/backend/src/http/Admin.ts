@@ -109,10 +109,12 @@ export const AdminHandlers = HttpApiBuilder.group(
         commands.revokeRole(params.userId, params.role),
       )
       .handle("createBlog", ({ payload }) =>
-        blogs.createBlog(payload).pipe(Effect.map(toBlog)),
+        blogs.createBlog(payload).pipe(Effect.map(toBlog), noStore),
       )
       .handle("updateBlog", ({ params, payload }) =>
-        blogs.updateBlog(params.blog, payload).pipe(Effect.map(toBlog)),
+        blogs
+          .updateBlog(params.blog, payload)
+          .pipe(Effect.map(toBlog), noStore),
       );
   }),
 );
