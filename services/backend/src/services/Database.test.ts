@@ -3,6 +3,7 @@ import { PgliteClient, PgliteMigrator } from "@effect/sql-pglite";
 import { Effect, Exit, Layer } from "effect";
 import { SqlClient, Statement } from "effect/sql";
 import { readdirSync } from "node:fs";
+import { AuditAction } from "#domains/audit/Audit";
 import { DatabaseTest } from "#testing/Database";
 import { clientOptions, migrations } from "./Database.ts";
 
@@ -1473,11 +1474,13 @@ describe("DatabaseTest", () => {
         // No foreign keys: the log outlives users and never blocks deleting
         // one.
         assert.deepStrictEqual(yield* describeConstraints(sql, "audit_log"), [
-          "audit_log_action_check: CHECK ((action = ANY (ARRAY['login'::text, 'logout'::text, 'login_refused'::text, 'role_granted'::text, 'role_revoked'::text, 'user_restricted'::text, 'restriction_lifted'::text, 'account_deleted'::text])))",
+          "audit_log_action_check: CHECK ((action = ANY (ARRAY['login'::text, 'logout'::text, 'login_refused'::text, 'role_granted'::text, 'role_revoked'::text, 'user_restricted'::text, 'restriction_lifted'::text, 'account_deleted'::text, 'outbox_retried'::text, 'contact_message_deleted'::text])))",
           "audit_log_detail_check: CHECK (((char_length(detail) >= 1) AND (char_length(detail) <= 100)))",
           "audit_log_id_pkey: PRIMARY KEY (id)",
         ]);
         assert.deepStrictEqual(yield* describeIndexes(sql, "audit_log"), [
+          "CREATE INDEX audit_log_action_id_idx ON public.audit_log USING btree (action, id)",
+          "CREATE INDEX audit_log_actor_id_idx ON public.audit_log USING btree (actor_id, id) WHERE (actor_id IS NOT NULL)",
           "CREATE INDEX audit_log_at_idx ON public.audit_log USING btree (at)",
           "CREATE UNIQUE INDEX audit_log_id_pkey ON public.audit_log USING btree (id)",
           "CREATE INDEX audit_log_target_id_idx ON public.audit_log USING btree (target_id, id) WHERE (target_id IS NOT NULL)",
@@ -1493,16 +1496,9 @@ describe("DatabaseTest", () => {
             INSERT INTO audit_log (at, action)
             VALUES ('2026-01-01T00:00:00Z', ${action})
           `;
-        for (const action of [
-          "login",
-          "logout",
-          "login_refused",
-          "role_granted",
-          "role_revoked",
-          "user_restricted",
-          "restriction_lifted",
-          "account_deleted",
-        ]) {
+        // Every action the application writes, so the schema and the check
+        // cannot drift apart.
+        for (const action of AuditAction.literals) {
           yield* insert(action);
         }
         for (const action of ["", "Login", "password_changed"]) {
@@ -1629,6 +1625,122 @@ describe("DatabaseTest", () => {
         assert.include(text, "audit_log_target_id_idx");
         // The index delivers the order: no separate sort step.
         assert.notInclude(text, "Sort");
+      }),
+    );
+
+    it.effect("uses the actor and target indexes for a user's history", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // The table is tiny, so the planner would prefer a sequential scan
+        // or a walk along the primary key.
+        const plan = yield* sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`SET LOCAL enable_seqscan = off`;
+            yield* sql`SET LOCAL enable_indexscan = off`;
+            return yield* sql<Record<string, string>>`
+              EXPLAIN
+              SELECT * FROM audit_log
+              WHERE (
+                  actor_id = ${"00000000-0000-4000-8000-000000000000"}::uuid
+                  OR target_id = ${"00000000-0000-4000-8000-000000000000"}::uuid
+                )
+                AND id < ${1000}
+              ORDER BY id DESC
+              LIMIT 10
+            `;
+          }),
+        );
+        const text = plan.flatMap((row) => Object.values(row)).join("\n");
+        assert.include(text, "audit_log_actor_id_idx");
+        assert.include(text, "audit_log_target_id_idx");
+      }),
+    );
+
+    it.effect("uses the action index to page one action newest first", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        // The table is tiny, so the planner would prefer a sequential scan.
+        const plan = yield* sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`SET LOCAL enable_seqscan = off`;
+            return yield* sql<Record<string, string>>`
+              EXPLAIN
+              SELECT * FROM audit_log
+              WHERE action = ${"account_deleted"} AND id < ${1000}
+              ORDER BY id DESC
+              LIMIT 10
+            `;
+          }),
+        );
+        const text = plan.flatMap((row) => Object.values(row)).join("\n");
+        assert.include(
+          text,
+          "Index Scan Backward using audit_log_action_id_idx",
+        );
+        // The index delivers the order: no separate sort step.
+        assert.notInclude(text, "Sort");
+      }),
+    );
+
+    it.effect("pages a user's history and one action newest first", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const admin = "00000000-0000-4000-8000-0000000000b1";
+        const user = "00000000-0000-4000-8000-0000000000b2";
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, target_id, detail)
+          VALUES
+            ('2026-02-01T00:00:00Z', 'login', ${admin}, ${admin}, NULL),
+            ('2026-02-01T00:01:00Z', 'role_granted', ${admin}, ${user}, 'admin'),
+            ('2026-02-01T00:02:00Z', 'outbox_retried', ${admin}, NULL, 'paging-topic'),
+            ('2026-02-01T00:03:00Z', 'login', ${user}, ${user}, NULL),
+            ('2026-02-01T00:04:00Z', 'contact_message_deleted', ${admin}, NULL, NULL),
+            ('2026-02-01T00:05:00Z', 'outbox_retried', NULL, NULL, 'paging-topic')
+        `;
+        const maxId = 2 ** 62;
+
+        const byUser = (beforeId: number) =>
+          sql<{ readonly id: string | number; readonly action: string }>`
+            SELECT id, action FROM audit_log
+            WHERE (actor_id = ${admin}::uuid OR target_id = ${admin}::uuid)
+              AND id < ${beforeId}
+            ORDER BY id DESC
+            LIMIT 2
+          `;
+        const first = yield* byUser(maxId);
+        assert.deepStrictEqual(
+          first.map((row) => row.action),
+          ["contact_message_deleted", "outbox_retried"],
+        );
+        // The login is both acted and suffered by the admin, yet listed once.
+        const second = yield* byUser(Number(first[1]!.id));
+        assert.deepStrictEqual(
+          second.map((row) => row.action),
+          ["role_granted", "login"],
+        );
+        assert.deepStrictEqual(yield* byUser(Number(second[1]!.id)), []);
+
+        const byAction = (beforeId: number) =>
+          sql<{
+            readonly id: string | number;
+            readonly actorId: string | null;
+          }>`
+            SELECT id, actor_id FROM audit_log
+            WHERE action = 'outbox_retried' AND detail = 'paging-topic'
+              AND id < ${beforeId}
+            ORDER BY id DESC
+            LIMIT 1
+          `;
+        const newest = yield* byAction(maxId);
+        assert.deepStrictEqual(
+          newest.map((row) => row.actorId),
+          [null],
+        );
+        const older = yield* byAction(Number(newest[0]!.id));
+        assert.deepStrictEqual(
+          older.map((row) => row.actorId),
+          [admin],
+        );
       }),
     );
 
@@ -2658,6 +2770,64 @@ describe("0012_allow_blog_editor_roles", () => {
           VALUES (${alice}, 'blogEditor:rust-notes')
         `;
       }).pipe(Effect.provide(DatabaseBefore0012)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0015_audit_admin_insights", () => {
+  // Runs the migrations before 0015 first, so the log has rows before the
+  // check is replaced and the indexes are built.
+  const DatabaseBefore0015 = databaseUpTo(14);
+
+  it.effect(
+    "keeps the existing entries and validates the replaced check",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, target_id, detail)
+          VALUES
+            ('2026-01-01T00:00:00Z', 'login', gen_random_uuid(), NULL, NULL),
+            ('2026-01-02T00:00:00Z', 'role_granted', NULL, gen_random_uuid(), 'admin')
+        `;
+        // Not allowed before 0015.
+        const before = yield* sql`
+          INSERT INTO audit_log (at, action, detail)
+          VALUES ('2026-01-03T00:00:00Z', 'outbox_retried', 'mail')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(15) });
+        assert.deepStrictEqual(applied, [[15, "audit_admin_insights"]]);
+
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["login", "role_granted"],
+        );
+
+        // Same name, and validated (not NOT VALID).
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conrelid = 'audit_log'::regclass
+            AND conname = 'audit_log_action_check'
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "audit_log_action_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, detail)
+          VALUES
+            ('2026-01-03T00:00:00Z', 'outbox_retried', gen_random_uuid(), 'mail'),
+            ('2026-01-04T00:00:00Z', 'contact_message_deleted', gen_random_uuid(), NULL)
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0015)),
     { timeout: 30_000 },
   );
 });

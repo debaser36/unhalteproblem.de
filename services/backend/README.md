@@ -264,6 +264,8 @@ action, the acting and the affected user (our ids), and a short qualifier
 | `account_deleted`                       | by `UserCommands.deleteAccount`, in its transaction                             |
 | `login`                                 | by the login callback, before the session is created (no entry, no session)     |
 | `logout`, `login_refused`               | by `POST /auth/logout` and the login callback; best effort, a failure is logged |
+| `outbox_retried`                        | by the admin insights commands, in their transaction; detail is the topic       |
+| `contact_message_deleted`               | by the admin insights commands, in their transaction; no detail                 |
 
 A row written inside a command exists exactly when the change does (it joins
 the transaction), and a refused or no-op command leaves none. Not recorded:

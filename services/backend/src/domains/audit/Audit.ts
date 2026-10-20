@@ -14,6 +14,8 @@ export const AuditAction = Schema.Literals([
   "user_restricted",
   "restriction_lifted",
   "account_deleted",
+  "outbox_retried",
+  "contact_message_deleted",
 ]);
 export type AuditAction = typeof AuditAction.Type;
 
