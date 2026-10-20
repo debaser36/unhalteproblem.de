@@ -36,6 +36,9 @@ describe("OpenAPI document", () => {
       "/account/delete",
       "/admin/blogs",
       "/admin/blogs/{blog}",
+      "/admin/projects",
+      "/admin/projects/media",
+      "/admin/projects/{projectId}",
       "/admin/users",
       "/admin/users/{userId}",
       "/admin/users/{userId}/restriction",
@@ -60,6 +63,8 @@ describe("OpenAPI document", () => {
       "/health",
       "/media/{mediaId}",
       "/posts",
+      "/projects",
+      "/projects/{project}",
       "/ready",
     ]);
     const operations = Object.fromEntries(
@@ -119,6 +124,18 @@ describe("OpenAPI document", () => {
         post: "blogEditor.unpublishPost",
       },
       "/blogs/{blog}/manage/media": { post: "blogEditor.uploadMedia" },
+      "/projects": { get: "projects.listProjects" },
+      "/projects/{project}": { get: "projects.getProject" },
+      "/admin/projects": {
+        get: "projectAdmin.listManagedProjects",
+        post: "projectAdmin.createProject",
+      },
+      "/admin/projects/{projectId}": {
+        get: "projectAdmin.getManagedProject",
+        put: "projectAdmin.updateProject",
+        delete: "projectAdmin.deleteProject",
+      },
+      "/admin/projects/media": { post: "projectAdmin.uploadProjectMedia" },
     });
   });
 

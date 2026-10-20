@@ -8,19 +8,20 @@ import {
   PostInput,
   UpdatePostPayload,
 } from "#domain/Blog";
-import { MediaInfo, MediaLimits } from "#domain/Media";
 import { BlogNotFound } from "#errors/BlogNotFound";
 import { Forbidden } from "#errors/Forbidden";
-import { InvalidUpload } from "#errors/InvalidUpload";
-import { MediaTooLarge } from "#errors/MediaTooLarge";
 import { PostEditConflict } from "#errors/PostEditConflict";
 import { PostNotFound } from "#errors/PostNotFound";
 import { PostSlugTaken } from "#errors/PostSlugTaken";
-import { UnsupportedMedia } from "#errors/UnsupportedMedia";
 import { LargeBody } from "#LargeBody";
+import {
+  CreatedMedia,
+  MediaUpload,
+  MediaUploadErrors,
+  mediaUploadDescription,
+} from "#MediaUpload";
 import { SameOrigin } from "#SameOrigin";
 import { Schema } from "effect";
-import { Multipart } from "effect/http";
 import {
   HttpApiEndpoint,
   HttpApiGroup,
@@ -42,25 +43,6 @@ const PostParams = { blog: BlogSlug, postId: PostId };
 const CreatedPost = Schema.Union([ManagedPost])
   .pipe(HttpApiSchema.status(201))
   .annotate({ description: "The new post, a draft." });
-
-/** Success of `uploadMedia`: the new `MediaInfo`, with status 201. */
-const CreatedMedia = Schema.Union([MediaInfo])
-  .pipe(HttpApiSchema.status(201))
-  .annotate({ description: "The uploaded image." });
-
-/**
- * Payload of `uploadMedia`: a multipart form with one file part `file`,
- * streamed to the handler. The limits stop the parser before more than one
- * part or more than 5 MiB of file are read; 16 KiB on top cover the part
- * headers and boundaries.
- */
-const MediaUpload = Schema.Struct({ file: Multipart.SingleFileSchema }).pipe(
-  HttpApiSchema.asMultipartStream({
-    maxParts: 1,
-    maxFileSize: MediaLimits.maxBytes,
-    maxTotalSize: MediaLimits.maxBytes + 16 * 1024,
-  }),
-);
 
 // Shared by every endpoint description.
 const editorRule =
@@ -226,7 +208,7 @@ export class BlogEditorGroup extends HttpApiGroup.make("blogEditor")
       params: BlogParams,
       payload: MediaUpload,
       success: CreatedMedia,
-      error: [Forbidden, UnsupportedMedia, MediaTooLarge, InvalidUpload],
+      error: [Forbidden, ...MediaUploadErrors],
     })
       .middleware(SameOrigin)
       .annotateMerge(
@@ -234,14 +216,8 @@ export class BlogEditorGroup extends HttpApiGroup.make("blogEditor")
           summary: "Upload an image",
           description:
             editorRule +
-            " Requires a same-origin request. Takes a multipart form with " +
-            "exactly one file part named `file`, at most 5 MiB, and " +
-            "answers 201 with the stored image; use its `url` as the `src` " +
-            "of images and its `id` as a `coverImage`. The type is " +
-            "detected from the content: anything but PNG, JPEG, WebP, GIF " +
-            "or AVIF answers 415 `UnsupportedMedia`. Answers 413 " +
-            "`MediaTooLarge` above 5 MiB and 400 `InvalidUpload` for a " +
-            "body without exactly one `file` part.",
+            " Requires a same-origin request. " +
+            mediaUploadDescription,
         }),
       ),
   )

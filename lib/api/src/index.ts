@@ -22,6 +22,8 @@ export { BlogEditorGroup } from "#groups/BlogEditor";
 export { BlogsGroup } from "#groups/Blogs";
 export { ContactGroup } from "#groups/Contact";
 export { MediaGroup } from "#groups/Media";
+export { ProjectAdminGroup } from "#groups/ProjectAdmin";
+export { ProjectsGroup } from "#groups/Projects";
 export { SystemGroup } from "#groups/System";
 
 export {
@@ -117,6 +119,7 @@ export {
   type TextNode,
 } from "#domain/Document";
 export { HealthStatus, ReadyStatus } from "#domain/Health";
+export { HttpUrl, HttpUrlMaxLength } from "#domain/HttpUrl";
 export { IsoDateTimeUtc } from "#domain/IsoDateTimeUtc";
 export {
   MediaContentType,
@@ -125,6 +128,23 @@ export {
   MediaLimits,
   mediaUrl,
 } from "#domain/Media";
+export {
+  ManagedProject,
+  ManagedProjectListItem,
+  ProjectId,
+  ProjectInput,
+  ProjectLimits,
+  ProjectListItem,
+  ProjectPosition,
+  ProjectSlug,
+  ProjectStatus,
+  ProjectSummary,
+  ProjectTags,
+  ProjectTitle,
+  ProjectVersion,
+  PublishedProject,
+  UpdateProjectPayload,
+} from "#domain/Project";
 
 export { AccountDeletionNotAllowed } from "#errors/AccountDeletionNotAllowed";
 export { AlreadyRestricted } from "#errors/AlreadyRestricted";
@@ -138,6 +158,9 @@ export { NotRestricted } from "#errors/NotRestricted";
 export { PostEditConflict } from "#errors/PostEditConflict";
 export { PostNotFound } from "#errors/PostNotFound";
 export { PostSlugTaken } from "#errors/PostSlugTaken";
+export { ProjectEditConflict } from "#errors/ProjectEditConflict";
+export { ProjectNotFound } from "#errors/ProjectNotFound";
+export { ProjectSlugTaken } from "#errors/ProjectSlugTaken";
 export { RateLimited } from "#errors/RateLimited";
 export { RestrictionNotAllowed } from "#errors/RestrictionNotAllowed";
 export { RoleChangeNotAllowed } from "#errors/RoleChangeNotAllowed";

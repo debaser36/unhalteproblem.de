@@ -13,6 +13,7 @@
     "#Authentication": "./src/Authentication.ts",
     "#Authorization": "./src/Authorization.ts",
     "#LargeBody": "./src/LargeBody.ts",
+    "#MediaUpload": "./src/MediaUpload.ts",
     "#SameOrigin": "./src/SameOrigin.ts",
     "#domain/*": "./src/domain/*.ts",
     "#errors/*": "./src/errors/*.ts",

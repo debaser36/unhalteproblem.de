@@ -1,30 +1,18 @@
 import { Document } from "#domain/Document";
 import { IsoDateTimeUtc } from "#domain/IsoDateTimeUtc";
 import { MediaId } from "#domain/Media";
+import { noNul, slugString } from "#domain/Text";
 import { type DateTime, Effect, Schema, SchemaGetter } from "effect";
 
 /** Length limit of `BlogSlug`. */
 export const BlogSlugMaxLength = 64;
-
-// Lowercase ASCII letters and digits in groups separated by single hyphens:
-// no leading, trailing or doubled "-". The `u` flag is required for
-// `Schema.isPattern` to export the pattern to JSON Schema.
-const BLOG_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
 /**
  * `BlogSlug` without its identifier, as a part of template literals such as
  * `BlogEditorRole`: JSON Schema generation (effect 4.0.5) cannot turn a part
  * with an identifier, i.e. a `$ref`, into a pattern and throws.
  */
-export const BlogSlugPart = Schema.String.check(
-  Schema.isNonEmpty(),
-  Schema.isMaxLength(BlogSlugMaxLength),
-  Schema.isPattern(BLOG_SLUG_PATTERN, {
-    expected:
-      "lowercase ASCII letters and digits in groups separated by single " +
-      'hyphens, e.g. "rust-notes"',
-  }),
-);
+export const BlogSlugPart = slugString(BlogSlugMaxLength, "rust-notes");
 
 /**
  * The URL slug of a subblog, e.g. `rust-notes`: 1 to 64 lowercase ASCII
@@ -56,15 +44,8 @@ export const BlogLimits = {
 
 // Text fields are validated as already trimmed instead of trimmed during
 // decoding, like `RestrictionNote` and the contact form's fields: clients
-// trim before sending, and the OpenAPI document keeps the constraints.
-// Postgres `text` cannot store U+0000, so NUL is rejected here instead of
-// failing in the database with a 500. The `u` flag is required for
-// `Schema.isPattern` to export the pattern to JSON Schema.
-// oxlint-disable-next-line no-control-regex -- matching NUL is the point
-const NO_NUL_PATTERN = /^[^\u0000]*$/u;
-const noNul = Schema.isPattern(NO_NUL_PATTERN, {
-  expected: "text without NUL characters",
-});
+// trim before sending, and the OpenAPI document keeps the constraints. They
+// reject NUL (`noNul`), which Postgres `text` cannot store.
 
 /** The title of a subblog: trimmed, 1 to 120 characters. */
 export const BlogTitle = Schema.Trimmed.check(
@@ -140,14 +121,9 @@ export type PostId = typeof PostId.Type;
  * 1 to 128 lowercase ASCII letters and digits, in groups separated by single
  * hyphens. Editors may change it.
  */
-export const PostSlug = Schema.String.check(
-  Schema.isNonEmpty(),
-  Schema.isMaxLength(BlogLimits.postSlugMaxLength),
-  Schema.isPattern(BLOG_SLUG_PATTERN, {
-    expected:
-      "lowercase ASCII letters and digits in groups separated by single " +
-      'hyphens, e.g. "hello-world"',
-  }),
+export const PostSlug = slugString(
+  BlogLimits.postSlugMaxLength,
+  "hello-world",
 ).annotate({
   identifier: "PostSlug",
   description:
@@ -179,21 +155,15 @@ export const PostSummary = Schema.Trimmed.check(
 });
 export type PostSummary = typeof PostSummary.Type;
 
-/** A tag of a post, e.g. `rust`: a slug of 1 to 32 characters. */
-export const Tag = Schema.String.check(
-  Schema.isNonEmpty(),
-  Schema.isMaxLength(BlogLimits.tagMaxLength),
-  Schema.isPattern(BLOG_SLUG_PATTERN, {
-    expected:
-      "lowercase ASCII letters and digits in groups separated by single " +
-      'hyphens, e.g. "type-systems"',
-  }),
-).annotate({
-  identifier: "Tag",
-  description:
-    "A tag of a post, e.g. `type-systems`: 1 to 32 lowercase ASCII letters " +
-    "and digits in groups separated by single hyphens.",
-});
+/** A tag of a post or project, e.g. `rust`: a slug of 1 to 32 characters. */
+export const Tag = slugString(BlogLimits.tagMaxLength, "type-systems").annotate(
+  {
+    identifier: "Tag",
+    description:
+      "A tag of a post or project, e.g. `type-systems`: 1 to 32 lowercase " +
+      "ASCII letters and digits in groups separated by single hyphens.",
+  },
+);
 export type Tag = typeof Tag.Type;
 
 /** The tags of a post: at most 10, without duplicates. */
