@@ -599,14 +599,20 @@ website's `Origin` (`SameOrigin`, 403 otherwise), because the SameSite=Lax
 session cookie still reaches the backend from same-site pages such as
 `auth.unhalteproblem.de`.
 
-| Endpoint                                 | Role         | Does                                                      |
-| ---------------------------------------- | ------------ | --------------------------------------------------------- |
-| `GET /admin/users?limit&cursor`          | `admin`      | Lists users with all fields, roles and active restriction |
-| `GET /admin/users/:id`                   | `admin`      | One user, with restriction history and role change log    |
-| `POST /admin/users/:id/restriction`      | `admin`      | Restricts the account, with a note                        |
-| `POST /admin/users/:id/restriction/lift` | `admin`      | Lifts the active restriction, with an optional note       |
-| `PUT /admin/users/:id/roles/:role`       | `superAdmin` | Grants a role                                             |
-| `DELETE /admin/users/:id/roles/:role`    | `superAdmin` | Revokes a role                                            |
+| Endpoint                                      | Role         | Does                                                      |
+| --------------------------------------------- | ------------ | --------------------------------------------------------- |
+| `GET /admin/users?limit&cursor`               | `admin`      | Lists users with all fields, roles and active restriction |
+| `GET /admin/users/:id`                        | `admin`      | One user, with restriction history and role change log    |
+| `POST /admin/users/:id/restriction`           | `admin`      | Restricts the account, with a note                        |
+| `POST /admin/users/:id/restriction/lift`      | `admin`      | Lifts the active restriction, with an optional note       |
+| `PUT /admin/users/:id/roles/:role`            | `superAdmin` | Grants a role                                             |
+| `DELETE /admin/users/:id/roles/:role`         | `superAdmin` | Revokes a role                                            |
+| `GET /admin/database`                         | `admin`      | Postgres version, size, connections, tables, migrations   |
+| `GET /admin/outbox?state&limit`               | `admin`      | Outbox messages, newest first, without payloads           |
+| `POST /admin/outbox/:id/retry`                | `admin`      | Makes a message due now with fresh attempts (audited)     |
+| `GET /admin/audit?limit&cursor&action&userId` | `admin`      | The audit log, newest first                               |
+| `GET /admin/contact?limit&cursor`             | `admin`      | Stored contact messages, newest first                     |
+| `DELETE /admin/contact/:id`                   | `admin`      | Deletes a contact message, e.g. spam (audited)            |
 
 The list is paged by keyset, oldest first (`created_at`, then `id`): the
 response carries `nextCursor`, an opaque token for the position after the

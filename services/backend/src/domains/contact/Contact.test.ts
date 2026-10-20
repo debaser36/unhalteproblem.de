@@ -14,6 +14,9 @@ import { TestClock } from "effect/testing";
 import * as DomainEvent from "#cqrs/DomainEvent";
 import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
+import { AuditCommands } from "#domains/audit/AuditCommands";
+import { AuditRepository } from "#domains/audit/AuditRepository";
+import { UserDirectoryLive } from "#domains/users/Users";
 import { MailFailed, Mailer } from "#services/Mailer";
 import { DatabaseTest } from "#testing/Database";
 import { makeRecordingMailer } from "#testing/Mailer";
@@ -36,7 +39,13 @@ const mailer = makeRecordingMailer();
 
 const TestLayer = ContactCommands.layer.pipe(
   Layer.provideMerge(
-    Layer.mergeAll(Outbox.layer, ContactRepository.layer, mailer.layer),
+    Layer.mergeAll(
+      Outbox.layer,
+      ContactRepository.layer,
+      mailer.layer,
+      AuditCommands.layer.pipe(Layer.provide(AuditRepository.layer)),
+      UserDirectoryLive,
+    ),
   ),
   Layer.provideMerge(Transaction.layer),
   Layer.provideMerge(DomainEvent.DomainEvents.layer),

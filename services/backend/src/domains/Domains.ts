@@ -7,6 +7,7 @@ import { BlogDirectoryLive, BlogsLive } from "./blogs/Blogs.ts";
 import { ContactLive } from "./contact/Contacts.ts";
 import { MediaLive } from "./media/Medias.ts";
 import { ModerationLive } from "./moderation/Moderations.ts";
+import { OperationsLive } from "./operations/Operations.ts";
 import { ProjectsLive } from "./projects/Projects.ts";
 import { UserDirectoryLive, UsersLive } from "./users/Users.ts";
 
@@ -23,6 +24,11 @@ const Moderation = ModerationLive.pipe(
 const Blogs = BlogsLive.pipe(Layer.provide(UserDirectoryLive));
 const Projects = ProjectsLive.pipe(Layer.provide(UserDirectoryLive));
 
+// Admins deleting contact messages and retrying outbox messages are audited
+// by our id.
+const Contact = ContactLive.pipe(Layer.provide(UserDirectoryLive));
+const Operations = OperationsLive.pipe(Layer.provide(UserDirectoryLive));
+
 /**
  * Every domain, on one shared `Transaction`, `DomainEvents` and `Outbox`. A
  * new domain gets its own folder next to `users/` and its layer is added
@@ -37,9 +43,10 @@ const Projects = ProjectsLive.pipe(Layer.provide(UserDirectoryLive));
  */
 export const DomainsLive = Layer.mergeAll(
   UsersLive,
-  ContactLive,
+  Contact,
   Blogs,
   Projects,
+  Operations,
 ).pipe(
   Layer.provideMerge(Moderation),
   Layer.provideMerge(MediaLive),

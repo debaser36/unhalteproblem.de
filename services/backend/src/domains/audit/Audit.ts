@@ -39,7 +39,8 @@ export class AuditRecord extends Schema.Class<
   AuditRecord,
   { readonly brand: unique symbol }
 >("AuditRecord")({
-  id: Schema.String,
+  // A bigint in the table, read as `id::float8`: exact far beyond any id it reaches.
+  id: Schema.Finite,
   at: Schema.DateTimeUtcFromDate,
   action: AuditAction,
   actorId: Schema.NullOr(UserId),

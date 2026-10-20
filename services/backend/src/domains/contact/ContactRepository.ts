@@ -4,7 +4,7 @@ import {
   DateTime,
   Effect,
   Layer,
-  type Option,
+  Option,
   Schema,
 } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
@@ -52,7 +52,47 @@ const make = Effect.gen(function* () {
     execute: (id) => sql`SELECT * FROM contact_messages WHERE id = ${id}`,
   });
 
+  // Newest first; the position is the (created_at, id) of the last message
+  // seen. The table holds at most `CONTACT_RETENTION` worth of messages,
+  // so `contact_messages_created_at_idx` is plenty.
+  const page = SqlSchema.findAll({
+    Request: Schema.Struct({
+      limit: Schema.Finite,
+      after: Schema.NullOr(
+        Schema.Struct({
+          createdAt: Schema.DateTimeUtcFromDate,
+          id: Schema.String,
+        }),
+      ),
+    }),
+    Result: StoredContactMessage,
+    execute: ({ limit, after }) => sql`
+      SELECT * FROM contact_messages
+      ${after === null ? sql`` : sql`WHERE (created_at, id) < (${after.createdAt}, ${after.id}::uuid)`}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit}
+    `,
+  });
+
+  const remove = SqlSchema.findOneOption({
+    Request: Schema.String,
+    Result: Schema.Struct({ id: Schema.String }),
+    execute: (id) =>
+      sql`DELETE FROM contact_messages WHERE id = ${id} RETURNING id`,
+  });
+
   return ContactRepository.of({
+    page: (query) =>
+      page({ limit: query.limit, after: Option.getOrNull(query.after) }).pipe(
+        scrubbed("page"),
+        Effect.withSpan("ContactRepository.page"),
+      ),
+    deleteById: (id) =>
+      remove(id).pipe(
+        Effect.map(Option.isSome),
+        scrubbed("deleteById"),
+        Effect.withSpan("ContactRepository.deleteById"),
+      ),
     insert: (message) =>
       insert(message).pipe(
         scrubbed("insert"),
@@ -84,6 +124,16 @@ export class ContactRepository extends Context.Service<
     readonly findById: (
       id: ContactMessageId,
     ) => Effect.Effect<Option.Option<StoredContactMessage>>;
+    /** Up to `limit` messages, newest first, after the one at `after`. */
+    readonly page: (query: {
+      readonly limit: number;
+      readonly after: Option.Option<{
+        readonly createdAt: DateTime.Utc;
+        readonly id: ContactMessageId;
+      }>;
+    }) => Effect.Effect<ReadonlyArray<StoredContactMessage>>;
+    /** Deletes one message; whether it existed. */
+    readonly deleteById: (id: ContactMessageId) => Effect.Effect<boolean>;
     /** Deletes the messages stored before `cutoff`; returns how many. */
     readonly deleteCreatedBefore: (
       cutoff: DateTime.Utc,

@@ -32,6 +32,7 @@ const setup = (limit: number) => {
               delivered.push(message);
             }),
           purgeOlderThan: () => Effect.succeed(0),
+          delete: () => Effect.die("not used by the contact form"),
         }),
       ),
       ContactRateLimit.layerWith({ limit, globalLimit: 100, window: "1 hour" }),

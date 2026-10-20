@@ -8,6 +8,7 @@ import * as Authorization from "#auth/Authorization";
 import { LogFormat, LogLevelConfig, ServerConfig } from "#Config";
 import { DomainsLive } from "#domains/Domains";
 import { AdminHandlers } from "#http/Admin";
+import { AdminInsightsHandlers } from "#http/AdminInsights";
 import { AccountHandlers } from "#http/Account";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
@@ -63,6 +64,7 @@ const Handlers = Layer.mergeAll(
   ContactHandlers,
   AuthHandlers,
   AdminHandlers,
+  AdminInsightsHandlers,
   AccountHandlers,
   BlogsHandlers,
   BlogEditorHandlers,

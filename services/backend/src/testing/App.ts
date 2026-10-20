@@ -22,6 +22,7 @@ import { pkceChallenge } from "#auth/Secrets";
 import { DomainsLive } from "#domains/Domains";
 import { AccountHandlers } from "#http/Account";
 import { AdminHandlers } from "#http/Admin";
+import { AdminInsightsHandlers } from "#http/AdminInsights";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
 import { BlogEditorHandlers } from "#http/BlogEditor";
@@ -297,6 +298,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     SystemHandlers,
     ContactHandlers,
     AdminHandlers,
+    AdminInsightsHandlers,
     AccountHandlers,
     BlogsHandlers,
     BlogEditorHandlers,
