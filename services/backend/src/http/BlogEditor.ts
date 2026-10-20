@@ -18,11 +18,12 @@ import {
   toMediaInfo,
 } from "./BlogViews.ts";
 
-/** Too much was sent, or not a single well-formed file part. */
+/**
+ * Too much was sent (413), or not a single well-formed file part (400): a
+ * second part trips `maxParts`, which is a malformed upload, not a big one.
+ */
 const uploadError = (error: Multipart.MultipartError) =>
-  error.reason._tag === "FileTooLarge" ||
-  error.reason._tag === "BodyTooLarge" ||
-  error.reason._tag === "TooManyParts"
+  error.reason._tag === "FileTooLarge" || error.reason._tag === "BodyTooLarge"
     ? new MediaTooLarge()
     : new InvalidUpload();
 
@@ -34,12 +35,20 @@ const fileOf = (
     const files = yield* parts.pipe(
       Stream.filter(Multipart.isFile),
       Stream.filter((file) => file.key === "file"),
-      Stream.take(1),
+      // Read the content while the parts are still being parsed: it is
+      // pulled from the request body, which is closed once the stream ends,
+      // so reading it afterwards waits forever for a file of more than one
+      // chunk.
+      Stream.mapEffect((file) => file.contentEffect),
+      // Drain the stream instead of stopping at the first file: a file over
+      // the limit ends its content early, cut off, and the parser's
+      // `FileTooLarge` (or `BodyTooLarge`, `TooManyParts`) only fails the
+      // next pull of the parts.
       Stream.runCollect,
     );
-    const file = Arr.head(files);
-    if (Option.isNone(file)) return yield* new InvalidUpload();
-    return yield* file.value.contentEffect;
+    const bytes = Arr.head(files);
+    if (Option.isNone(bytes)) return yield* new InvalidUpload();
+    return bytes.value;
   }).pipe(
     Effect.catchTag("MultipartError", (error) =>
       Effect.fail(uploadError(error)),
