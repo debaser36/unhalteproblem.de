@@ -1,0 +1,360 @@
+import { assert, describe, it } from "@effect/vitest";
+import { PgliteMigrator } from "@effect/sql-pglite";
+import { Effect } from "effect";
+import { SqlClient } from "effect/sql";
+import { readdirSync } from "node:fs";
+import { migrations } from "#services/Database";
+import {
+  loaderUpTo,
+  databaseUpTo,
+  describeColumns,
+  insertUser,
+} from "./Helpers.ts";
+
+const migrationsDirectory = new URL("../../migrations/", import.meta.url);
+
+describe("migrations", () => {
+  it("registers every file in src/migrations, numbered without gaps", () => {
+    const files = readdirSync(migrationsDirectory)
+      .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+      .map((file) => file.slice(0, -".ts".length))
+      .sort();
+
+    for (const name of files) {
+      assert.match(name, /^\d{4}_[a-z0-9]+(?:_[a-z0-9]+)*$/);
+    }
+    assert.deepStrictEqual(
+      files.map((name) => Number(name.slice(0, 4))),
+      files.map((_, index) => index + 1),
+    );
+    assert.deepStrictEqual(Object.keys(migrations).sort(), files);
+  });
+});
+describe("0003_create_user_roles", () => {
+  // Runs the migrations before 0003 first, so users can exist before
+  // user_roles does.
+  const DatabaseBefore0003 = databaseUpTo(2);
+
+  it.effect(
+    "gives users who registered earlier the normalUser role",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "backfill-alice");
+        const bob = yield* insertUser(sql, "backfill-bob");
+        yield* sql`
+          UPDATE users SET created_at = '2026-01-02T03:04:05Z'
+          WHERE id = ${alice}
+        `;
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(3) });
+        assert.deepStrictEqual(applied, [[3, "create_user_roles"]]);
+
+        const roles = yield* sql<{
+          readonly subject: string;
+          readonly role: string;
+          readonly matchesCreatedAt: boolean;
+        }>`
+          SELECT u.subject, r.role, r.granted_at = u.created_at AS matches_created_at
+          FROM user_roles r JOIN users u ON u.id = r.user_id
+          WHERE r.user_id IN (${alice}, ${bob})
+          ORDER BY u.subject
+        `;
+        assert.deepStrictEqual(roles, [
+          {
+            subject: "backfill-alice",
+            role: "normalUser",
+            matchesCreatedAt: true,
+          },
+          {
+            subject: "backfill-bob",
+            role: "normalUser",
+            matchesCreatedAt: true,
+          },
+        ]);
+      }).pipe(Effect.provide(DatabaseBefore0003)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0004_add_user_moderation", () => {
+  // Runs the migrations before 0004 first, so roles can exist before
+  // user_role_changes does.
+  const DatabaseBefore0004 = databaseUpTo(3);
+
+  it.effect(
+    "starts the role log with the roles granted so far",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "log-backfill-alice");
+        const bob = yield* insertUser(sql, "log-backfill-bob");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role, granted_at) VALUES
+            (${bob}, 'normalUser', '2026-03-04T05:06:07Z'),
+            (${alice}, 'superAdmin', '2026-02-03T04:05:06Z'),
+            (${alice}, 'normalUser', '2026-01-02T03:04:05Z')
+        `;
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(4) });
+        assert.deepStrictEqual(applied, [[4, "add_user_moderation"]]);
+
+        // One granted entry per role, by the system, in the order granted.
+        const log = yield* sql<{
+          readonly subject: string;
+          readonly role: string;
+          readonly change: string;
+          readonly changedBy: string | null;
+          readonly matchesGrantedAt: boolean;
+        }>`
+          SELECT u.subject, c.role, c.change, c.changed_by,
+            c.changed_at = r.granted_at AS matches_granted_at
+          FROM user_role_changes c
+          JOIN users u ON u.id = c.user_id
+          JOIN user_roles r ON r.user_id = c.user_id AND r.role = c.role
+          WHERE c.user_id IN (${alice}, ${bob})
+          ORDER BY c.id
+        `;
+        const granted = (subject: string, role: string) => ({
+          subject,
+          role,
+          change: "granted",
+          changedBy: null,
+          matchesGrantedAt: true,
+        });
+        assert.deepStrictEqual(log, [
+          granted("log-backfill-alice", "normalUser"),
+          granted("log-backfill-alice", "superAdmin"),
+          granted("log-backfill-bob", "normalUser"),
+        ]);
+
+        // Existing grants have no granter.
+        const granters = yield* sql<{ readonly grantedBy: string | null }>`
+          SELECT DISTINCT granted_by FROM user_roles
+          WHERE user_id IN (${alice}, ${bob})
+        `;
+        assert.deepStrictEqual(granters, [{ grantedBy: null }]);
+      }).pipe(Effect.provide(DatabaseBefore0004)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0007_drop_session_id_token", () => {
+  // Runs the migrations before 0007 first, so a session can still have an
+  // id_token before the column is dropped.
+  const DatabaseBefore0007 = databaseUpTo(6);
+
+  it.effect(
+    "drops id_token and keeps the sessions",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO auth_sessions (id_hash, user_id, id_token, claims, expires_at)
+          VALUES (${new Uint8Array(32)}, 'drop-token-user', 'token', '{"a":1}', '2030-01-01T00:00:00Z')
+        `;
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(7) });
+        assert.deepStrictEqual(applied, [[7, "drop_session_id_token"]]);
+
+        const columns = yield* describeColumns(sql, "auth_sessions");
+        assert.isFalse(
+          columns.some((c) => c.startsWith("auth_sessions.id_token")),
+        );
+        const sessions = yield* sql<{
+          readonly userId: string;
+          readonly claims: unknown;
+        }>`
+          SELECT user_id, claims FROM auth_sessions
+          WHERE user_id = 'drop-token-user'
+        `;
+        assert.deepStrictEqual(sessions, [
+          { userId: "drop-token-user", claims: { a: 1 } },
+        ]);
+      }).pipe(Effect.provide(DatabaseBefore0007)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0012_allow_blog_editor_roles", () => {
+  // Runs the migrations before 0012 first, so roles and their log exist
+  // before the checks are replaced.
+  const DatabaseBefore0012 = databaseUpTo(11);
+
+  it.effect(
+    "keeps the existing roles and validates the replaced checks",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "blog-editor-alice");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role) VALUES
+            (${alice}, 'normalUser'),
+            (${alice}, 'superAdmin')
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${alice}, 'superAdmin', 'granted', now())
+        `;
+        // Not allowed before 0012.
+        const before = yield* sql`
+          INSERT INTO user_roles (user_id, role)
+          VALUES (${alice}, 'blogEditor:rust-notes')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(12) });
+        assert.deepStrictEqual(applied, [[12, "allow_blog_editor_roles"]]);
+
+        const roles = yield* sql<{ readonly role: string }>`
+          SELECT role FROM user_roles WHERE user_id = ${alice} ORDER BY role
+        `;
+        assert.deepStrictEqual(
+          roles.map((row) => row.role),
+          ["normalUser", "superAdmin"],
+        );
+
+        // Same names, and validated (not NOT VALID) on both tables.
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conname IN (
+            'user_roles_role_check', 'user_role_changes_role_check'
+          )
+          ORDER BY conname
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "user_role_changes_role_check", convalidated: true },
+          { conname: "user_roles_role_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO user_roles (user_id, role)
+          VALUES (${alice}, 'blogEditor:rust-notes')
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0012)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0015_audit_admin_insights", () => {
+  // Runs the migrations before 0015 first, so the log has rows before the
+  // check is replaced and the indexes are built.
+  const DatabaseBefore0015 = databaseUpTo(14);
+
+  it.effect(
+    "keeps the existing entries and validates the replaced check",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, target_id, detail)
+          VALUES
+            ('2026-01-01T00:00:00Z', 'login', gen_random_uuid(), NULL, NULL),
+            ('2026-01-02T00:00:00Z', 'role_granted', NULL, gen_random_uuid(), 'admin')
+        `;
+        // Not allowed before 0015.
+        const before = yield* sql`
+          INSERT INTO audit_log (at, action, detail)
+          VALUES ('2026-01-03T00:00:00Z', 'outbox_retried', 'mail')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(15) });
+        assert.deepStrictEqual(applied, [[15, "audit_admin_insights"]]);
+
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["login", "role_granted"],
+        );
+
+        // Same name, and validated (not NOT VALID).
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conrelid = 'audit_log'::regclass
+            AND conname = 'audit_log_action_check'
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "audit_log_action_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, detail)
+          VALUES
+            ('2026-01-03T00:00:00Z', 'outbox_retried', gen_random_uuid(), 'mail'),
+            ('2026-01-04T00:00:00Z', 'contact_message_deleted', gen_random_uuid(), NULL)
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0015)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0016_audit_content_changes", () => {
+  // Runs the migrations up to 0015 first, so the log has rows (including
+  // actions added by 0015) before the check is replaced.
+  const DatabaseBefore0016 = databaseUpTo(15);
+
+  it.effect(
+    "keeps the existing entries and validates the replaced check",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, target_id, detail)
+          VALUES
+            ('2026-01-01T00:00:00Z', 'login', gen_random_uuid(), NULL, NULL),
+            ('2026-01-02T00:00:00Z', 'outbox_retried', gen_random_uuid(), NULL, 'mail')
+        `;
+        // Not allowed before 0016.
+        const before = yield* sql`
+          INSERT INTO audit_log (at, action, detail)
+          VALUES ('2026-01-03T00:00:00Z', 'blog_created', 'rust-notes')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(16) });
+        assert.deepStrictEqual(applied, [[16, "audit_content_changes"]]);
+
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["login", "outbox_retried"],
+        );
+
+        // Same name, and validated (not NOT VALID).
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conrelid = 'audit_log'::regclass
+            AND conname = 'audit_log_action_check'
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "audit_log_action_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, detail)
+          VALUES
+            ('2026-01-03T00:00:00Z', 'blog_created', gen_random_uuid(), 'rust-notes'),
+            ('2026-01-04T00:00:00Z', 'blog_updated', gen_random_uuid(), 'rust-notes'),
+            ('2026-01-05T00:00:00Z', 'post_deleted', gen_random_uuid(), gen_random_uuid()::text),
+            ('2026-01-06T00:00:00Z', 'project_created', gen_random_uuid(), 'website'),
+            ('2026-01-07T00:00:00Z', 'project_updated', gen_random_uuid(), 'website'),
+            ('2026-01-08T00:00:00Z', 'project_deleted', gen_random_uuid(), 'website')
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0016)),
+    { timeout: 30_000 },
+  );
+});
