@@ -21,14 +21,17 @@ import { ProjectsAdminPage } from "./ProjectsAdminPage.tsx";
 import { UserPage } from "./UserPage.tsx";
 import { UsersPage } from "./UsersPage.tsx";
 
+// Absolute on purpose: the panel is mounted on the splat route `admin/*`, and
+// React Router v7 resolves relative links there against the whole current URL,
+// so `to: "users"` on /admin/users would lead to /admin/users/users.
 const sections = [
-  { to: "", label: "Database", icon: Database, end: true },
-  { to: "users", label: "Users", icon: Users },
-  { to: "blogs", label: "Blogs", icon: BookOpen },
-  { to: "projects", label: "Projects", icon: FolderGit2 },
-  { to: "outbox", label: "Outbox", icon: Activity },
-  { to: "audit", label: "Audit log", icon: ScrollText },
-  { to: "inbox", label: "Inbox", icon: Inbox },
+  { to: "/admin", label: "Database", icon: Database, end: true },
+  { to: "/admin/users", label: "Users", icon: Users },
+  { to: "/admin/blogs", label: "Blogs", icon: BookOpen },
+  { to: "/admin/projects", label: "Projects", icon: FolderGit2 },
+  { to: "/admin/outbox", label: "Outbox", icon: Activity },
+  { to: "/admin/audit", label: "Audit log", icon: ScrollText },
+  { to: "/admin/inbox", label: "Inbox", icon: Inbox },
 ] as const;
 
 /**
