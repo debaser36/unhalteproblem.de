@@ -13,7 +13,7 @@ Use the vendored Effect documentation as targeted reference, not ambient
 context:
 
 1. Identify the Effect APIs and concepts involved in the change.
-2. Check `agent-patterns/` and existing code in this repo first; if the pattern is there, stop. Otherwise grep (do not read whole) `repos/effect/LLMS.md` and `repos/effect/ai-docs/src` for those names
+2. Check `agent-patterns/` and existing code in this repo first; if the pattern is there, stop. Otherwise grep (do not read whole, and always with a narrow `path` and a match limit) `repos/effect/LLMS.md` and `repos/effect/ai-docs/src` for those names
    and concepts, then read the matching sections and examples. If
    `agent-patterns/effect-<topic>.md` exists for the topic, read it first.
 3. Apply the relevant guidance and inspect the module source
@@ -30,5 +30,5 @@ context:
 The task is ready for implementation when every material Effect API or pattern
 has matching local guidance, or the search has established that none exists.
 
-If the lookup would need many files, delegate it to the `effect-researcher`
-agent and continue with its summary.
+If the lookup would need many files and you are the main session, delegate it to the `effect-researcher`
+agent and continue with its summary. Subagents cannot start subagents: they search narrowly themselves.

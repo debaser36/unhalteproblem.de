@@ -2,6 +2,7 @@
 name: api-contract
 description: Owns the shared HttpApi contract in lib/api (@unhalteproblem.de/api), the single definition that backend services implement and services/web consumes as a typed client. Use to create the contract package, add or change endpoints, groups, payload/error schemas or auth middleware definitions, or to check a contract change for breaking changes before it lands.
 tools: Read, Grep, Glob, Edit, Write, Bash
+model: sonnet
 skills:
   - effect-development
 ---

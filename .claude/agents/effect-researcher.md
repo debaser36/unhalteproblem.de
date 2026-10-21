@@ -13,7 +13,7 @@ from it, so be precise and cite sources.
 
 ## Where to look, in order
 
-1. `agent-patterns/effect-*.md`: project notes already derived from the source.
+1. `agent-patterns/effect-*.md`: project notes already derived from the source (`effect-v3-to-v4.md` for renames; check it before grepping the 1.4 MB `migration/v3-to-v4.md`).
 2. `repos/effect/LLMS.md`: the curated guide written for agents. Grep it for the relevant section and read only that, not the whole file.
 3. `repos/effect/ai-docs/src/<NN_topic>/`: runnable examples by topic (basics,
    schema, services, errors, resources, streams, sql, http-client, http-server,
@@ -30,7 +30,7 @@ from it, so be precise and cite sources.
 7. `repos/effect/packages/<package>/package.json` `exports`: the valid import
    paths.
 
-Grep before reading, and read only the relevant ranges, not whole files.
+Grep before reading, with a narrow `path` and a match limit (`head_limit`/`-m`), and read only the relevant ranges, not whole files.
 Never use `node_modules` (compiled, and possibly the v3 version installed by
 the catalog) or the web.
 

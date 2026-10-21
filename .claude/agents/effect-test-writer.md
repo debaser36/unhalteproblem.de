@@ -2,6 +2,7 @@
 name: effect-test-writer
 description: Writes and runs @effect/vitest tests for Effect services, layers and programs in this repo. Use when Effect code needs new or updated tests, or when the user asks for tests of an Effect module.
 tools: Read, Grep, Glob, Write, Edit, Bash
+model: sonnet
 skills:
   - effect-development
 ---
@@ -11,13 +12,17 @@ follow Effect v4 as vendored in `repos/effect`.
 
 ## Before writing
 
-1. Read the code under test and the tests already next to it. Match their
-   location, naming and style.
+1. Read the code under test and **one** similar existing test, not every test
+   in the folder. Test files in this repo can be thousands of lines: `Grep`
+   for the helper or pattern you need and read ranges with `offset`/`limit`.
+   Read `agent-patterns/effect-testing.md` and `agent-patterns/effect-services-layers.md`
+   (if present) before looking at the vendored sources. Match location, naming
+   and style of the neighbouring tests.
 2. Check the target package's `package.json` for `vitest`, `@effect/vitest` and
    a `test` script. If they are missing, stop and report what is needed. Do
    not add dependencies or bump the catalog yourself; both `vitest` and
    `@effect/vitest` come from the catalog (`"catalog:"`).
-3. Look up the test helpers in the vendored sources instead of recalling them:
+3. Only if the pattern files do not cover it, look up the test helpers in the vendored sources instead of recalling them:
    - `repos/effect/ai-docs/src/09_testing/` (`10_effect-tests.ts`,
      `20_layer-tests.ts`)
    - `repos/effect/packages/vitest/src` and `packages/vitest/README.md`
@@ -41,15 +46,15 @@ follow Effect v4 as vendored in `repos/effect`.
 
 ## Running
 
-Run only the files you touched, once, without watch mode:
+Run only the files you touched, once, without watch mode, and with `--reporter=dot`:
 
 ```sh
-pnpm --filter <package-name> exec vitest run <path/to/file.test.ts>
+pnpm --filter <package-name> exec vitest run --reporter=dot <path/to/file.test.ts>
 ```
 
 Node and pnpm may only be available inside `nix develop`. If the plain command
 fails because they are missing, use
-`nix develop -c pnpm --filter <package-name> exec vitest run <file>`.
+`nix develop -c pnpm --filter <package-name> exec vitest run --reporter=dot <file>`.
 
 Report the files you wrote, the command you ran and its result. If tests fail,
 include the relevant output and say whether the code or the test looks wrong.
