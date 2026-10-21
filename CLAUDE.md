@@ -10,7 +10,7 @@ libraries — is written in [Effect](https://effect.website).
 - `lib/*` — shared libraries and configs (`lib/tsconfig` holds the base tsconfig).
 - `apps/*`, `packages/*`, `docs/*` — reserved workspace globs, currently empty.
 - `repos/*` — vendored upstream repositories (git subtrees). See below.
-- `agent-patterns/` — project-local Effect pattern notes written by agents with `/effect-patterns` (created on first use). Read the relevant file before writing Effect code on that topic.
+- `agent-patterns/` — project-local Effect pattern notes written by agents with `/effect-patterns`. Read the relevant file before writing Effect code on that topic.
 
 ## Commands
 
@@ -51,31 +51,10 @@ before the first change: `<type>/<short-kebab-description>` (e.g.
 branch per independent task. If you notice an unrelated problem along the
 way, note it for its own branch instead of fixing it on the current one.
 
-**Commits — only when the user asks for them.** Then use Conventional
-Commit-style messages: a type, a colon, and a short lowercase imperative
-summary:
-
-| Type        | For                                                                     |
-| ----------- | ----------------------------------------------------------------------- |
-| `feat:`     | new functionality                                                       |
-| `fix:`      | bug fixes                                                               |
-| `refactor:` | code changes with no behaviour change                                   |
-| `update:`   | dependency, flake or subtree version bumps                              |
-| `test:`     | tests only                                                              |
-| `docs:`     | documentation only (README, CLAUDE.md, agent-patterns)                  |
-| `build:`    | build tooling and config (turbo, tsconfig, nix, vite, oxlint, prettier) |
-| `chore:`    | everything else (repo housekeeping, Claude Code config)                 |
-
-Keep commits modular: one feature, change or fix per commit. Stage only the
-files that belong to that change (`git add <paths>`; interactive `git add -p`
-is not available). Split the work into several commits rather than bundling
-it. Where practical, every commit should leave build, type-check and tests
-passing.
-
-**Merging.** When a task is finished and verified, say so and ask whether to
-merge. On yes: rebase the branch onto `main` if `main` has moved, run
-`git switch main && git merge --ff-only <branch>`, and delete the branch.
-Never push and never open PRs unless asked.
+**Commits — only when the user asks for them**, and never push or open PRs
+unless asked. Load the `git-workflow` skill before committing or merging: it
+has the commit message types, the modular-commit rules and the merge steps.
+When a task is finished and verified, say so and ask whether to merge.
 
 ## Vendored repositories (`repos/`)
 
@@ -106,6 +85,7 @@ agents can read real library source instead of guessing or searching the web.
   reading the subtree in the main context. A lookup you expect to need again
   belongs in `agent-patterns/` via `/effect-patterns`.
 - Most training data is Effect v3. When unsure whether an API is v3 or v4, check
+  `agent-patterns/effect-v3-to-v4.md` first, then
   `repos/effect/MIGRATION.md` and `repos/effect/migration/v3-to-v4.md` (import map
   plus a per-module API reference, e.g. search for ``### `effect/Effect` ``).
 - In v4, `@effect/platform`, `@effect/cli`, `@effect/sql`, `@effect/rpc` and
@@ -139,15 +119,15 @@ agents can read real library source instead of guessing or searching the web.
   on the kernel in `src/cqrs/`: state changes go through a `…Commands`
   service (`Command.boundary`, one transaction, events published after the
   commit), reads through `…Queries` (`Query.boundary`). Copy the `users`
-  domain for a new one; see the backend README, section "Domains".
+  domain for a new one; see `services/backend/docs/domains.md`.
 - Database schema changes go through the `db-migration` agent. Committed
   migrations are immutable.
 - Authorization is role-based and lives in the types: code that needs a role
   requires `Authorized(...)` from `@unhalteproblem.de/api` (one call with
   several roles = any of them; several calls = all of them). Only
   `#auth/Authorization` in the backend provides these proofs, and endpoints
-  use `RequireRoles(...)` from the contract. See the backend README, section
-  "Authorization".
+  use `RequireRoles(...)` from the contract. See
+  `services/backend/docs/authorization.md`.
 
 ## Security
 
@@ -159,26 +139,30 @@ each step or commit.
 
 ## Token budget
 
-Subagents start cold and re-read context, so use them where they add
-something the main session can't: one `effect-reviewer` pass per branch, the
-owning agent for `lib/api` and migrations, and `effect-researcher` only when
-the pattern isn't in this repo or `agent-patterns/` yet. Give each agent the
-file paths and facts you already have so it doesn't rediscover them. Do one
-task per session; suggest a fresh session rather than continuing past a
-context compaction.
+- **Read narrowly.** Never read a whole large file when a section will do:
+  `services/backend/README.md` is only an index (the topics are in
+  `services/backend/docs/`), and `*.test.ts` files can be thousands of lines,
+  so `Grep` for what you need and use `offset`/`limit`.
+- **Search `repos/` with a narrow `path`** (for example
+  `repos/effect/packages/effect/src/unstable/http`), with `head_limit` or
+  `-m`. `repos/effect/migration/v3-to-v4.md` is 1.4 MB: search it for exact
+  names only, and try `agent-patterns/effect-v3-to-v4.md` first. Dependency
+  folders, `dist/` and `pnpm-lock.yaml` are denied for reading; use
+  `pnpm why` / `pnpm outdated` instead.
+- **Subagents start cold**, so use them where they add something the main
+  session can't: one `effect-reviewer` pass per branch, the owning agent for
+  `lib/api` and migrations, and `effect-researcher` only when the pattern
+  isn't in this repo or `agent-patterns/` yet. Give each agent the file paths
+  and facts you already have. Subagents cannot start subagents.
+- **Models.** Routine edits and test writing do not need the strongest model;
+  `effect-test-writer`, `api-contract` and `effect-researcher` run on Sonnet.
+  Keep the strong model for design, auth and the reviews.
+- Do one task per session; suggest a fresh session rather than continuing past
+  a context compaction.
 
-## Hooks
+## Type-check hook
 
-`.claude/settings.json` runs a type-check when Claude finishes a turn
-(`.claude/hooks/typecheck.sh`). It runs `tsc` on every workspace package with
-TypeScript files edited that turn, plus Effect language service diagnostics (`effect-tsgo`) on
-edited files that import Effect. Errors are fed back once for fixing. Fix them;
-don't silence them. Edits in other git worktrees of this repository are checked
-with that worktree's `node_modules`; a worktree without them is skipped with a
-note, so run `pnpm install` there first.
-
-## Agents and skills
-
-Agents live in `.claude/agents/`, skills in `.claude/skills/`; their
-descriptions are loaded automatically. `dependency-maintainer` runs only when
-the user asks; it is deliberately not scheduled.
+`.claude/hooks/typecheck.sh` runs when a turn ends: `tsc` for each edited
+workspace package, Effect diagnostics for edited files importing Effect. Errors
+come back once; fix them and don't silence them. A worktree without
+`node_modules` is skipped, so run `pnpm install` there first.
