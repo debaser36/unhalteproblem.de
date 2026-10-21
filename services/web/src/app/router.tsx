@@ -39,6 +39,14 @@ export const routes: Array<RouteObject> = [
             ),
           },
           {
+            // `~` keeps it apart from subblog slugs (like `projects/~new`).
+            path: "blog/~request",
+            ...page(
+              () => import("#features/blog/RequestBlogPage.tsx"),
+              (m) => m.RequestBlogPage,
+            ),
+          },
+          {
             path: "blog/:blog",
             ...page(
               () => import("#features/blog/BlogPage.tsx"),

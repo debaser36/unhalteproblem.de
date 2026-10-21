@@ -32,7 +32,8 @@ export function BlogsAdminPage() {
       <AdminHeading title="Blogs">
         Subblogs. Their posts are written by users with{" "}
         <code className="font-mono text-accent">blogEditor:&lt;slug&gt;</code>,
-        which a superAdmin grants on the user&apos;s page.
+        which a superAdmin grants on the user&apos;s page, or which approving a
+        user&apos;s blog request gives them.
       </AdminHeading>
       <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
         <AsyncView atom={blogsAtom}>

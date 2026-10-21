@@ -1,8 +1,9 @@
 import type { Blog } from "@unhalteproblem.de/api";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, BookPlus } from "lucide-react";
 import { Link } from "react-router";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { formatDate } from "#lib/format.ts";
+import { ButtonLink } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { Container } from "#ui/Container.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
@@ -14,7 +15,19 @@ import { NoPosts, PostList } from "./PostList.tsx";
 export function BlogIndexPage() {
   return (
     <Container>
-      <PageHeader path="~/blog" title="Blog">
+      <PageHeader
+        path="~/blog"
+        title="Blog"
+        actions={
+          <ButtonLink
+            to="/blog/~request"
+            variant="secondary"
+            icon={<BookPlus size={15} />}
+          >
+            Start your own
+          </ButtonLink>
+        }
+      >
         Write-ups, notes and the occasional rant, sorted into a few subblogs.
         Pick one, or read everything below.
       </PageHeader>

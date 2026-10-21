@@ -1,6 +1,7 @@
 import {
   Activity,
   BookOpen,
+  BookPlus,
   Database,
   FolderGit2,
   Inbox,
@@ -13,6 +14,7 @@ import { RequireUser } from "#app/RequireUser.tsx";
 import { cn } from "#lib/cn.ts";
 import { Container } from "#ui/Container.tsx";
 import { AuditLogPage } from "./AuditLogPage.tsx";
+import { BlogRequestsAdminPage } from "./BlogRequestsAdminPage.tsx";
 import { BlogsAdminPage } from "./BlogsAdminPage.tsx";
 import { ContactInboxPage } from "./ContactInboxPage.tsx";
 import { DatabasePage } from "./DatabasePage.tsx";
@@ -28,6 +30,7 @@ const sections = [
   { to: "/admin", label: "Database", icon: Database, end: true },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/blogs", label: "Blogs", icon: BookOpen },
+  { to: "/admin/blog-requests", label: "Blog requests", icon: BookPlus },
   { to: "/admin/projects", label: "Projects", icon: FolderGit2 },
   { to: "/admin/outbox", label: "Outbox", icon: Activity },
   { to: "/admin/audit", label: "Audit log", icon: ScrollText },
@@ -77,6 +80,10 @@ export function AdminApp() {
                 <Route path="users" element={<UsersPage />} />
                 <Route path="users/:userId" element={<UserPage />} />
                 <Route path="blogs" element={<BlogsAdminPage />} />
+                <Route
+                  path="blog-requests"
+                  element={<BlogRequestsAdminPage />}
+                />
                 <Route path="projects" element={<ProjectsAdminPage />} />
                 <Route path="outbox" element={<OutboxPage />} />
                 <Route path="audit" element={<AuditLogPage />} />
