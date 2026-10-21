@@ -38,7 +38,7 @@ const TokenResponse = Schema.Struct({
 interface Options {
   /** The realm URL, `https://host/realms/<realm>`. */
   readonly issuer: string;
-  /** The backend's client; it needs a service account (see the README). */
+  /** The backend's client; it needs a service account (see docs/authentication.md). */
   readonly clientId: string;
   readonly clientSecret: Redacted.Redacted;
 }

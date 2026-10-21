@@ -43,8 +43,8 @@ const make = Effect.gen(function* () {
  * fixing what made it fail, e.g. the SMTP settings). Audited.
  *
  * @effect-expect-leaking Authorized<"admin">
- * Requiring the proof in every method is the point (see "Authorization" in
- * the README).
+ * Requiring the proof in every method is the point (see
+ * docs/authorization.md).
  */
 export class OperationsCommands extends Context.Service<
   OperationsCommands,

@@ -187,7 +187,7 @@ const make = Effect.gen(function* () {
  *
  * @effect-expect-leaking Authorized<"admin">
  * Requiring the proof in every method is the point: whoever calls one
- * must have checked the role (see "Authorization" in the README).
+ * must have checked the role (see docs/authorization.md).
  */
 export class ProjectCommands extends Context.Service<
   ProjectCommands,

@@ -83,7 +83,7 @@ export { UserNotFound } from "@unhalteproblem.de/api";
 
 /**
  * The roles every user gets at registration. More are granted by an
- * operator (see the backend README, section "Authorization").
+ * operator (see docs/authorization.md).
  */
 export const initialRoles: ReadonlyArray<Role> = ["normalUser"];
 

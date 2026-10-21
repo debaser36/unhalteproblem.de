@@ -132,7 +132,7 @@ const make = Effect.gen(function* () {
     `,
   });
 
-  // What the README tells operators to run by hand: the message is due now,
+  // What docs/domains.md ("Outbox") tells operators to run by hand: the message is due now,
   // with all its attempts back. A message that is being handled right now
   // loses its lease and may run once more, which handlers tolerate (at
   // least once).
