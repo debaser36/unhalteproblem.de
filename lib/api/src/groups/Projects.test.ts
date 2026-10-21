@@ -28,6 +28,7 @@ import { Unauthorized } from "#errors/Unauthorized";
 import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
+import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
 
 describe("project endpoints in the OpenAPI document", () => {
   const spec = OpenApi.fromApi(Api);
@@ -336,6 +337,9 @@ layer(
           AuthenticationStub,
           requireRolesStub(RequireAdmin),
           requireRolesStub(RequireSuperAdmin),
+          Layer.succeed(RequireBlogRequestModerator, () =>
+            Effect.die("not used by this group"),
+          ),
           SameOriginStub,
           // Pass-through: the stub checks nothing.
           Layer.succeed(LargeBody, (httpEffect) => httpEffect),

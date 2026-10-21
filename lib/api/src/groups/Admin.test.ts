@@ -42,6 +42,7 @@ import { UserNotFound } from "#errors/UserNotFound";
 import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
+import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
 
 const stateChanging = [
   "admin.restrictUser",
@@ -570,6 +571,9 @@ layer(
           AuthenticationStub,
           requireRolesStub(RequireAdmin),
           requireRolesStub(RequireSuperAdmin),
+          Layer.succeed(RequireBlogRequestModerator, () =>
+            Effect.die("not used by this group"),
+          ),
           SameOriginStub,
           // Only the blog editor group uses them.
           Layer.succeed(LargeBody, () => Effect.die("not used by admin")),

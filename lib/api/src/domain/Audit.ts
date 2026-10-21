@@ -22,6 +22,12 @@ import { Effect, Schema, SchemaGetter } from "effect";
  * - `post_deleted`: an admin deleted a blog post; `detail` is its id.
  * - `project_created`, `project_updated`, `project_deleted`: an admin
  *   created, edited or deleted a project; `detail` is its slug.
+ * - `blog_request_approved`: a moderator (`admin` or `superAdmin`) approved
+ *   a blog request; actor = the moderator, target = the requester, `detail`
+ *   is the slug of the created blog.
+ * - `blog_request_rejected`: a moderator rejected a blog request; actor =
+ *   the moderator, target = the requester, no detail (the reason is free
+ *   text).
  */
 export const AuditAction = Schema.Literals([
   "login",
@@ -40,6 +46,8 @@ export const AuditAction = Schema.Literals([
   "project_created",
   "project_updated",
   "project_deleted",
+  "blog_request_approved",
+  "blog_request_rejected",
 ]).annotate({
   identifier: "AuditAction",
   description: "What an audit log entry records.",

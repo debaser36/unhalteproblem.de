@@ -46,6 +46,8 @@ describe("AuditAction", () => {
       "project_created",
       "project_updated",
       "project_deleted",
+      "blog_request_approved",
+      "blog_request_rejected",
     ]);
   });
 });

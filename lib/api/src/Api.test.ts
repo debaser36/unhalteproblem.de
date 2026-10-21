@@ -20,6 +20,7 @@ import {
   RateLimited,
   RequireAdmin,
   RequireBlogEditor,
+  RequireBlogRequestModerator,
   RequireSuperAdmin,
   SameOrigin,
   ServiceUnavailable,
@@ -35,6 +36,9 @@ describe("OpenAPI document", () => {
     assert.deepStrictEqual(Object.keys(spec.paths).sort(), [
       "/account/delete",
       "/admin/audit",
+      "/admin/blog-requests",
+      "/admin/blog-requests/{requestId}/approve",
+      "/admin/blog-requests/{requestId}/reject",
       "/admin/blogs",
       "/admin/blogs/{blog}",
       "/admin/contact",
@@ -56,6 +60,8 @@ describe("OpenAPI document", () => {
       "/auth/logout",
       "/auth/register",
       "/auth/session",
+      "/blog-requests",
+      "/blog-requests/{requestId}/withdraw",
       "/blogs",
       "/blogs/{blog}",
       "/blogs/{blog}/manage/media",
@@ -151,6 +157,20 @@ describe("OpenAPI document", () => {
       "/admin/contact": { get: "adminInsights.listContactMessages" },
       "/admin/contact/{messageId}": {
         delete: "adminInsights.deleteContactMessage",
+      },
+      "/blog-requests": {
+        get: "blogRequests.listMyBlogRequests",
+        post: "blogRequests.requestBlog",
+      },
+      "/blog-requests/{requestId}/withdraw": {
+        post: "blogRequests.withdrawBlogRequest",
+      },
+      "/admin/blog-requests": { get: "blogRequestAdmin.listBlogRequests" },
+      "/admin/blog-requests/{requestId}/approve": {
+        post: "blogRequestAdmin.approveBlogRequest",
+      },
+      "/admin/blog-requests/{requestId}/reject": {
+        post: "blogRequestAdmin.rejectBlogRequest",
       },
     });
   });
@@ -380,6 +400,7 @@ const unusedMiddleware = Effect.die("not used by these groups");
 const AdminMiddlewareStubs = Layer.mergeAll(
   Layer.succeed(RequireAdmin, () => unusedMiddleware),
   Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
+  Layer.succeed(RequireBlogRequestModerator, () => unusedMiddleware),
   Layer.succeed(SameOrigin, () => unusedMiddleware),
   Layer.succeed(LargeBody, () => unusedMiddleware),
   Layer.succeed(RequireBlogEditor, () => unusedMiddleware),

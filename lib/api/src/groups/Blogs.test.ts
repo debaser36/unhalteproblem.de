@@ -32,6 +32,7 @@ import { Unauthorized } from "#errors/Unauthorized";
 import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
+import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
 import { BlogEditorGroup } from "./BlogEditor.ts";
 
 describe("blog endpoints in the OpenAPI document", () => {
@@ -425,6 +426,7 @@ layer(
           RequireBlogEditorStub,
           Layer.succeed(RequireAdmin, () => unusedMiddleware),
           Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
+          Layer.succeed(RequireBlogRequestModerator, () => unusedMiddleware),
         ),
       ),
     ),

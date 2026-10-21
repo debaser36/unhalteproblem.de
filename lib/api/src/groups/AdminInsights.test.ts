@@ -29,6 +29,7 @@ import { Unauthorized } from "#errors/Unauthorized";
 import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
+import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
 
 describe("admin insights endpoints in the OpenAPI document", () => {
   const spec = OpenApi.fromApi(Api);
@@ -116,6 +117,8 @@ describe("admin insights endpoints in the OpenAPI document", () => {
         "project_created",
         "project_updated",
         "project_deleted",
+        "blog_request_approved",
+        "blog_request_rejected",
       ],
     );
     for (const name of ["AuditLogEntryId", "OutboxMessageId"]) {
@@ -344,6 +347,9 @@ layer(
           // Not used by this group, but the test server builds every
           // middleware of the API.
           requireRolesStub(RequireSuperAdmin),
+          Layer.succeed(RequireBlogRequestModerator, () =>
+            Effect.die("not used by this group"),
+          ),
           Layer.succeed(RequireBlogEditor, (httpEffect) => httpEffect),
           SameOriginStub,
           Layer.succeed(LargeBody, (httpEffect) => httpEffect),
