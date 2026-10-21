@@ -91,3 +91,7 @@ nothing else of the users domain), and `UserCommands.syncFromLogin` calls
 savepoint), so a user never exists without their first role. `UserQueries`
 composes the admin overview from `ModerationQueries`. `DomainsLive` wires
 it: users' directory, then moderation, then the rest of users.
+
+The blogs domain uses `ModerationCommands.grantApprovedBlogEditor` when a
+blog request is approved; moderation only asks the blogs' directory, so
+that is no cycle either.

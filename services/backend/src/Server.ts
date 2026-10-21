@@ -1,5 +1,10 @@
 import { NodeHttpServer } from "@effect/platform-node";
-import { Api, RequireAdmin, RequireSuperAdmin } from "@unhalteproblem.de/api";
+import {
+  Api,
+  RequireAdmin,
+  RequireBlogRequestModerator,
+  RequireSuperAdmin,
+} from "@unhalteproblem.de/api";
 import { ByteSize, Effect, Layer, Logger, References } from "effect";
 import { HttpIncomingMessage, HttpRouter } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
@@ -13,6 +18,10 @@ import { AccountHandlers } from "#http/Account";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
 import { BlogEditorHandlers } from "#http/BlogEditor";
+import {
+  BlogRequestAdminHandlers,
+  BlogRequestsHandlers,
+} from "#http/BlogRequests";
 import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
 import { LargeBodyLive } from "#http/LargeBody";
@@ -53,6 +62,7 @@ const AuthServices = Layer.mergeAll(
   Authorization.blogEditorMiddleware,
   Authorization.middleware(RequireAdmin),
   Authorization.middleware(RequireSuperAdmin),
+  Authorization.middleware(RequireBlogRequestModerator),
   OidcProvider.layer,
   TokenVerifier.layer,
   AuthCleanup,
@@ -68,6 +78,8 @@ const Handlers = Layer.mergeAll(
   AccountHandlers,
   BlogsHandlers,
   BlogEditorHandlers,
+  BlogRequestsHandlers,
+  BlogRequestAdminHandlers,
   MediaHandlers,
   ProjectsHandlers,
   ProjectAdminHandlers,

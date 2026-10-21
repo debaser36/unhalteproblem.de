@@ -1,13 +1,14 @@
 import { assert, describe, it, layer } from "@effect/vitest";
 import {
   AlreadyRestricted,
+  Authorized,
   Forbidden,
   NotRestricted,
   RestrictionNotAllowed,
   type Role,
   RoleChangeNotAllowed,
 } from "@unhalteproblem.de/api";
-import { DateTime, Effect, Exit, Option } from "effect";
+import { Cause, DateTime, Effect, Exit, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { hashSecret } from "#auth/Secrets";
@@ -992,6 +993,227 @@ describe("moderation audit trail", () => {
           .pipe(asAdmin(admin), Effect.exit);
         assert.isTrue(Exit.isFailure(exit));
         assert.strictEqual((yield* sql`SELECT 1 FROM audit_log`).length, 0);
+      }),
+    );
+  });
+});
+
+/** Runs a command as `actor`, as if `RequireBlogRequestModerator` had checked them. */
+const asModerator =
+  (actor: Member) =>
+  <A, E, R>(self: Effect.Effect<A, E, R>) =>
+    Effect.provideService(self, Authorized("admin", "superAdmin"), {
+      user: { id: actor.subject, roles: actor.roles },
+      roles: ["admin"] as const,
+    });
+
+/** Creates a subblog in SQL. */
+const insertBlog = (slug: string) =>
+  Effect.flatMap(
+    SqlClient.SqlClient,
+    (sql) => sql`
+      INSERT INTO blogs (id, slug, title, description, created_at, updated_at)
+      VALUES (${crypto.randomUUID()}, ${slug}, ${slug}, '', now(), now())
+    `,
+  ).pipe(Effect.orDie);
+
+describe("ModerationCommands.grantApprovedBlogEditor", () => {
+  layer(UsersTest, { timeout: "30 seconds" })((it) => {
+    it.effect.each(["admin", "superAdmin"] as const)(
+      "lets a moderator with only %s grant the editor role, logged and audited",
+      (role) =>
+        Effect.gen(function* () {
+          const commands = yield* ModerationCommands;
+          const sql = yield* SqlClient.SqlClient;
+          const moderator = yield* member(role);
+          const target = yield* member();
+          const slug = `blog-${role.toLowerCase()}`;
+          yield* insertBlog(slug);
+          yield* sql`DELETE FROM audit_log`;
+          const events = yield* published;
+
+          yield* commands
+            .grantApprovedBlogEditor(target.user.id, slug)
+            .pipe(asModerator(moderator));
+
+          assert.deepStrictEqual(yield* rolesOf(target), [
+            `blogEditor:${slug}`,
+            "normalUser",
+          ]);
+          const log = yield* roleChangeRows(target);
+          assert.deepStrictEqual(
+            log.map(({ role, change, changedBy }) => [role, change, changedBy]),
+            [
+              ["normalUser", "granted", null],
+              [`blogEditor:${slug}`, "granted", moderator.user.id],
+            ],
+          );
+          const audit = yield* sql<{
+            readonly action: string;
+            readonly actorId: string;
+            readonly targetId: string;
+            readonly detail: string | null;
+          }>`SELECT action, actor_id, target_id, detail FROM audit_log`;
+          assert.deepStrictEqual(audit, [
+            {
+              action: "role_granted",
+              actorId: moderator.user.id,
+              targetId: target.user.id,
+              detail: `blogEditor:${slug}`,
+            },
+          ]);
+          assert.deepStrictEqual(
+            (yield* events.take).filter(
+              (event) => event instanceof RoleGranted,
+            ),
+            [
+              new RoleGranted({
+                userId: target.user.id,
+                role: `blogEditor:${slug}`,
+                by: moderator.user.id,
+              }),
+            ],
+          );
+        }),
+    );
+
+    it.effect(
+      "dies for a subblog that has an editor already and grants nothing",
+      () =>
+        Effect.gen(function* () {
+          const commands = yield* ModerationCommands;
+          const moderator = yield* member("admin");
+          const editor = yield* member();
+          const other = yield* member();
+          yield* insertBlog("taken");
+          yield* commands
+            .grantApprovedBlogEditor(editor.user.id, "taken")
+            .pipe(asModerator(moderator));
+          const log = yield* roleChangeRows(editor);
+
+          // Neither a second editor nor the same one again: this grant is
+          // only for the subblog an approval has just created.
+          for (const target of [other, editor]) {
+            const exit = yield* commands
+              .grantApprovedBlogEditor(target.user.id, "taken")
+              .pipe(asModerator(moderator), Effect.exit);
+            assert.isTrue(Exit.isFailure(exit) && Cause.hasDies(exit.cause));
+          }
+          assert.deepStrictEqual(yield* rolesOf(other), ["normalUser"]);
+          assert.deepStrictEqual(yield* roleChangeRows(editor), log);
+        }),
+    );
+
+    it.effect("is refused with Forbidden for the moderator themselves", () =>
+      Effect.gen(function* () {
+        const commands = yield* ModerationCommands;
+        const moderator = yield* member("admin");
+        yield* insertBlog("myself");
+
+        const error = yield* commands
+          .grantApprovedBlogEditor(moderator.user.id, "myself")
+          .pipe(asModerator(moderator), Effect.flip);
+
+        assert.instanceOf(error, Forbidden);
+        assert.notInclude(yield* rolesOf(moderator), "blogEditor:myself");
+      }),
+    );
+
+    it.effect(
+      "is refused with Forbidden without admin or superAdmin in the database",
+      () =>
+        Effect.gen(function* () {
+          const commands = yield* ModerationCommands;
+          // The proof says admin (read just before a revocation), the
+          // database no longer does.
+          const stale = {
+            ...(yield* member()),
+            roles: ["admin", "normalUser"],
+          } satisfies Member;
+          const target = yield* member();
+          yield* insertBlog("stale");
+          const log = yield* roleChangeRows(target);
+
+          const error = yield* commands
+            .grantApprovedBlogEditor(target.user.id, "stale")
+            .pipe(asModerator(stale), Effect.flip);
+
+          assert.instanceOf(error, Forbidden);
+          assert.deepStrictEqual(yield* rolesOf(target), ["normalUser"]);
+          assert.deepStrictEqual(yield* roleChangeRows(target), log);
+        }),
+    );
+
+    it.effect(
+      "is refused with Forbidden while the moderator is restricted",
+      () =>
+        Effect.gen(function* () {
+          const commands = yield* ModerationCommands;
+          const root = yield* member("admin", "superAdmin");
+          const moderator = yield* member("admin");
+          const target = yield* member();
+          yield* insertBlog("restricted");
+          yield* commands
+            .restrict(moderator.user.id, "rogue")
+            .pipe(asAdmin(root));
+
+          const error = yield* commands
+            .grantApprovedBlogEditor(target.user.id, "restricted")
+            .pipe(asModerator(moderator), Effect.flip);
+
+          assert.instanceOf(error, Forbidden);
+          assert.deepStrictEqual(yield* rolesOf(target), ["normalUser"]);
+        }),
+    );
+
+    it.effect("fails with UserNotFound for an unknown id", () =>
+      Effect.gen(function* () {
+        const commands = yield* ModerationCommands;
+        const moderator = yield* member("admin");
+        yield* insertBlog("nobody");
+        const error = yield* commands
+          .grantApprovedBlogEditor(unknownId, "nobody")
+          .pipe(asModerator(moderator), Effect.flip);
+        assert.deepStrictEqual(error, new UserNotFound({ userId: unknownId }));
+      }),
+    );
+
+    it.effect(
+      "fails with UserNotFound for a deleted account and grants nothing",
+      () =>
+        Effect.gen(function* () {
+          const commands = yield* ModerationCommands;
+          const users = yield* UserCommands;
+          const moderator = yield* member("admin");
+          const target = yield* member();
+          yield* insertBlog("deleted");
+          yield* users.deleteAccount(target.subject);
+
+          const error = yield* commands
+            .grantApprovedBlogEditor(target.user.id, "deleted")
+            .pipe(asModerator(moderator), Effect.flip);
+
+          assert.deepStrictEqual(
+            error,
+            new UserNotFound({ userId: target.user.id }),
+          );
+          assert.notInclude(
+            (yield* roleRows(target)).map(({ role }) => role),
+            "blogEditor:deleted",
+          );
+        }),
+    );
+
+    it.effect("dies for a subblog that does not exist and grants nothing", () =>
+      Effect.gen(function* () {
+        const commands = yield* ModerationCommands;
+        const moderator = yield* member("admin");
+        const target = yield* member();
+        const exit = yield* commands
+          .grantApprovedBlogEditor(target.user.id, "missing-blog")
+          .pipe(asModerator(moderator), Effect.exit);
+        assert.isTrue(Exit.isFailure(exit) && Cause.hasDies(exit.cause));
+        assert.deepStrictEqual(yield* rolesOf(target), ["normalUser"]);
       }),
     );
   });

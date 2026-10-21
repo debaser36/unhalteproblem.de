@@ -14,7 +14,9 @@ import { UserDirectoryLive, UsersLive } from "./users/Users.ts";
 // Moderation acts on users (through their directory), and registering a user
 // grants their first roles (through moderation): users' directory, then
 // moderation, then the rest of users. Moderation also asks the blogs'
-// directory before it grants an editor role.
+// directory before it grants an editor role. Approving a blog request in
+// turn grants the editor role through moderation, which the blogs layer gets
+// from the `provideMerge(Moderation)` below.
 const Moderation = ModerationLive.pipe(
   Layer.provide([UserDirectoryLive, BlogDirectoryLive]),
 );

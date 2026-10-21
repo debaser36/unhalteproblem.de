@@ -4,7 +4,9 @@ Users have roles: `normalUser`, `admin` and `superAdmin` (`Role` in
 `@unhalteproblem.de/api`), and `blogEditor:<slug>`, which lets its holder
 edit the posts of the subblog `<slug>` (lowercase letters and digits in
 groups joined by hyphens, at most 64 characters). superAdmins grant and
-revoke it through the admin API like any other role. Roles are flat, so no
+revoke it through the admin API like any other role; an admin or superAdmin
+approving a user's blog request also grants it to them for the new subblog
+(see [blogs.md](blogs.md)). Roles are flat, so no
 role includes another, and a user can hold several. Every user gets
 `normalUser` at registration. Roles are stored in `user_roles` and read on every authenticated request, in the same
 query as the session (`#auth/SessionAccess`; into

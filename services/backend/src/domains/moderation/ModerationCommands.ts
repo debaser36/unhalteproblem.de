@@ -2,8 +2,10 @@ import {
   AccountDeletionNotAllowed,
   AlreadyRestricted,
   Authorized,
+  blogEditorRole,
   BlogNotFound,
   blogOfEditorRole,
+  type BlogSlug,
   Forbidden,
   NotRestricted,
   RestrictionNotAllowed,
@@ -48,14 +50,14 @@ const make = Effect.gen(function* () {
    * and read under that lock.
    *
    * The proof only says what the actor held when their request started. If
-   * they lost `required` or were restricted since (say, by a moderator
+   * they lost every role of `required` or were restricted since (say, by a moderator
    * acting on them at the same moment), they are refused with `Forbidden`
    * here, so two superAdmins restricting each other can't both succeed.
    */
   const lockParties = Effect.fnUntraced(function* (
     proof: { readonly user: { readonly id: string } },
     targetId: UserId,
-    required: Role,
+    required: ReadonlyArray<Role>,
   ) {
     const actorUser = yield* users.findBySubject(proof.user.id);
     if (Option.isNone(actorUser)) {
@@ -73,7 +75,8 @@ const make = Effect.gen(function* () {
     const roles = yield* moderation.rolesOfUsers([actorId, targetId]);
     const actor: Party = { id: actorId, roles: roles.get(actorId) ?? [] };
     const restricted = yield* moderation.activeRestrictionsOf([actorId]);
-    if (!actor.roles.includes(required) || restricted.has(actorId)) {
+    const permitted = required.some((role) => actor.roles.includes(role));
+    if (!permitted || restricted.has(actorId)) {
       return yield* new Forbidden();
     }
     return { actor, target, targetRoles: roles.get(targetId) ?? [] };
@@ -121,13 +124,50 @@ const make = Effect.gen(function* () {
       const { actor } = yield* lockParties(
         yield* Authorized("superAdmin"),
         userId,
-        "superAdmin",
+        ["superAdmin"],
       );
       // An editor role only for a subblog that exists: one for a subblog
       // created later would start to count without anyone deciding so then.
       const blog = blogOfEditorRole(role);
       if (Option.isSome(blog) && !(yield* blogs.exists(blog.value))) {
         return yield* new BlogNotFound({ blog: blog.value });
+      }
+      const now = yield* DateTime.now;
+      const change = { userId, role, by: Option.some(actor.id), at: now };
+      if (yield* moderation.grantRole(change)) {
+        yield* moderation.recordRoleChange({ ...change, change: "granted" });
+        yield* DomainEvent.record(
+          new RoleGranted({ userId, role, by: actor.id }),
+        );
+        yield* audit.record({
+          action: "role_granted",
+          actor: Option.some(actor.id),
+          target: Option.some(userId),
+          detail: role,
+        });
+      }
+    }, Command.boundary(transaction)),
+
+    grantApprovedBlogEditor: Effect.fn(
+      "ModerationCommands.grantApprovedBlogEditor",
+    )(function* (userId: UserId, blog: BlogSlug) {
+      const { actor } = yield* lockParties(
+        yield* Authorized("admin", "superAdmin"),
+        userId,
+        ["admin", "superAdmin"],
+      );
+      // Admins grant no other role, and only to someone else for a subblog
+      // nobody edits yet: the one their approval just created. Anything
+      // else stays with superAdmins (`grantRole`).
+      if (actor.id === userId) return yield* new Forbidden();
+      const role = blogEditorRole(blog);
+      if (!(yield* blogs.exists(blog))) {
+        return yield* Effect.die(new Error("Approved blog does not exist"));
+      }
+      if (yield* moderation.isHeld(role)) {
+        return yield* Effect.die(
+          new Error("Approved blog has editors already"),
+        );
       }
       const now = yield* DateTime.now;
       const change = { userId, role, by: Option.some(actor.id), at: now };
@@ -153,11 +193,9 @@ const make = Effect.gen(function* () {
       // Locked before the users, in the same order everywhere, so two
       // revocations can't both see a second superAdmin.
       const superAdmins = yield* moderation.lockSuperAdmins;
-      const { actor, targetRoles } = yield* lockParties(
-        proof,
-        userId,
+      const { actor, targetRoles } = yield* lockParties(proof, userId, [
         "superAdmin",
-      );
+      ]);
       if (!targetRoles.includes(role)) return;
       const refusal = revocationRefusal({
         actor: actor.id,
@@ -195,7 +233,7 @@ const make = Effect.gen(function* () {
       const { actor, target, targetRoles } = yield* lockParties(
         yield* Authorized("admin"),
         userId,
-        "admin",
+        ["admin"],
       );
       const refusal = restrictionRefusal(actor, {
         id: userId,
@@ -242,7 +280,7 @@ const make = Effect.gen(function* () {
       const { actor, target, targetRoles } = yield* lockParties(
         yield* Authorized("admin"),
         userId,
-        "admin",
+        ["admin"],
       );
       const refusal = restrictionRefusal(actor, {
         id: userId,
@@ -330,6 +368,24 @@ export class ModerationCommands extends Context.Service<
       void,
       UserNotFound | BlogNotFound | Forbidden,
       Authorized<"superAdmin">
+    >;
+    /**
+     * Grants `blogEditor:<blog>` to a user whose blog request an admin or
+     * superAdmin approved: the one role they grant without being
+     * superAdmins. Never to the moderator themselves (`Forbidden`), and only
+     * for a subblog that exists and has no editor yet (a defect otherwise),
+     * so it can't make anyone an editor of an existing subblog.
+     * Logged like `grantRole`. It is for one caller,
+     * `BlogRequestCommands.approve`, which creates the subblog first and
+     * joins its transaction.
+     */
+    readonly grantApprovedBlogEditor: (
+      userId: UserId,
+      blog: BlogSlug,
+    ) => Effect.Effect<
+      void,
+      UserNotFound | Forbidden,
+      Authorized<"admin" | "superAdmin">
     >;
     /**
      * Revokes a role (superAdmins only). Revoking a role the user doesn't

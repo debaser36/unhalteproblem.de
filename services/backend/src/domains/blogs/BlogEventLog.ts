@@ -7,8 +7,14 @@ import {
   PostSaved,
   PostUnpublished,
 } from "./Blog.ts";
+import {
+  BlogRequestApproved,
+  BlogRequested,
+  BlogRequestRejected,
+  BlogRequestWithdrawn,
+} from "./BlogRequest.ts";
 
-/** Logs the blogs domain's events: ids only, never post content. */
+/** Logs the blogs domain's events: ids only, never post or request content. */
 export const BlogEventLog = DomainEvent.subscriber(
   "BlogEventLog",
   Schema.Union([
@@ -17,6 +23,10 @@ export const BlogEventLog = DomainEvent.subscriber(
     PostPublished,
     PostUnpublished,
     PostDeleted,
+    BlogRequested,
+    BlogRequestApproved,
+    BlogRequestRejected,
+    BlogRequestWithdrawn,
   ]),
   (event) =>
     Match.valueTags(event, {
@@ -37,6 +47,22 @@ export const BlogEventLog = DomainEvent.subscriber(
       PostDeleted: ({ blog, postId, by }) =>
         Effect.logInfo("Post deleted").pipe(
           Effect.annotateLogs({ blog, postId, by }),
+        ),
+      BlogRequested: ({ requestId, by }) =>
+        Effect.logInfo("Blog requested").pipe(
+          Effect.annotateLogs({ requestId, by }),
+        ),
+      BlogRequestApproved: ({ requestId, blog, requester, by }) =>
+        Effect.logInfo("Blog request approved").pipe(
+          Effect.annotateLogs({ requestId, blog, requester, by }),
+        ),
+      BlogRequestRejected: ({ requestId, requester, by }) =>
+        Effect.logInfo("Blog request rejected").pipe(
+          Effect.annotateLogs({ requestId, requester, by }),
+        ),
+      BlogRequestWithdrawn: ({ requestId, by }) =>
+        Effect.logInfo("Blog request withdrawn").pipe(
+          Effect.annotateLogs({ requestId, by }),
         ),
     }),
 );

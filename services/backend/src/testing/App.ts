@@ -1,5 +1,10 @@
 import { assert } from "@effect/vitest";
-import { Api, RequireAdmin, RequireSuperAdmin } from "@unhalteproblem.de/api";
+import {
+  Api,
+  RequireAdmin,
+  RequireBlogRequestModerator,
+  RequireSuperAdmin,
+} from "@unhalteproblem.de/api";
 import {
   AccessToken,
   IdToken,
@@ -26,6 +31,10 @@ import { AdminInsightsHandlers } from "#http/AdminInsights";
 import { AuthHandlers } from "#http/Auth";
 import { AuthenticationLive } from "#http/Authentication";
 import { BlogEditorHandlers } from "#http/BlogEditor";
+import {
+  BlogRequestAdminHandlers,
+  BlogRequestsHandlers,
+} from "#http/BlogRequests";
 import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
 import { LargeBodyLive } from "#http/LargeBody";
@@ -302,6 +311,8 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     AccountHandlers,
     BlogsHandlers,
     BlogEditorHandlers,
+    BlogRequestsHandlers,
+    BlogRequestAdminHandlers,
     MediaHandlers,
     ProjectsHandlers,
     ProjectAdminHandlers,
@@ -312,6 +323,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
       Authorization.blogEditorMiddleware,
       Authorization.middleware(RequireAdmin),
       Authorization.middleware(RequireSuperAdmin),
+      Authorization.middleware(RequireBlogRequestModerator),
       Layer.succeed(OidcProvider, makeProvider(options)),
       TokenVerifier.layerWith({
         issuer,

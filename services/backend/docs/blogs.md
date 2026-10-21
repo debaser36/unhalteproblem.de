@@ -7,7 +7,8 @@ changes, since it is in URLs and in roles. Its posts are written in place on
 the website by the holders of **`blogEditor:<slug>`**, granted by superAdmins
 like any role (`PUT /admin/users/:id/roles/blogEditor:<slug>`, 404
 `BlogNotFound` for a subblog that doesn't exist, so no editor role waits for
-one that might be created later).
+one that might be created later), or by approving a user's blog request
+(see below).
 
 | Endpoints                                 | Who                 | Does                                                          |
 | ----------------------------------------- | ------------------- | ------------------------------------------------------------- |
@@ -45,3 +46,45 @@ one that might be created later).
 
 Look at the posts of a subblog with
 `SELECT p.slug, p.status, p.published_at, p.version FROM blog_posts p JOIN blogs b ON b.id = p.blog_id WHERE b.slug = '…' ORDER BY p.updated_at DESC`.
+
+## Blog requests
+
+Any logged-in user can ask for a subblog of their own on the website
+(`/blog/~request`), with a title and a description (`blog_requests`,
+`BlogRequestCommands` and `BlogRequestQueries` in the blogs domain). An
+**admin or superAdmin** decides it in the admin panel:
+
+| Endpoints                               | Who                     | Does                                                        |
+| --------------------------------------- | ----------------------- | ----------------------------------------------------------- |
+| `GET /blog-requests`                    | any logged-in user      | The caller's own requests, newest first (the latest 50)     |
+| `POST /blog-requests`                   | any logged-in user      | Asks for a subblog; 409 `BlogRequestAlreadyPending`         |
+| `POST /blog-requests/:id/withdraw`      | the requester           | Withdraws their pending request                             |
+| `GET /admin/blog-requests?status&limit` | `admin` or `superAdmin` | All requests (or those with `status`), newest first         |
+| `POST /admin/blog-requests/:id/approve` | `admin` or `superAdmin` | Creates the subblog with the chosen slug, makes them editor |
+| `POST /admin/blog-requests/:id/reject`  | `admin` or `superAdmin` | Rejects it, with an optional reason the requester sees      |
+
+- **One at a time.** A user has at most one pending request (the partial
+  unique index `blog_requests_one_pending_per_user`); a decided or
+  withdrawn one is kept, so they can ask again.
+- **Approval** happens in one transaction: the subblog is created with the
+  request's title and description and the slug the moderator chose (409
+  `BlogSlugTaken`), the requester gets `blogEditor:<slug>`
+  (`ModerationCommands.grantApprovedBlogEditor`, logged in the role change
+  log like any grant), and the request records the subblog. This is the one
+  role an admin grants without being a superAdmin, and moderation grants it
+  only to someone else and only for a subblog nobody edits yet. If the
+  requester has
+  deleted their account meanwhile, approval fails with 404 `UserNotFound`
+  and nothing is created; reject the request instead.
+- **Nobody decides their own request** (403 `Forbidden`): it would let an
+  admin make themselves an editor. Approving re-checks the moderator under
+  lock, like in moderation (a rejection grants nothing, so it goes by the
+  request's proof). A request that is no longer pending answers 409
+  `BlogRequestNotPending`.
+- **Audit.** Approval writes `blog_created`, `role_granted` and
+  `blog_request_approved` (target the requester, detail the slug); a
+  rejection writes `blog_request_rejected` without the reason. The event
+  log has ids only.
+
+Look at open requests with
+`SELECT id, requester_id, title, created_at FROM blog_requests WHERE status = 'pending' ORDER BY created_at`.

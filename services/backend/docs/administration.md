@@ -29,8 +29,12 @@ meanwhile appear on later pages without shifting earlier ones. The cursor
 holds the time in milliseconds, which is the precision `users.created_at` is
 written with (from the Effect clock), so don't insert users by hand.
 
-Roles are flat here too: a superAdmin needs `admin` as well to use the
-admin endpoints. `:id` is our user id (`users.id`), not the Keycloak `sub`.
+Blog requests are decided under `/admin/blog-requests` by admins or
+superAdmins; see [blogs.md](blogs.md).
+
+Roles are flat here too: apart from the blog requests, a superAdmin needs
+`admin` as well to use the admin endpoints. `:id` is our user id
+(`users.id`), not the Keycloak `sub`.
 
 - **Roles.** Granting a held role and revoking one that isn't held change
   nothing. Nobody revokes their own `superAdmin`, and the last superAdmin

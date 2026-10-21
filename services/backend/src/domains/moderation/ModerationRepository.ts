@@ -183,6 +183,14 @@ const make = Effect.gen(function* () {
           )
         : Effect.succeed(new Map()),
 
+    isHeld: (role) =>
+      sql<{ readonly held: boolean }>`
+        SELECT EXISTS (SELECT 1 FROM user_roles WHERE role = ${role}) AS held
+      `.pipe(
+        Effect.map((rows) => rows[0]?.held === true),
+        Effect.withSpan("ModerationRepository.isHeld"),
+      ),
+
     lockSuperAdmins: sql<{ readonly userId: UserId }>`
       SELECT user_id FROM user_roles WHERE role = 'superAdmin' FOR UPDATE
     `.pipe(
@@ -309,6 +317,8 @@ export class ModerationRepository extends Context.Service<
       ReadonlyArray<UserId>,
       SqlError.SqlError
     >;
+    /** Whether anybody holds the role. */
+    readonly isHeld: (role: Role) => Effect.Effect<boolean, SqlError.SqlError>;
     /** Grants the role; returns whether the user didn't hold it yet. */
     readonly grantRole: (grant: {
       readonly userId: UserId;
