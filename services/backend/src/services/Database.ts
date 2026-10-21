@@ -22,6 +22,7 @@ import createBlogsAndMedia from "#migrations/0013_create_blogs_and_media";
 import createProjects from "#migrations/0014_create_projects";
 import auditAdminInsights from "#migrations/0015_audit_admin_insights";
 import auditContentChanges from "#migrations/0016_audit_content_changes";
+import createBlogRequests from "#migrations/0017_create_blog_requests";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -47,6 +48,7 @@ export const migrations = {
   "0014_create_projects": createProjects,
   "0015_audit_admin_insights": auditAdminInsights,
   "0016_audit_content_changes": auditContentChanges,
+  "0017_create_blog_requests": createBlogRequests,
 };
 
 /** Loads {@link migrations} in id order. */

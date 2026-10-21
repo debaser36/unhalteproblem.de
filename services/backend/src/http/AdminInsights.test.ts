@@ -26,6 +26,7 @@ const migrationNames = [
   "create_projects",
   "audit_admin_insights",
   "audit_content_changes",
+  "create_blog_requests",
 ];
 
 interface OutboxFields {

@@ -224,3 +224,33 @@ export const insertProject = (
     )
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));
+
+/** Inserts a blog request, a pending one by default, and returns its id. */
+export const insertBlogRequest = (
+  sql: SqlClient.SqlClient,
+  request: {
+    readonly requesterId: string;
+    readonly title?: string;
+    readonly description?: string;
+    readonly status?: string;
+    readonly createdAt?: string;
+    readonly decidedAt?: string | null;
+    readonly decidedBy?: string | null;
+    readonly reason?: string | null;
+    readonly blogId?: string | null;
+  },
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO blog_requests (
+      id, requester_id, title, description, status, created_at, decided_at,
+      decided_by, reason, blog_id
+    )
+    VALUES (
+      gen_random_uuid(), ${request.requesterId}, ${request.title ?? "Title"},
+      ${request.description ?? ""}, ${request.status ?? "pending"},
+      ${request.createdAt ?? "2026-01-01T00:00:00Z"}::timestamptz,
+      ${request.decidedAt ?? null}::timestamptz, ${request.decidedBy ?? null},
+      ${request.reason ?? null}, ${request.blogId ?? null}
+    )
+    RETURNING id
+  `.pipe(Effect.map(([row]) => row.id));

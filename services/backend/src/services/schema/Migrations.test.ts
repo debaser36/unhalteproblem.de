@@ -358,3 +358,61 @@ describe("0016_audit_content_changes", () => {
     { timeout: 30_000 },
   );
 });
+
+describe("0017_create_blog_requests", () => {
+  // Runs the migrations up to 0016 first, so the log has rows (including
+  // actions added by 0016) before the check is replaced.
+  const DatabaseBefore0017 = databaseUpTo(16);
+
+  it.effect(
+    "keeps the existing entries and validates the replaced check",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, target_id, detail)
+          VALUES
+            ('2026-01-01T00:00:00Z', 'login', gen_random_uuid(), NULL, NULL),
+            ('2026-01-02T00:00:00Z', 'blog_created', gen_random_uuid(), NULL, 'rust-notes')
+        `;
+        // Not allowed before 0017.
+        const before = yield* sql`
+          INSERT INTO audit_log (at, action, detail)
+          VALUES ('2026-01-03T00:00:00Z', 'blog_request_approved', 'rust-notes')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(17) });
+        assert.deepStrictEqual(applied, [[17, "create_blog_requests"]]);
+
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["login", "blog_created"],
+        );
+
+        // Same name, and validated (not NOT VALID).
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conrelid = 'audit_log'::regclass
+            AND conname = 'audit_log_action_check'
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "audit_log_action_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, target_id, detail)
+          VALUES
+            ('2026-01-03T00:00:00Z', 'blog_request_approved', gen_random_uuid(), gen_random_uuid(), 'rust-notes'),
+            ('2026-01-04T00:00:00Z', 'blog_request_rejected', gen_random_uuid(), gen_random_uuid(), NULL)
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0017)),
+    { timeout: 30_000 },
+  );
+});
