@@ -1,7 +1,8 @@
 # Authorization
 
-Users have roles: `normalUser`, `admin` and `superAdmin` (`Role` in
-`@unhalteproblem.de/api`), and `blogEditor:<slug>`, which lets its holder
+Users have roles: `normalUser`, `admin`, `superAdmin` and `foodPlanner`
+(uses the food planner, see [food.md](food.md); since migration 0019)
+(`Role` in `@unhalteproblem.de/api`), and `blogEditor:<slug>`, which lets its holder
 edit the posts of the subblog `<slug>` (lowercase letters and digits in
 groups joined by hyphens, at most 64 characters). superAdmins grant and
 revoke it through the admin API like any other role; an admin or superAdmin
