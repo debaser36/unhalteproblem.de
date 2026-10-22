@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { BlogSlug } from "@unhalteproblem.de/api";
-import { breadcrumbsJsonLd } from "@unhalteproblem.de/seo";
+import { blogSeo } from "@unhalteproblem.de/seo";
 import { Option } from "effect";
 import { PenSquare } from "lucide-react";
 import { useParams } from "react-router";
@@ -8,7 +8,6 @@ import { AsyncView } from "#api/AsyncView.tsx";
 import { userAtom } from "#api/session.ts";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
 import { Seo } from "#app/Seo.tsx";
-import { site } from "#app/site.ts";
 import { ButtonLink } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
 import { PageHeader } from "#ui/PageHeader.tsx";
@@ -45,16 +44,11 @@ function Blog({ blog }: { readonly blog: BlogSlug }) {
       {(info) => (
         <Container>
           <Seo
-            title={info.title}
-            description={info.description}
-            path={`/blog/${blog}`}
-            jsonLd={[
-              breadcrumbsJsonLd(site.origin, [
-                { name: "Home", path: "/" },
-                { name: "Blog", path: "/blog" },
-                { name: info.title, path: `/blog/${blog}` },
-              ]),
-            ]}
+            {...blogSeo({
+              slug: blog,
+              title: info.title,
+              description: info.description,
+            })}
           />
           <PageHeader
             path={`~/blog/${blog}`}

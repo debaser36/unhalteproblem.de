@@ -4,7 +4,7 @@ import {
   type BlogSlug,
   type PublishedPost,
 } from "@unhalteproblem.de/api";
-import { blogPostingJsonLd, breadcrumbsJsonLd } from "@unhalteproblem.de/seo";
+import { postSeo } from "@unhalteproblem.de/seo";
 import { DateTime, Option } from "effect";
 import { ArrowLeft, PenLine } from "lucide-react";
 import { useState } from "react";
@@ -13,7 +13,6 @@ import { AsyncView } from "#api/AsyncView.tsx";
 import { userAtom } from "#api/session.ts";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
 import { Seo } from "#app/Seo.tsx";
-import { site } from "#app/site.ts";
 import { toEditorContent } from "#editor/convert.ts";
 import { RichDocument } from "#editor/RichDocument.tsx";
 import { Button } from "#ui/Button.tsx";
@@ -102,47 +101,21 @@ function Reading({
   readonly post: PublishedPost;
   readonly onEdit: (() => void) | undefined;
 }) {
-  const path = `/blog/${post.blog}/${post.slug}`;
-  const image =
-    post.coverImage === null ? undefined : mediaUrl(post.coverImage);
-  const publishedAt = DateTime.formatIso(post.publishedAt);
-  const updatedAt = DateTime.formatIso(post.updatedAt);
-  const description =
-    post.summary !== ""
-      ? post.summary
-      : `${post.title}, a post by ${post.author.name ?? site.owner}.`;
   return (
     <article className="animate-fade-up">
       <Seo
-        title={post.title}
-        description={description}
-        path={path}
-        image={image}
-        article={{
-          publishedAt,
-          updatedAt,
-          author: post.author.name,
+        {...postSeo({
+          blog: post.blog,
+          slug: post.slug,
+          title: post.title,
+          summary: post.summary,
+          image: post.coverImage === null ? null : mediaUrl(post.coverImage),
+          publishedAt: DateTime.formatIso(post.publishedAt),
+          updatedAt: DateTime.formatIso(post.updatedAt),
+          authorName: post.author.name,
           tags: post.tags,
-        }}
-        jsonLd={[
-          blogPostingJsonLd(site.origin, {
-            path,
-            title: post.title,
-            description,
-            image,
-            publishedAt,
-            updatedAt,
-            author: post.author.name,
-            tags: post.tags,
-            section: post.categories.main.name,
-          }),
-          breadcrumbsJsonLd(site.origin, [
-            { name: "Home", path: "/" },
-            { name: "Blog", path: "/blog" },
-            { name: post.blog, path: `/blog/${post.blog}` },
-            { name: post.title, path },
-          ]),
-        ]}
+          category: post.categories.main.name,
+        })}
       />
       <PostHeader
         blog={post.blog}

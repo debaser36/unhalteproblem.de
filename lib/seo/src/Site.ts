@@ -18,3 +18,30 @@ export const site = {
   /** The default preview image (1200x630) for pages without a cover. */
   image: "/og-image.png",
 } as const;
+
+/**
+ * Site-wide structured data: the website and its owner. `index.html` carries
+ * a copy for crawlers without JavaScript (a test keeps the two equal), and
+ * the backend's crawler pages embed it.
+ */
+export const siteJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${site.origin}/#website`,
+      url: `${site.origin}/`,
+      name: site.name,
+      description: "Notes, projects and experiments by Nico.",
+      inLanguage: "en",
+      publisher: { "@id": `${site.origin}/#person` },
+    },
+    {
+      "@type": "Person",
+      "@id": `${site.origin}/#person`,
+      name: site.fullName,
+      url: `${site.origin}/about`,
+      sameAs: [site.githubUrl],
+    },
+  ],
+} as const;
