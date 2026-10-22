@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+# Private and utility pages (they are also noindex).
+Disallow: /admin
+Disallow: /account
+Disallow: /blog/~request
+Disallow: /blog/*/manage
+Disallow: /blog/*/edit/
+Disallow: /projects/~
+# The API is not for crawlers, except the images that posts and previews use.
+Disallow: /api/
+Allow: /api/media/
+
+Sitemap: https://unhalteproblem.de/sitemap.xml
