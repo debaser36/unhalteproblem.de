@@ -214,7 +214,7 @@ export {
   PublishedProject,
   UpdateProjectPayload,
 } from "#domain/Project";
-export { SeoPage } from "#domain/Seo";
+export { SeoBlogQuery, SeoLimits, SeoPage } from "#domain/Seo";
 
 export { AccountDeletionNotAllowed } from "#errors/AccountDeletionNotAllowed";
 export { AlreadyRestricted } from "#errors/AlreadyRestricted";

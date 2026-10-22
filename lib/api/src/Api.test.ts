@@ -236,6 +236,13 @@ describe("OpenAPI document", () => {
     }
   });
 
+  it("documents page as an optional query parameter of GET /seo/blogs/{blog}", () => {
+    const query = (spec.paths["/seo/blogs/{blog}"]?.get?.parameters ?? [])
+      .filter((parameter) => parameter.in === "query")
+      .map(({ name, required }) => ({ name, required }));
+    assert.deepStrictEqual(query, [{ name: "page", required: false }]);
+  });
+
   it("documents the Location header of the redirects", () => {
     const redirects = [
       spec.paths["/auth/login"]?.get?.responses["302"],

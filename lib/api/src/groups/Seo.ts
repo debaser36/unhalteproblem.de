@@ -1,6 +1,6 @@
 import { BlogSlug, PostSlug } from "#domain/Blog";
 import { ProjectSlug } from "#domain/Project";
-import { SeoPage } from "#domain/Seo";
+import { SeoBlogQuery, SeoLimits, SeoPage } from "#domain/Seo";
 import { BlogNotFound } from "#errors/BlogNotFound";
 import { PostNotFound } from "#errors/PostNotFound";
 import { ProjectNotFound } from "#errors/ProjectNotFound";
@@ -60,6 +60,7 @@ export class SeoGroup extends HttpApiGroup.make("seo")
     ),
     HttpApiEndpoint.get("renderBlog", "/seo/blogs/:blog", {
       params: { blog: BlogSlug },
+      query: SeoBlogQuery,
       success: html("The HTML page of the subblog."),
       error: BlogNotFound,
     }).annotateMerge(
@@ -67,7 +68,11 @@ export class SeoGroup extends HttpApiGroup.make("seo")
         summary: "Render a subblog",
         description:
           pageDescription +
-          " Renders the subblog with its published posts; 404 " +
+          " Renders the subblog with its published posts, 50 per page; " +
+          "`page` (1-based, 1 if absent) selects the page. A page beyond " +
+          "the last answers 200 with an empty list. A `page` outside " +
+          `1 to ${SeoLimits.maxPage} or a non-integer is rejected with 400 ` +
+          "(later posts are reachable through the sitemap); 404 " +
           "`BlogNotFound` for an unknown slug.",
       }),
     ),
