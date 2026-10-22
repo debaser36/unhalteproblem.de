@@ -219,7 +219,7 @@ const exit = await submit({ payload: { name, email, message } });
 Plain Effect client: `const client = yield* HttpApiClient.make(Api, { baseUrl })`, then
 `client.group.endpoint({ params, query, payload })`; no-arg endpoints: `client.health()`.
 `HttpApiClient.urlBuilder(Api, { baseUrl })` builds URLs for endpoints you navigate to (login redirects).
-Source: services/backend/src/services/OidcProvider.ts, repos/effect/ai-docs/src/51_http-server/10_basics.ts
+Source: services/backend/src/auth/OidcProvider.ts, repos/effect/ai-docs/src/51_http-server/10_basics.ts
 
 ## Error handling
 

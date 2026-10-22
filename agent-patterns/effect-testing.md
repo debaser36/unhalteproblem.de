@@ -67,7 +67,7 @@ it.effect("gives every client its own quota", () =>
 );
 ```
 
-Source: services/backend/src/services/ContactRateLimit.test.ts. Here the
+Source: services/backend/src/domains/contact/ContactRateLimit.test.ts. Here the
 layer is built per test, so tests don't share state.
 
 ### Share one expensive layer (database) across a `describe`

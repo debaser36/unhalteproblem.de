@@ -81,9 +81,9 @@ export class MailFailed extends Schema.TaggedError<
 }
 ```
 
-Source: services/backend/src/services/Mailer.ts (`message` getter shortened).
+Source: services/backend/src/infrastructure/Mailer.ts (`message` getter shortened).
 Marker errors without fields (`{}`) are fine
-(services/backend/src/services/ContactRateLimit.ts). Keep secrets and user
+(services/backend/src/domains/contact/ContactRateLimit.ts). Keep secrets and user
 data out of fields and `message`: they reach logs.
 
 ### Translate a database constraint into a domain error
@@ -101,7 +101,7 @@ transaction
 Source: services/backend/src/domains/blogs/BlogCommands.ts. Only inside a
 savepoint (a nested `Transaction.run`), otherwise the transaction is dead.
 `isUniqueViolation` checks `SqlError.isSqlError(e) && e.reason._tag ===
-"UniqueViolation"` (services/backend/src/repositories/Columns.ts).
+"UniqueViolation"` (services/backend/src/infrastructure/Columns.ts).
 
 ### Infrastructure errors become defects at the boundary
 
@@ -154,7 +154,7 @@ limiter.consume({ key, limit, window }).pipe(
 );
 ```
 
-Source: services/backend/src/services/ContactRateLimit.ts. Vendored example:
+Source: services/backend/src/domains/contact/ContactRateLimit.ts. Vendored example:
 `Effect.catchReason("AiError", "RateLimitError", (r) => ...)` in
 repos/effect Effect.ts JSDoc (new in v4).
 

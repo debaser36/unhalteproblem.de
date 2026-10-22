@@ -50,7 +50,7 @@ Repositories depend only on `SqlClient.SqlClient`, never on `PgClient`.
 ## Common patterns
 
 Client options: snake_case columns, camelCase TypeScript, jsonb keys untouched.
-Source: services/backend/src/services/Database.ts (adapted from repos/effect/packages/sql/pg/src/PgClient.ts)
+Source: services/backend/src/infrastructure/Database.ts (adapted from repos/effect/packages/sql/pg/src/PgClient.ts)
 
 ```ts
 export const clientOptions = {
@@ -64,7 +64,7 @@ const PgLive = PgClient.layerConfig(
 ```
 
 Database layer: migrations run at layer construction, so everything built on it sees a migrated schema.
-Source: services/backend/src/services/Database.ts, services/backend/src/testing/Database.ts
+Source: services/backend/src/infrastructure/Database.ts, services/backend/src/testing/Database.ts
 
 ```ts
 const MigrationsLive = PgMigrator.layer({
@@ -95,7 +95,7 @@ export default Effect.gen(function* () {
 Name constraints explicitly (`<table>_<col>_pkey|fkey|check`): code matches on them (`isUniqueViolation`).
 
 Model with per-variant fields (nullable column as Option, jsonb as JSON text, DB-generated column).
-Source: services/backend/src/repositories/Sessions.ts, domains/users/User.ts
+Source: services/backend/src/auth/Sessions.ts, domains/users/User.ts
 
 ```ts
 export class Session extends Model.Class<Session>("Session")({
@@ -109,7 +109,7 @@ subject: Subject.pipe(Model.FieldExcept(["update", "jsonUpdate"])), // immutable
 ```
 
 Repository service: queries built once in `make`, exposed through a `Context.Service` plus `static layer`.
-Source: services/backend/src/repositories/Sessions.ts, domains/users/UserRepository.ts
+Source: services/backend/src/auth/Sessions.ts, domains/users/UserRepository.ts
 
 ```ts
 const find = SqlSchema.findOneOption({
@@ -146,10 +146,10 @@ export class Sessions extends Context.Service<
 ```
 
 Method signatures keep `SqlError.SqlError` and drop `SchemaError`: `dieOnSchemaError` (`Effect.catchTag("SchemaError", Effect.die)`,
-repositories/Sql.ts) turns it into a defect, because rows are written by us. Name spans: `Effect.fn("Sessions.find")`.
+infrastructure/Sql.ts) turns it into a defect, because rows are written by us. Name spans: `Effect.fn("Sessions.find")`.
 
 SQL snippets: conditional fragments, `IN`, locking, upsert, `RETURNING`, counting deletes.
-Source: domains/users/UserRepository.ts, cqrs/Outbox.ts, repositories/Sql.ts
+Source: domains/users/UserRepository.ts, cqrs/Outbox.ts, infrastructure/Sql.ts
 
 ```ts
 sql`SELECT * FROM users WHERE ${sql.in("id", ids)} ORDER BY id FOR NO KEY UPDATE`;
@@ -183,13 +183,13 @@ Never call `sql.withTransaction` directly in domain code (`Transaction.run` dies
   Test with `SqlError.isSqlError(e) && e.reason._tag === "UniqueViolation"`.
 - A failed statement aborts the Postgres transaction. Catch a unique violation only around a savepoint (`transaction.run(save)`),
   then map it to a domain error (`Effect.catchIf(isUniqueViolation(postSlugConstraint), () => Effect.fail(new PostSlugTaken(...)))`).
-  Source: services/backend/src/repositories/Columns.ts, domains/blogs/BlogCommands.ts
+  Source: services/backend/src/infrastructure/Columns.ts, domains/blogs/BlogCommands.ts
 - `Query.boundary`/`Command.boundary` turn `SqlError` and `SchemaError` into scrubbed defects (no SQL in responses).
 
 ## Testing
 
 Fresh in-memory Postgres per layer build; share with `layer(...)` and keep tests independent of each other's rows.
-Source: services/backend/src/repositories/Sessions.test.ts, testing/Database.ts
+Source: services/backend/src/auth/Sessions.test.ts, testing/Database.ts
 
 ```ts
 const TestLayer = Sessions.layer.pipe(Layer.provideMerge(DatabaseTest));
@@ -224,5 +224,5 @@ Source: repos/effect/migration/v3-to-v4.md, sections `@effect/sql/*`, `@effect/s
 - `SELECT *` into a model whose columns differ from the table, or string-concatenated SQL (use `sql` fragments).
 - Editing a committed migration, or relying on migrations being read from disk at runtime.
 - Opening transactions with `sql.withTransaction` in domains, or publishing events before the commit.
-- Importing `@effect/sql-pg` outside `services/Database.ts`; `@effect/sql` (v3) packages.
+- Importing `@effect/sql-pg` outside `infrastructure/Database.ts`; `@effect/sql` (v3) packages.
 - Putting snake_case in TypeScript: the client converts names, but jsonb contents (`transformJson: false`) keep theirs.

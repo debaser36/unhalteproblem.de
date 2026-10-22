@@ -56,7 +56,7 @@ export class Readiness extends Context.Service<
 }
 ```
 
-Source: services/backend/src/services/Readiness.ts (this repo). Methods are
+Source: services/backend/src/infrastructure/Readiness.ts (this repo). Methods are
 `Effect.fn("Svc.method")(function* (…) {…})` so they get a span; dependencies
 are yielded once in the `make` effect and closed over, so methods have
 `R = never`. Document needed layers on `layer` ("Needs `Outbox` and …").
@@ -92,7 +92,7 @@ static readonly layer = Layer.effect(ContactRateLimit, make /* … */).pipe(
 );
 ```
 
-Source: services/backend/src/services/ContactRateLimit.ts. Variant layers use
+Source: services/backend/src/domains/contact/ContactRateLimit.ts. Variant layers use
 suffixes (`layerSmtp`, `layerDisabled`, `layerWith`); the primary one is `layer`.
 
 ### Compose: `provide` hides, `provideMerge` exposes
@@ -120,7 +120,7 @@ const transport =
   );
 ```
 
-Source: services/backend/src/services/Mailer.ts (`layerSmtp`), inside `Layer.effect`.
+Source: services/backend/src/infrastructure/Mailer.ts (`layerSmtp`), inside `Layer.effect`.
 
 ### Config-driven layer choice: `Layer.unwrap`
 

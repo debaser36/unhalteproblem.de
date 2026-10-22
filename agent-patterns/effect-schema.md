@@ -100,7 +100,7 @@ variants `select`, `insert`, `update`, `json`, `jsonCreate`, `jsonUpdate`.
 `Model.FieldExcept([...])` leaves a field out of those variants. A field with
 a different shape per variant:
 `Model.Field({ select: Document, insert: Schema.fromJsonString(Document), ... })`
-(services/backend/src/repositories/Columns.ts). Build rows with `Row.make({...})`.
+(services/backend/src/infrastructure/Columns.ts). Build rows with `Row.make({...})`.
 
 ### Defaults and optional query keys
 
