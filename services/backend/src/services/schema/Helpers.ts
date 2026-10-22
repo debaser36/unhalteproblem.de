@@ -120,16 +120,42 @@ export const insertUser = (sql: SqlClient.SqlClient, subject: string) =>
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));
 
-/** Inserts a subblog and returns its id. */
+/** The id of a category, a preset of 0018 or one from {@link insertCategory}. */
+export const categoryId = (sql: SqlClient.SqlClient, slug: string) =>
+  sql`(SELECT id FROM categories WHERE slug = ${slug})`;
+
+/** Inserts a category and returns its id. */
+export const insertCategory = (
+  sql: SqlClient.SqlClient,
+  slug: string,
+  name: string = slug,
+  createdBy: string | null = null,
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO categories (id, slug, name, created_at, created_by)
+    VALUES (gen_random_uuid(), ${slug}, ${name}, now(), ${createdBy})
+    RETURNING id
+  `.pipe(Effect.map(([row]) => row.id));
+
+/**
+ * Inserts a subblog and returns its id. Its main category is
+ * `miscellaneous` unless `mainCategoryId` names another.
+ */
 export const insertBlog = (
   sql: SqlClient.SqlClient,
   slug: string,
   createdBy: string | null = null,
+  mainCategoryId?: string,
 ) =>
   sql<{ readonly id: string }>`
-    INSERT INTO blogs
-      (id, slug, title, description, created_at, created_by, updated_at)
-    VALUES (gen_random_uuid(), ${slug}, 'Title', '', now(), ${createdBy}, now())
+    INSERT INTO blogs (
+      id, slug, title, description, created_at, created_by, updated_at,
+      main_category_id
+    )
+    VALUES (
+      gen_random_uuid(), ${slug}, 'Title', '', now(), ${createdBy}, now(),
+      ${mainCategoryId === undefined ? categoryId(sql, "miscellaneous") : sql`${mainCategoryId}::uuid`}
+    )
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));
 
@@ -148,7 +174,11 @@ export const insertMedia = (
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));
 
-/** Inserts a post, a draft with an empty document by default. */
+/**
+ * Inserts a post, a draft with an empty document by default. Its main
+ * category is `miscellaneous` unless `mainCategoryId` names another. Its
+ * word count is set by the trigger of 0018.
+ */
 export const insertPost = (
   sql: SqlClient.SqlClient,
   post: {
@@ -163,25 +193,32 @@ export const insertPost = (
     readonly publishedAt?: string;
     readonly authorId?: string;
     readonly version?: number;
+    readonly mainCategoryId?: string;
   },
-) =>
-  sql<{ readonly id: string }>`
+) => {
+  const content = post.content ?? {
+    type: "doc",
+    content: [{ type: "paragraph" }],
+  };
+  return sql<{ readonly id: string }>`
     INSERT INTO blog_posts (
       id, blog_id, slug, title, summary, tags, cover_media_id, content,
       status, published_at, author_id, updated_by, created_at, updated_at,
-      version
+      version, main_category_id
     )
     VALUES (
       gen_random_uuid(), ${post.blogId}, ${post.slug}, ${post.title ?? "Title"},
       ${post.summary ?? ""}, ${post.tags ?? []}::text[],
       ${post.coverMediaId ?? null},
-      ${JSON.stringify(post.content ?? { type: "doc", content: [{ type: "paragraph" }] })}::jsonb,
+      ${JSON.stringify(content)}::jsonb,
       ${post.status ?? "draft"}, ${post.publishedAt ?? null}::timestamptz,
       ${post.authorId ?? null}, ${post.authorId ?? null},
-      '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', ${post.version ?? 1}
+      '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', ${post.version ?? 1},
+      ${post.mainCategoryId === undefined ? categoryId(sql, "miscellaneous") : sql`${post.mainCategoryId}::uuid`}
     )
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));
+};
 
 /** Inserts a project, an unpublished one with an empty document by default. */
 export const insertProject = (

@@ -1012,8 +1012,8 @@ const insertBlog = (slug: string) =>
   Effect.flatMap(
     SqlClient.SqlClient,
     (sql) => sql`
-      INSERT INTO blogs (id, slug, title, description, created_at, updated_at)
-      VALUES (${crypto.randomUUID()}, ${slug}, ${slug}, '', now(), now())
+      INSERT INTO blogs (id, slug, title, description, created_at, updated_at, main_category_id)
+      VALUES (${crypto.randomUUID()}, ${slug}, ${slug}, '', now(), now(), (SELECT id FROM categories WHERE slug = 'miscellaneous'))
     `,
   ).pipe(Effect.orDie);
 

@@ -33,7 +33,7 @@ describe("DatabaseTest", () => {
         // No foreign keys: the log outlives users and never blocks deleting
         // one.
         assert.deepStrictEqual(yield* describeConstraints(sql, "audit_log"), [
-          "audit_log_action_check: CHECK ((action = ANY (ARRAY['login'::text, 'logout'::text, 'login_refused'::text, 'role_granted'::text, 'role_revoked'::text, 'user_restricted'::text, 'restriction_lifted'::text, 'account_deleted'::text, 'outbox_retried'::text, 'contact_message_deleted'::text, 'blog_created'::text, 'blog_updated'::text, 'post_deleted'::text, 'project_created'::text, 'project_updated'::text, 'project_deleted'::text, 'blog_request_approved'::text, 'blog_request_rejected'::text])))",
+          "audit_log_action_check: CHECK ((action = ANY (ARRAY['login'::text, 'logout'::text, 'login_refused'::text, 'role_granted'::text, 'role_revoked'::text, 'user_restricted'::text, 'restriction_lifted'::text, 'account_deleted'::text, 'outbox_retried'::text, 'contact_message_deleted'::text, 'blog_created'::text, 'blog_updated'::text, 'post_deleted'::text, 'project_created'::text, 'project_updated'::text, 'project_deleted'::text, 'blog_request_approved'::text, 'blog_request_rejected'::text, 'category_created'::text, 'category_renamed'::text, 'category_merged'::text, 'category_deleted'::text])))",
           "audit_log_detail_check: CHECK (((char_length(detail) >= 1) AND (char_length(detail) <= 100)))",
           "audit_log_id_pkey: PRIMARY KEY (id)",
         ]);

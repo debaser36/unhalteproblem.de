@@ -9,6 +9,7 @@ import {
   insertBlog,
   insertMedia,
   insertPost,
+  categoryId,
 } from "./Helpers.ts";
 
 import { DatabaseTest } from "#testing/Database";
@@ -28,6 +29,7 @@ describe("DatabaseTest", () => {
           "blogs.created_at timestamp with time zone not null",
           "blogs.created_by uuid",
           "blogs.updated_at timestamp with time zone not null",
+          "blogs.main_category_id uuid not null",
         ]);
         assert.deepStrictEqual(yield* describeColumns(sql, "media"), [
           "media.id uuid not null",
@@ -55,6 +57,8 @@ describe("DatabaseTest", () => {
           "blog_posts.created_at timestamp with time zone not null",
           "blog_posts.updated_at timestamp with time zone not null",
           "blog_posts.version integer not null default 1",
+          "blog_posts.main_category_id uuid not null",
+          "blog_posts.word_count integer not null default 0",
         ]);
       }),
     );
@@ -66,12 +70,14 @@ describe("DatabaseTest", () => {
           "blogs_created_by_fkey: FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
           "blogs_description_check: CHECK (((char_length(description) <= 1000) AND (description !~ '^[ \\t\\n\\v\\f\\r]|[ \\t\\n\\v\\f\\r]$'::text)))",
           "blogs_id_pkey: PRIMARY KEY (id)",
+          "blogs_main_category_id_fkey: FOREIGN KEY (main_category_id) REFERENCES categories(id) ON DELETE RESTRICT",
           "blogs_slug_check: CHECK (((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(slug) <= 64)))",
           "blogs_slug_key: UNIQUE (slug)",
           "blogs_title_check: CHECK ((((char_length(title) >= 1) AND (char_length(title) <= 120)) AND (title !~ '^[ \\t\\n\\v\\f\\r]|[ \\t\\n\\v\\f\\r]$'::text)))",
         ]);
         assert.deepStrictEqual(yield* describeIndexes(sql, "blogs"), [
           "CREATE UNIQUE INDEX blogs_id_pkey ON public.blogs USING btree (id)",
+          "CREATE INDEX blogs_main_category_id_idx ON public.blogs USING btree (main_category_id)",
           "CREATE UNIQUE INDEX blogs_slug_key ON public.blogs USING btree (slug)",
         ]);
         assert.deepStrictEqual(yield* describeConstraints(sql, "media"), [
@@ -93,6 +99,7 @@ describe("DatabaseTest", () => {
           `blog_posts_content_check: CHECK ((content @> '{"type": "doc"}'::jsonb))`,
           "blog_posts_cover_media_id_fkey: FOREIGN KEY (cover_media_id) REFERENCES media(id) ON DELETE SET NULL",
           "blog_posts_id_pkey: PRIMARY KEY (id)",
+          "blog_posts_main_category_id_fkey: FOREIGN KEY (main_category_id) REFERENCES categories(id) ON DELETE RESTRICT",
           "blog_posts_published_at_check: CHECK (((status = 'draft'::text) OR (published_at IS NOT NULL)))",
           "blog_posts_published_at_milliseconds_check: CHECK ((published_at = date_trunc('milliseconds'::text, published_at)))",
           "blog_posts_slug_check: CHECK (((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(slug) <= 128)))",
@@ -102,12 +109,14 @@ describe("DatabaseTest", () => {
           "blog_posts_title_check: CHECK ((((char_length(title) >= 1) AND (char_length(title) <= 200)) AND (title !~ '^[ \\t\\n\\v\\f\\r]|[ \\t\\n\\v\\f\\r]$'::text)))",
           "blog_posts_updated_by_fkey: FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL",
           "blog_posts_version_check: CHECK ((version >= 1))",
+          "blog_posts_word_count_check: CHECK ((word_count >= 0))",
         ]);
         assert.deepStrictEqual(yield* describeIndexes(sql, "blog_posts"), [
           "CREATE INDEX blog_posts_blog_id_published_at_id_idx ON public.blog_posts USING btree (blog_id, published_at DESC, id DESC) WHERE (status = 'published'::text)",
           "CREATE UNIQUE INDEX blog_posts_blog_id_slug_key ON public.blog_posts USING btree (blog_id, slug)",
           "CREATE INDEX blog_posts_blog_id_updated_at_idx ON public.blog_posts USING btree (blog_id, updated_at DESC)",
           "CREATE UNIQUE INDEX blog_posts_id_pkey ON public.blog_posts USING btree (id)",
+          "CREATE INDEX blog_posts_main_category_id_idx ON public.blog_posts USING btree (main_category_id)",
           "CREATE INDEX blog_posts_published_at_id_idx ON public.blog_posts USING btree (published_at DESC, id DESC) WHERE (status = 'published'::text)",
           "CREATE INDEX blog_posts_tags_idx ON public.blog_posts USING gin (tags)",
         ]);
@@ -125,8 +134,8 @@ describe("DatabaseTest", () => {
         const sql = yield* SqlClient.SqlClient;
         const insert = (slug: string, title: string, description: string) =>
           sql`
-            INSERT INTO blogs (id, slug, title, description, created_at, updated_at)
-            VALUES (gen_random_uuid(), ${slug}, ${title}, ${description}, now(), now())
+            INSERT INTO blogs (id, slug, title, description, created_at, updated_at, main_category_id)
+            VALUES (gen_random_uuid(), ${slug}, ${title}, ${description}, now(), now(), ${categoryId(sql, "miscellaneous")})
           `;
         yield* insert("check-a", "T", "");
         yield* insert(

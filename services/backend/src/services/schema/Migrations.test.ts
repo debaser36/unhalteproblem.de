@@ -416,3 +416,202 @@ describe("0017_create_blog_requests", () => {
     { timeout: 30_000 },
   );
 });
+
+describe("0018_create_categories", () => {
+  // Runs the migrations up to 0017 first, so subblogs, posts and audit
+  // entries exist before the new columns are added.
+  const DatabaseBefore0018 = databaseUpTo(17);
+
+  const paragraph = (...texts: ReadonlyArray<string>) => ({
+    type: "paragraph",
+    content: texts.map((text) => ({ type: "text", text })),
+  });
+  const documents = [
+    // Empty: no text nodes at all.
+    { type: "doc", content: [{ type: "paragraph" }] },
+    // Whitespace around and between words, tabs and newlines, an empty and
+    // a whitespace-only text node.
+    {
+      type: "doc",
+      content: [
+        paragraph("  Hello,  world ", "", "   "),
+        {
+          type: "heading",
+          attrs: { level: 2 },
+          content: [{ type: "text", text: "Two\twords\nand more" }],
+        },
+      ],
+    },
+    // Nested lists and marks; a code block counts too.
+    {
+      type: "doc",
+      content: [
+        {
+          type: "bulletList",
+          content: [
+            {
+              type: "listItem",
+              content: [
+                paragraph("one"),
+                {
+                  type: "bulletList",
+                  content: [
+                    { type: "listItem", content: [paragraph("two three")] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "bold", marks: [{ type: "bold" }] },
+            { type: "text", text: " text" },
+          ],
+        },
+        { type: "codeBlock", content: [{ type: "text", text: "let x = 1;" }] },
+      ],
+    },
+  ];
+
+  it.effect(
+    "backfills main categories and word counts and widens the audit check",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const [blog] = yield* sql<{ readonly id: string }>`
+          INSERT INTO blogs (id, slug, title, description, created_at, updated_at)
+          VALUES (gen_random_uuid(), 'old-blog', 'Old', '', now(), now())
+          RETURNING id
+        `;
+        for (const [index, content] of documents.entries()) {
+          yield* sql`
+            INSERT INTO blog_posts (
+              id, blog_id, slug, title, summary, content, status, created_at,
+              updated_at
+            )
+            VALUES (
+              gen_random_uuid(), ${blog.id}, ${`post-${index}`}, 'Title', '',
+              ${JSON.stringify(content)}::jsonb, 'draft', now(), now()
+            )
+          `;
+        }
+        yield* sql`
+          INSERT INTO audit_log (at, action, detail)
+          VALUES ('2026-01-01T00:00:00Z', 'blog_request_approved', 'old-blog')
+        `;
+        // Not allowed before 0018.
+        const before = yield* sql`
+          INSERT INTO audit_log (at, action, detail)
+          VALUES ('2026-01-02T00:00:00Z', 'category_created', 'rust')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(18) });
+        assert.deepStrictEqual(applied, [[18, "create_categories"]]);
+
+        const blogs = yield* sql<{ readonly slug: string }>`
+          SELECT c.slug FROM blogs b JOIN categories c ON c.id = b.main_category_id
+        `;
+        assert.deepStrictEqual(blogs, [{ slug: "miscellaneous" }]);
+
+        // The stored count is exactly what BlogRepository computed per query.
+        const posts = yield* sql<{
+          readonly slug: string;
+          readonly category: string;
+          readonly wordCount: number;
+          readonly computed: number;
+        }>`
+          SELECT p.slug, c.slug AS category, p.word_count,
+            (SELECT count(*)::int
+               FROM jsonb_path_query(p.content, 'strict $.**.text') AS t(text),
+                    regexp_split_to_table(t.text #>> '{}', '\\s+') AS w(word)
+              WHERE w.word <> '') AS computed
+          FROM blog_posts p JOIN categories c ON c.id = p.main_category_id
+          ORDER BY p.slug
+        `;
+        assert.deepStrictEqual(posts, [
+          {
+            slug: "post-0",
+            category: "miscellaneous",
+            wordCount: 0,
+            computed: 0,
+          },
+          {
+            slug: "post-1",
+            category: "miscellaneous",
+            wordCount: 6,
+            computed: 6,
+          },
+          {
+            slug: "post-2",
+            category: "miscellaneous",
+            wordCount: 9,
+            computed: 9,
+          },
+        ]);
+
+        const columns = yield* sql<{
+          readonly tableName: string;
+          readonly columnName: string;
+          readonly isNullable: string;
+          readonly columnDefault: string | null;
+        }>`
+          SELECT table_name, column_name, is_nullable, column_default
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND column_name IN ('main_category_id', 'word_count')
+          ORDER BY table_name, column_name
+        `;
+        assert.deepStrictEqual(columns, [
+          {
+            tableName: "blog_posts",
+            columnName: "main_category_id",
+            isNullable: "NO",
+            columnDefault: null,
+          },
+          {
+            tableName: "blog_posts",
+            columnName: "word_count",
+            isNullable: "NO",
+            columnDefault: "0",
+          },
+          {
+            tableName: "blogs",
+            columnName: "main_category_id",
+            isNullable: "NO",
+            columnDefault: null,
+          },
+        ]);
+
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["blog_request_approved"],
+        );
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conrelid = 'audit_log'::regclass
+            AND conname = 'audit_log_action_check'
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "audit_log_action_check", convalidated: true },
+        ]);
+        yield* sql`
+          INSERT INTO audit_log (at, action, actor_id, detail)
+          VALUES
+            ('2026-01-02T00:00:00Z', 'category_created', gen_random_uuid(), 'rust'),
+            ('2026-01-03T00:00:00Z', 'category_renamed', gen_random_uuid(), 'rust-lang'),
+            ('2026-01-04T00:00:00Z', 'category_merged', gen_random_uuid(), 'rust-lang'),
+            ('2026-01-05T00:00:00Z', 'category_deleted', gen_random_uuid(), 'career')
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0018)),
+    { timeout: 30_000 },
+  );
+});
