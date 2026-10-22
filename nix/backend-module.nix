@@ -90,6 +90,25 @@ let
     client_max_body_size 32k;
   '';
 
+  # The website's security headers. A location with an `add_header` of its own
+  # inherits none of the server's, so it must include these again.
+  #
+  # The SPA loads its scripts, styles, fonts and images from its own origin
+  # (documents only show our own uploads). Styles allow 'unsafe-inline' for
+  # the editor's style attributes (text alignment); data: covers assets Vite
+  # inlines. form-action is left out on purpose: the logout form's redirect
+  # to Keycloak would count against it. The backend's own CSP on uploaded
+  # images and crawler pages is enforced in addition to this one.
+  securityHeaders = lib.optionalString cfg.nginx.securityHeaders ''
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Cross-Origin-Opener-Policy same-origin always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+  '';
+
   # Login start and callback each write a row to Postgres, so they get their
   # own limit. Exact locations take precedence over the "/api/" prefix, and
   # proxy_pass with a URI replaces the whole matched path while keeping the
@@ -180,6 +199,18 @@ in
         public pages are answered with the backend's server-rendered pages
         instead, and /sitemap.xml comes from the backend. The virtual host
         itself (TLS, root) is configured elsewhere. null leaves nginx alone.
+      '';
+    };
+
+    nginx.securityHeaders = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Whether the virtual host sends the website's security headers (CSP,
+        HSTS, framing, referrer and sniffing protection) on every response.
+        nginx drops all inherited `add_header`s in a location that has one of
+        its own, so a location added elsewhere with an `add_header` must
+        repeat them. Turn this off to set the headers yourself.
       '';
     };
 
@@ -301,7 +332,7 @@ in
       # how the rest of the virtual host serves the SPA. rewrite appends the
       # current arguments, so they are replaced by the cleaned ones first.
       services.nginx.virtualHosts.${cfg.nginx.virtualHost} = {
-        extraConfig = ''
+        extraConfig = securityHeaders + ''
           if ($unhalteproblem_seo_uri != "") {
             set $args $unhalteproblem_seo_args;
             rewrite ^ $unhalteproblem_seo_uri last;
@@ -333,7 +364,7 @@ in
           # They read the database, so they are rate limited as well.
           "~ ^/api/seo/" = {
             proxyPass = backendUrl "";
-            extraConfig = proxyConfig + ''
+            extraConfig = proxyConfig + securityHeaders + ''
               limit_req zone=unhalteproblem_seo burst=30 nodelay;
               limit_req_status 429;
               # The same URL answers people with the SPA.
