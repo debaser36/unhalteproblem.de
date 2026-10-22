@@ -311,7 +311,8 @@ export const AuthHandlers = HttpApiBuilder.group(
     });
 
     // Every auth response carries personal data, cookies or one-time URLs:
-    // each handler is `noStore`, its error responses included.
+    // each handler is `noStore`, its error responses included. (Responses made
+    // before a handler runs, like a 400 for a malformed request, are not.)
     return (
       handlers
         .handle("session", () => Effect.service(CurrentUser).pipe(noStore))

@@ -8,7 +8,9 @@ import { PublicUrlConfig } from "#Config";
  * `origin`. Browsers send it on every POST and every non-GET `fetch`, so a
  * missing one is refused too.
  */
-export const requireSameOrigin = Effect.fn(function* (origin: string) {
+export const requireSameOrigin = Effect.fn("http.requireSameOrigin")(function* (
+  origin: string,
+) {
   const request = yield* HttpServerRequest.HttpServerRequest;
   if (request.headers["origin"] === origin) return;
   // Whether it was missing or foreign, not the value itself: that is
