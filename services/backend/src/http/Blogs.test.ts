@@ -270,7 +270,12 @@ describe("blogs paging", () => {
 });
 
 describe("admin createBlog and updateBlog", () => {
-  const payload = { slug: "new-blog", title: "New", description: "" };
+  const payload = {
+    slug: "new-blog",
+    title: "New",
+    description: "",
+    categories: { main: "Programming", extra: [] },
+  };
 
   it.effect(
     "require a session (401), admin (403) and a same-origin request",
@@ -326,7 +331,13 @@ describe("admin createBlog and updateBlog", () => {
           },
         );
         assert.deepInclude(created, {
-          ...payload,
+          slug: payload.slug,
+          title: payload.title,
+          description: payload.description,
+          categories: {
+            main: { slug: "programming", name: "Programming" },
+            extra: [],
+          },
           postCount: 0,
           latestPostAt: null,
         });

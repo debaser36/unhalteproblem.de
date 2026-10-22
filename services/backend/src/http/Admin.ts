@@ -8,6 +8,7 @@ import {
 import { Effect, Option } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { BlogCommands } from "#domains/blogs/BlogCommands";
+import { CategoryCommands } from "#domains/blogs/CategoryCommands";
 import type { Restriction, RoleChange } from "#domains/moderation/Moderation";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import {
@@ -15,7 +16,7 @@ import {
   type UserOverview,
   UserQueries,
 } from "#domains/users/UserQueries";
-import { toBlog } from "./BlogViews.ts";
+import { toBlog, toCategory } from "./BlogViews.ts";
 import { noStore } from "./CacheControl.ts";
 
 const toRestriction = (restriction: Restriction): RestrictionDto => ({
@@ -72,6 +73,7 @@ export const AdminHandlers = HttpApiBuilder.group(
     const commands = yield* ModerationCommands;
     const queries = yield* UserQueries;
     const blogs = yield* BlogCommands;
+    const categories = yield* CategoryCommands;
     return handlers
       .handle("listUsers", ({ query }) =>
         queries
@@ -115,6 +117,19 @@ export const AdminHandlers = HttpApiBuilder.group(
         blogs
           .updateBlog(params.blog, payload)
           .pipe(Effect.map(toBlog), noStore),
+      )
+      .handle("renameCategory", ({ params, payload }) =>
+        categories
+          .renameCategory(params.category, payload.name)
+          .pipe(Effect.map(toCategory), noStore),
+      )
+      .handle("mergeCategory", ({ params, payload }) =>
+        categories
+          .mergeCategory(params.category, payload.into)
+          .pipe(Effect.map(toCategory), noStore),
+      )
+      .handle("deleteCategory", ({ params }) =>
+        categories.deleteCategory(params.category).pipe(noStore),
       );
   }),
 );

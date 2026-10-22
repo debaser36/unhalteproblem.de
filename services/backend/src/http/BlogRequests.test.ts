@@ -408,6 +408,7 @@ describe("approving a blog request", () => {
               title: "First",
               summary: "",
               tags: [],
+              categories: { main: "Programming", extra: [] },
               coverImage: null,
               content: { type: "doc", content: [] },
             },

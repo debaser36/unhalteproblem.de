@@ -167,7 +167,12 @@ describe("audit trail of content changes", () => {
       yield* app.createBlog("alpha");
       // The slug is taken: the command fails, its audit entry rolls back.
       yield* app.expect(409, app.admin.cookie, "POST", "/admin/blogs", {
-        body: { slug: "alpha", title: "Again", description: "" },
+        body: {
+          slug: "alpha",
+          title: "Again",
+          description: "",
+          categories: { main: "Programming", extra: [] },
+        },
       });
       assert.lengthOf(yield* entries(app, ["blog_created"]), 1);
     }),

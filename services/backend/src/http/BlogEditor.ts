@@ -7,6 +7,7 @@ import { BlogQueries } from "#domains/blogs/BlogQueries";
 import { noStore } from "./CacheControl.ts";
 import { uploadedFile } from "./Upload.ts";
 import {
+  toBlog,
   toManagedPost,
   toManagedPostListItem,
   toMediaInfo,
@@ -46,6 +47,11 @@ export const BlogEditorHandlers = HttpApiBuilder.group(
           asEditorOf(params.blog),
           noStore,
         ),
+      )
+      .handle("setBlogCategories", ({ params, payload }) =>
+        commands
+          .setBlogCategories(params.blog, payload)
+          .pipe(Effect.map(toBlog), asEditorOf(params.blog), noStore),
       )
       .handle("createPost", ({ params, payload }) =>
         commands

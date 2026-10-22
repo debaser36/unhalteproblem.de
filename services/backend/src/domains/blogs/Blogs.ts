@@ -7,6 +7,9 @@ import { BlogRepository } from "./BlogRepository.ts";
 import { BlogRequestCommands } from "./BlogRequestCommands.ts";
 import { BlogRequestQueries } from "./BlogRequestQueries.ts";
 import { BlogRequestRepository } from "./BlogRequestRepository.ts";
+import { CategoryCommands } from "./CategoryCommands.ts";
+import { CategoryQueries } from "./CategoryQueries.ts";
+import { CategoryRepository } from "./CategoryRepository.ts";
 
 /**
  * Whether a subblog exists, for moderation (granting editor roles). Built
@@ -19,7 +22,8 @@ export const BlogDirectoryLive = BlogDirectory.layer.pipe(
 
 /**
  * The blogs domain: provides `BlogCommands`, `BlogQueries`,
- * `BlogRequestCommands` and `BlogRequestQueries` and runs the event log.
+ * `BlogRequestCommands`, `BlogRequestQueries`, `CategoryCommands` and
+ * `CategoryQueries` and runs the event log.
  * Needs a migrated `SqlClient`, `Transaction`, `DomainEvents`,
  * `UserDirectory`, `MediaCommands`, `AuditCommands` and
  * `ModerationCommands` (approving a request grants the editor role).
@@ -31,7 +35,13 @@ export const BlogsLive = BlogEventLog.pipe(
       BlogQueries.layer,
       BlogRequestCommands.layer,
       BlogRequestQueries.layer,
+      CategoryCommands.layer,
+      CategoryQueries.layer,
     ),
   ),
-  Layer.provide([BlogRepository.layer, BlogRequestRepository.layer]),
+  Layer.provide([
+    BlogRepository.layer,
+    BlogRequestRepository.layer,
+    CategoryRepository.layer,
+  ]),
 );

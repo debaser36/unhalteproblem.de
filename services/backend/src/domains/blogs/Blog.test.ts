@@ -10,8 +10,9 @@ import {
   publish,
   readingMinutes,
 } from "./Blog.ts";
+import { CategoryId } from "./Category.ts";
 
-// How the repository counts words (in SQL): whitespace-separated runs of text.
+// How the database counts words (a trigger on blog_posts): whitespace-separated runs of text.
 const wordsIn = (document: Document) =>
   documentText(document).split(/\s+/u).filter(Boolean).length;
 
@@ -37,6 +38,7 @@ const draft = PostRow.make({
   title: "Hello",
   summary: "",
   tags: ["rust"],
+  mainCategoryId: CategoryId.make("3c4d5e6f-7a8b-4c3d-8e4f-5a6b7c8d9e0f"),
   coverMediaId: Option.none(),
   content: paragraphs("Hello"),
   status: "draft",
@@ -46,6 +48,7 @@ const draft = PostRow.make({
   createdAt: t0,
   updatedAt: t0,
   version: 3,
+  wordCount: 1,
 });
 
 describe("readingMinutes", () => {

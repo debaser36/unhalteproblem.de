@@ -2,8 +2,14 @@ import { Api, type BlogSlug, type PostPageQuery } from "@unhalteproblem.de/api";
 import { Effect, Option } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { BlogQueries } from "#domains/blogs/BlogQueries";
+import { CategoryQueries } from "#domains/blogs/CategoryQueries";
 import { revalidate } from "./CacheControl.ts";
-import { toBlog, toPostListItem, toPublishedPost } from "./BlogViews.ts";
+import {
+  toBlog,
+  toCategory,
+  toPostListItem,
+  toPublishedPost,
+} from "./BlogViews.ts";
 
 /** The public blog: subblogs and their published posts. */
 export const BlogsHandlers = HttpApiBuilder.group(
@@ -11,11 +17,15 @@ export const BlogsHandlers = HttpApiBuilder.group(
   "blogs",
   Effect.fn(function* (handlers) {
     const queries = yield* BlogQueries;
+    const categories = yield* CategoryQueries;
     const feed = (blog: Option.Option<BlogSlug>, query: PostPageQuery) =>
       queries
         .feed({
           blog,
           tag: Option.fromUndefinedOr(query.tag),
+          category: Option.fromUndefinedOr(query.category),
+          author: Option.fromUndefinedOr(query.author),
+          sort: query.sort,
           after: Option.fromUndefinedOr(query.cursor),
           limit: query.limit,
         })
@@ -49,6 +59,12 @@ export const BlogsHandlers = HttpApiBuilder.group(
         queries
           .getPublished(params.blog, params.post)
           .pipe(Effect.map(toPublishedPost), revalidate),
+      )
+      .handle("listCategories", () =>
+        categories.listCategories.pipe(
+          Effect.map((all) => all.map(toCategory)),
+          revalidate,
+        ),
       );
   }),
 );

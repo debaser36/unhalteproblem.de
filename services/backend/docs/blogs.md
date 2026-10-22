@@ -13,10 +13,13 @@ one that might be created later), or by approving a user's blog request
 | Endpoints                                 | Who                 | Does                                                          |
 | ----------------------------------------- | ------------------- | ------------------------------------------------------------- |
 | `GET /blogs`, `/blogs/:blog`              | everyone            | Subblogs, with their number of published posts                |
-| `GET /blogs/:blog/posts`, `/posts`        | everyone            | Published posts, newest first, paged by keyset cursor         |
+| `GET /blogs/:blog/posts`, `/posts`        | everyone            | Published posts, sorted and filtered, paged by keyset cursor  |
 | `GET /blogs/:blog/posts/:post`            | everyone            | One published post, by slug                                   |
 | `/blogs/:blog/manage/posts[/:postId[/…]]` | `blogEditor:<blog>` | All posts, drafts included; create, save, (un)publish, delete |
 | `POST /blogs/:blog/manage/media`          | `blogEditor:<blog>` | Uploads an image (see [media.md](media.md))                   |
+| `PUT /blogs/:blog/manage/categories`      | `blogEditor:<blog>` | Sets the subblog's categories                                 |
+| `GET /categories`                         | everyone            | All categories, with their subblogs and published posts       |
+| `/admin/categories/:category[/merge]`     | `admin`             | Rename, merge into another, delete an unused one              |
 
 - **Authorization.** The editor endpoints need a session (401) and the role
   for the subblog in their path (403); the handler provides
@@ -41,8 +44,27 @@ one that might be created later), or by approving a user's blog request
   to 512 KiB (`LargeBody`); nginx allows it on `/api/blogs/*/manage/` and
   `/api/admin/projects`.
 - **Authors.** A post names its author (`users.name`, else the username)
-  while their account exists; a deleted account's posts stay, without a
-  name.
+  and their user id while their account exists; a deleted account's posts
+  stay, without a name or id. The id is what `?author=` filters by.
+- **Categories.** One list (`categories`) for subblogs and posts. Each has
+  one main category (`main_category_id`) and up to three extras
+  (`blog_extra_categories`, `blog_post_extra_categories`); the cap and
+  "main is not an extra" are checked by the contract's `CategoriesInput`,
+  not the database. Editors send names: a name is matched by its slug
+  (`categorySlugOf`, so "Web dev" and "web-dev" are one category) and
+  created if none exists, in the save's transaction (audit
+  `category_created`). The categories used are locked `FOR KEY SHARE`, and
+  admins' rename, merge and delete lock them `FOR UPDATE`, both in slug
+  order. A new post's editor preselects the subblog's main category;
+  approved blog requests start in `miscellaneous`. The migration seeds ten
+  presets.
+- **Sorting and filters.** `sort` is `newest` (default), `oldest`,
+  `updated`, `title`, `readingTime` (by `word_count`, kept by a trigger),
+  `category` (main category name, then newest) or `author` (name, unknown
+  and deleted authors last, then newest). `category`, `author` and `tag`
+  filter. The cursor carries the sort and its keys, so a cursor of one sort
+  is refused (400) with another. The subblog list is unpaged and sorted in
+  the browser.
 
 Look at the posts of a subblog with
 `SELECT p.slug, p.status, p.published_at, p.version FROM blog_posts p JOIN blogs b ON b.id = p.blog_id WHERE b.slug = '…' ORDER BY p.updated_at DESC`.

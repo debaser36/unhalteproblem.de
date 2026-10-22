@@ -1,6 +1,7 @@
 import {
   Authorized,
   blogEditorRole,
+  type CategoriesInput,
   type CreateBlogPayload,
   type PostInput,
   type UpdateBlogPayload,
@@ -19,6 +20,7 @@ import type {
   UnsupportedMedia,
 } from "#domains/media/Media";
 import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
+import type { UserId } from "#domains/users/User";
 import { isUniqueViolation } from "#repositories/Columns";
 import {
   BlogCreated,
@@ -46,12 +48,15 @@ import {
   type BlogSummary,
   type PostView,
 } from "./BlogRepository.ts";
+import { namedCategories } from "./Category.ts";
+import { CategoryRepository } from "./CategoryRepository.ts";
 
 /** The proof that the current user edits the subblog `blog`. */
 const editorOf = (blog: BlogSlug) => Authorized(blogEditorRole(blog));
 
 const make = Effect.gen(function* () {
   const repository = yield* BlogRepository;
+  const categories = yield* CategoryRepository;
   const users = yield* UserDirectory;
   const media = yield* MediaCommands;
   const audit = yield* AuditCommands;
@@ -109,6 +114,35 @@ const make = Effect.gen(function* () {
         ),
       );
 
+  /**
+   * The ids of the chosen categories, main first, creating the new ones on
+   * behalf of `actor`; each new one is recorded in the audit log.
+   */
+  const chooseCategories = Effect.fnUntraced(function* (
+    input: CategoriesInput,
+    actor: UserId,
+    now: DateTime.Utc,
+  ) {
+    const { ids, created } = yield* categories.ensure(
+      namedCategories(input),
+      Option.some(actor),
+      now,
+    );
+    for (const slug of created) {
+      yield* audit.record({
+        action: "category_created",
+        actor: Option.some(actor),
+        target: Option.none(),
+        detail: slug,
+      });
+    }
+    const [main, ...extra] = ids;
+    if (main === undefined) {
+      return yield* Effect.die(new Error("A main category is required"));
+    }
+    return { main, extra };
+  });
+
   const setStatus = (published: boolean) =>
     Effect.fnUntraced(function* (blog: BlogSlug, postId: PostId) {
       const actor = yield* actorOf(yield* editorOf(blog));
@@ -142,14 +176,17 @@ const make = Effect.gen(function* () {
     ) {
       const actor = yield* actorOf(yield* Authorized("admin"));
       const now = yield* DateTime.now;
+      const chosen = yield* chooseCategories(payload.categories, actor, now);
+      const id = BlogId.make(crypto.randomUUID());
       yield* transaction
         .run(
           repository.insertBlog(
             BlogRow.make({
-              id: BlogId.make(crypto.randomUUID()),
+              id,
               slug: payload.slug,
               title: payload.title,
               description: payload.description,
+              mainCategoryId: chosen.main,
               createdAt: now,
               createdBy: Option.some(actor),
               updatedAt: now,
@@ -161,6 +198,7 @@ const make = Effect.gen(function* () {
             Effect.fail(new BlogSlugTaken({ blog: payload.slug })),
           ),
         );
+      yield* categories.setBlogExtras(id, chosen.extra);
       yield* DomainEvent.record(
         new BlogCreated({ blog: payload.slug, by: actor }),
       );
@@ -192,6 +230,25 @@ const make = Effect.gen(function* () {
       return yield* summaryOf(blog);
     }, Command.boundary(transaction)),
 
+    setBlogCategories: Effect.fn("BlogCommands.setBlogCategories")(function* (
+      blog: BlogSlug,
+      input: CategoriesInput,
+    ) {
+      const actor = yield* actorOf(yield* editorOf(blog));
+      const row = yield* blogBySlug(blog);
+      const now = yield* DateTime.now;
+      const chosen = yield* chooseCategories(input, actor, now);
+      yield* categories.setBlogMain(row.id, chosen.main, now);
+      yield* categories.setBlogExtras(row.id, chosen.extra);
+      yield* audit.record({
+        action: "blog_updated",
+        actor: Option.some(actor),
+        target: Option.none(),
+        detail: blog,
+      });
+      return yield* summaryOf(blog);
+    }, Command.boundary(transaction)),
+
     createPost: Effect.fn("BlogCommands.createPost")(function* (
       blog: BlogSlug,
       input: PostInput,
@@ -200,6 +257,7 @@ const make = Effect.gen(function* () {
       const blogRow = yield* blogBySlug(blog);
       const now = yield* DateTime.now;
       const id = PostId.make(crypto.randomUUID());
+      const chosen = yield* chooseCategories(input.categories, actor, now);
       yield* savePost(
         repository.insertPost(
           PostRow.make({
@@ -209,6 +267,7 @@ const make = Effect.gen(function* () {
             title: input.title,
             summary: input.summary,
             tags: input.tags,
+            mainCategoryId: chosen.main,
             coverMediaId: Option.fromNullOr(input.coverImage),
             content: input.content,
             status: "draft",
@@ -218,10 +277,13 @@ const make = Effect.gen(function* () {
             createdAt: now,
             updatedAt: now,
             version: 1,
+            // Counted by the database from the content.
+            wordCount: 0,
           }),
         ),
         input.slug,
       );
+      yield* categories.setPostExtras(id, chosen.extra);
       yield* DomainEvent.record(
         new PostSaved({ blog, postId: id, version: 1, by: actor }),
       );
@@ -236,11 +298,14 @@ const make = Effect.gen(function* () {
     ) {
       const actor = yield* actorOf(yield* editorOf(blog));
       const blogRow = yield* blogBySlug(blog);
+      const now = yield* DateTime.now;
+      // Categories before the post: an admin's merge locks them first too,
+      // so the two never deadlock. A stale version rolls them back.
+      const chosen = yield* chooseCategories(input.categories, actor, now);
       const post = yield* lockPost(blogRow, postId);
       if (isStale(post, version)) {
         return yield* new PostEditConflict({ currentVersion: post.version });
       }
-      const now = yield* DateTime.now;
       const next = post.version + 1;
       yield* savePost(
         repository.updatePost(
@@ -250,6 +315,7 @@ const make = Effect.gen(function* () {
             title: input.title,
             summary: input.summary,
             tags: input.tags,
+            mainCategoryId: chosen.main,
             coverMediaId: Option.fromNullOr(input.coverImage),
             content: input.content,
             updatedBy: Option.some(actor),
@@ -259,6 +325,7 @@ const make = Effect.gen(function* () {
         ),
         input.slug,
       );
+      yield* categories.setPostExtras(postId, chosen.extra);
       yield* DomainEvent.record(
         new PostSaved({ blog, postId, version: next, by: actor }),
       );
@@ -326,6 +393,11 @@ export class BlogCommands extends Context.Service<
       blog: BlogSlug,
       payload: UpdateBlogPayload,
     ) => Effect.Effect<BlogSummary, BlogNotFound, Authorized<"admin">>;
+    /** Replaces the subblog's categories; for its editors, not only admins. */
+    readonly setBlogCategories: (
+      blog: BlogSlug,
+      input: CategoriesInput,
+    ) => Effect.Effect<BlogSummary, BlogNotFound, EditorProof>;
     /** Creates a draft. */
     readonly createPost: (
       blog: BlogSlug,
@@ -367,6 +439,6 @@ export class BlogCommands extends Context.Service<
     >;
   }
 >()("@unhalteproblem.de/backend/domains/blogs/BlogCommands") {
-  /** Needs `BlogRepository`, `UserDirectory`, `MediaCommands`, `AuditCommands` and `Transaction`. */
+  /** Needs `BlogRepository`, `CategoryRepository`, `UserDirectory`, `MediaCommands`, `AuditCommands` and `Transaction`. */
   static readonly layer = Layer.effect(BlogCommands, make);
 }

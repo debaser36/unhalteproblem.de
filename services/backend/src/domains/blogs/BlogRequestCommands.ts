@@ -2,6 +2,7 @@ import {
   Authorized,
   type BlogRequestReason,
   type CreateBlogRequestPayload,
+  DefaultCategorySlug,
   Forbidden,
 } from "@unhalteproblem.de/api";
 import type { Subject } from "@unhalteproblem.de/oidc";
@@ -40,6 +41,7 @@ import {
   BlogRequestRepository,
 } from "./BlogRequestRepository.ts";
 import { BlogRepository } from "./BlogRepository.ts";
+import { CategoryRepository } from "./CategoryRepository.ts";
 
 /** The proof that the current user may decide blog requests. */
 const moderator = () => Authorized("admin", "superAdmin");
@@ -47,6 +49,7 @@ const moderator = () => Authorized("admin", "superAdmin");
 const make = Effect.gen(function* () {
   const requests = yield* BlogRequestRepository;
   const blogs = yield* BlogRepository;
+  const categories = yield* CategoryRepository;
   const users = yield* UserDirectory;
   const moderation = yield* ModerationCommands;
   const audit = yield* AuditCommands;
@@ -173,6 +176,27 @@ const make = Effect.gen(function* () {
       const request = yield* lockForModerator(requestId, actor);
       const now = yield* DateTime.now;
       const blogId = BlogId.make(crypto.randomUUID());
+      // A new subblog starts in the default category; its editors choose
+      // their own (`setBlogCategories`). The migration seeds it, but an admin
+      // may have renamed, merged or deleted it since: then it is created
+      // again (and locked against that until the approval commits).
+      const { ids, created } = yield* categories.ensure(
+        [{ slug: DefaultCategorySlug, name: "Miscellaneous" }],
+        Option.some(actor),
+        now,
+      );
+      const category = ids[0];
+      if (category === undefined) {
+        return yield* Effect.die(new Error("ensure returned no category"));
+      }
+      for (const slug of created) {
+        yield* audit.record({
+          action: "category_created",
+          actor: Option.some(actor),
+          target: Option.none(),
+          detail: slug,
+        });
+      }
       yield* transaction
         .run(
           blogs.insertBlog(
@@ -181,6 +205,7 @@ const make = Effect.gen(function* () {
               slug,
               title: request.title,
               description: request.description,
+              mainCategoryId: category,
               createdAt: now,
               createdBy: Option.some(actor),
               updatedAt: now,
@@ -304,6 +329,6 @@ export class BlogRequestCommands extends Context.Service<
     >;
   }
 >()("@unhalteproblem.de/backend/domains/blogs/BlogRequestCommands") {
-  /** Needs `BlogRequestRepository`, `BlogRepository`, `UserDirectory`, `ModerationCommands`, `AuditCommands` and `Transaction`. */
+  /** Needs `BlogRequestRepository`, `BlogRepository`, `CategoryRepository`, `UserDirectory`, `ModerationCommands`, `AuditCommands` and `Transaction`. */
   static readonly layer = Layer.effect(BlogRequestCommands, make);
 }

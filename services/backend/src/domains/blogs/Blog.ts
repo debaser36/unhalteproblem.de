@@ -14,6 +14,7 @@ import { DateTime, Option, Schema } from "effect";
 import { Model } from "effect/schema";
 import { UserId } from "#domains/users/User";
 import { DocumentColumn } from "#repositories/Columns";
+import { CategoryId } from "./Category.ts";
 
 /**
  * Subblogs and their posts. A subblog (`blogs`) is created and renamed by
@@ -37,6 +38,9 @@ export class BlogRow extends Model.Class<BlogRow>("BlogRow")({
   slug: BlogSlug.pipe(Model.FieldExcept(["update", "jsonUpdate"])),
   title: BlogTitle,
   description: BlogDescription,
+  // Changed only by `CategoryRepository.setBlogMain`, so an admin's rename
+  // (a whole-row update) never reverts an editor's choice.
+  mainCategoryId: CategoryId.pipe(Model.FieldExcept(["update", "jsonUpdate"])),
   createdAt: Schema.DateTimeUtcFromDate.pipe(
     Model.FieldExcept(["update", "jsonUpdate"]),
   ),
@@ -54,6 +58,7 @@ const postSummaryFields = {
   title: PostTitle,
   summary: PostSummary,
   tags: Schema.Array(Tag),
+  mainCategoryId: CategoryId,
   coverMediaId: Schema.OptionFromNullOr(MediaId),
   status: PostStatus,
   /** When the post was first published; kept when it goes back to draft. */
@@ -63,6 +68,8 @@ const postSummaryFields = {
   createdAt: Schema.DateTimeUtcFromDate,
   updatedAt: Schema.DateTimeUtcFromDate,
   version: Schema.Int,
+  /** Words of the content, for the reading time; kept by the database. */
+  wordCount: Schema.Int,
 };
 
 /**
@@ -82,6 +89,7 @@ export class PostRow extends Model.Class<PostRow>("PostRow")({
   createdAt: Schema.DateTimeUtcFromDate.pipe(
     Model.FieldExcept(["update", "jsonUpdate"]),
   ),
+  wordCount: Model.GeneratedByDb(Schema.Int),
   content: DocumentColumn,
 }) {}
 

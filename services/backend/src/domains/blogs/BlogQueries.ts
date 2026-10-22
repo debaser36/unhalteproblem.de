@@ -1,8 +1,12 @@
-import { Authorized, blogEditorRole } from "@unhalteproblem.de/api";
+import {
+  Authorized,
+  blogEditorRole,
+  type PostCursorPosition,
+  type PostSort,
+} from "@unhalteproblem.de/api";
 import { Context, Effect, Layer, Option } from "effect";
 import * as Query from "#cqrs/Query";
 import {
-  type BlogId,
   BlogNotFound,
   type BlogSlug,
   type PostId,
@@ -12,7 +16,7 @@ import {
 import {
   BlogRepository,
   type BlogSummary,
-  type FeedPosition,
+  type FeedQuery,
   type PostListView,
   type PostView,
 } from "./BlogRepository.ts";
@@ -20,8 +24,38 @@ import {
 export interface FeedPage {
   readonly posts: ReadonlyArray<PostListView>;
   /** Where the next page starts; none on the last page. */
-  readonly next: Option.Option<FeedPosition>;
+  readonly next: Option.Option<PostCursorPosition>;
 }
+
+/** What a reader asks a feed for: like `FeedQuery`, by subblog slug. */
+export interface FeedRequest extends Omit<FeedQuery, "blogId"> {
+  readonly blog: Option.Option<BlogSlug>;
+}
+
+/** The position of `view` in the order of `sort`, for the next cursor. */
+const positionOf = (
+  sort: PostSort,
+  { post, categories, authorName }: PostListView,
+): PostCursorPosition => {
+  const id = post.id;
+  // Feeds list only published posts, and those always have the time.
+  const publishedAt = Option.getOrElse(post.publishedAt, () => post.updatedAt);
+  switch (sort) {
+    case "newest":
+    case "oldest":
+      return { sort, publishedAt, id };
+    case "updated":
+      return { sort, updatedAt: post.updatedAt, id };
+    case "title":
+      return { sort, title: post.title, id };
+    case "readingTime":
+      return { sort, words: post.wordCount, id };
+    case "category":
+      return { sort, category: categories.main.name, publishedAt, id };
+    case "author":
+      return { sort, author: Option.getOrNull(authorName), publishedAt, id };
+  }
+};
 
 const make = Effect.gen(function* () {
   const repository = yield* BlogRepository;
@@ -33,12 +67,7 @@ const make = Effect.gen(function* () {
   });
 
   /** One more than asked tells whether there is a next page. */
-  const page = Effect.fnUntraced(function* (query: {
-    readonly blogId: Option.Option<BlogId>;
-    readonly tag: Option.Option<string>;
-    readonly after: Option.Option<FeedPosition>;
-    readonly limit: number;
-  }) {
+  const page = Effect.fnUntraced(function* (query: FeedQuery) {
     const views = yield* repository.feed({ ...query, limit: query.limit + 1 });
     const posts = views.slice(0, query.limit);
     const last = posts.at(-1);
@@ -46,10 +75,7 @@ const make = Effect.gen(function* () {
       posts,
       next:
         views.length > query.limit && last !== undefined
-          ? Option.map(last.post.publishedAt, (publishedAt) => ({
-              publishedAt,
-              id: last.post.id,
-            }))
+          ? Option.some(positionOf(query.sort, last))
           : Option.none(),
     } satisfies FeedPage;
   });
@@ -66,21 +92,14 @@ const make = Effect.gen(function* () {
       return summary.value;
     }, Query.boundary),
 
-    feed: Effect.fn("BlogQueries.feed")(function* (query: {
-      readonly blog: Option.Option<BlogSlug>;
-      readonly tag: Option.Option<string>;
-      readonly after: Option.Option<FeedPosition>;
-      readonly limit: number;
-    }) {
-      const id = Option.isSome(query.blog)
-        ? Option.some(yield* blogId(query.blog.value))
+    feed: Effect.fn("BlogQueries.feed")(function* ({
+      blog,
+      ...query
+    }: FeedRequest) {
+      const id = Option.isSome(blog)
+        ? Option.some(yield* blogId(blog.value))
         : Option.none();
-      return yield* page({
-        blogId: id,
-        tag: query.tag,
-        after: query.after,
-        limit: query.limit,
-      });
+      return yield* page({ ...query, blogId: id });
     }, Query.boundary),
 
     getPublished: Effect.fn("BlogQueries.getPublished")(function* (
@@ -124,13 +143,13 @@ export class BlogQueries extends Context.Service<
     readonly getBlog: (
       blog: BlogSlug,
     ) => Effect.Effect<BlogSummary, BlogNotFound>;
-    /** Published posts, newest first: of one subblog, or of all. */
-    readonly feed: (query: {
-      readonly blog: Option.Option<BlogSlug>;
-      readonly tag: Option.Option<string>;
-      readonly after: Option.Option<FeedPosition>;
-      readonly limit: number;
-    }) => Effect.Effect<FeedPage, BlogNotFound>;
+    /**
+     * Published posts in the order the request asks for: of one subblog,
+     * or of all.
+     */
+    readonly feed: (
+      request: FeedRequest,
+    ) => Effect.Effect<FeedPage, BlogNotFound>;
     readonly getPublished: (
       blog: BlogSlug,
       slug: PostSlug,

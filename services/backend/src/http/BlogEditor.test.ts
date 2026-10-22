@@ -292,7 +292,7 @@ describe("writing a post", () => {
         publishedAt: null,
         version: 1,
         tags: ["rust"],
-        author: { name: "ada" },
+        author: { id: ed.id, name: "ada" },
       });
       assert.deepStrictEqual(draft["content"], content);
 
@@ -341,7 +341,7 @@ describe("writing a post", () => {
         slug: "hello",
         title: "Title of hello",
         publishedAt,
-        author: { name: "ada" },
+        author: { id: ed.id, name: "ada" },
         readingMinutes: 2,
       });
       assert.deepStrictEqual(post["content"], content);
@@ -618,7 +618,7 @@ describe("writing a post", () => {
         "GET",
         "/blogs/alpha/posts/hello",
       );
-      assert.deepStrictEqual(before["author"], { name: "ada" });
+      assert.deepStrictEqual(before["author"], { id: ed.id, name: "ada" });
 
       yield* app.expect(204, ed.cookie, "POST", "/account/delete");
 
@@ -628,11 +628,11 @@ describe("writing a post", () => {
         "GET",
         "/blogs/alpha/posts/hello",
       );
-      assert.deepStrictEqual(after["author"], { name: null });
+      assert.deepStrictEqual(after["author"], { id: null, name: null });
       const page = yield* app.expect(200, undefined, "GET", "/posts");
       assert.deepStrictEqual(
         (page["posts"] as ReadonlyArray<Json>).map((item) => item["author"]),
-        [{ name: null }],
+        [{ id: null, name: null }],
       );
     }),
   );

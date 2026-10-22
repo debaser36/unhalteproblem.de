@@ -41,6 +41,7 @@ export const postInput = (
   title: `Title of ${slug}`,
   summary: `Summary of ${slug}`,
   tags: [],
+  categories: { main: "Programming", extra: [] },
   coverImage: null,
   content: doc(words(10)),
   ...overrides,
@@ -179,7 +180,12 @@ export const makeBlogApp = Effect.fnUntraced(function* (
   /** Creates a subblog as `admin`; returns the `Blog`. */
   const createBlog = (slug: string, title = `Blog ${slug}`) =>
     expect(201, admin.cookie, "POST", "/admin/blogs", {
-      body: { slug, title, description: `About ${slug}` },
+      body: {
+        slug,
+        title,
+        description: `About ${slug}`,
+        categories: { main: "Programming", extra: [] },
+      },
     });
 
   /** Logs `subject` in as an editor of `blogs` (granted in SQL). */
