@@ -80,7 +80,7 @@ Node refuses to strip types under `node_modules`, where a deployed copy of
   "imports": {
     "#Config": "./src/Config.ts",
     "#http/*": "./src/http/*.ts",
-    "#services/*": "./src/services/*.ts"
+    "#infrastructure/*": "./src/infrastructure/*.ts"
   }
   ```
   Add `#Server` only if something besides `main.ts` imports it. Add the alias
