@@ -62,16 +62,19 @@ editor says so instead of overwriting their work.
 Every routed page renders `<Seo>` (`src/app/Seo.tsx`), or `<NoIndex>` for
 private and utility pages (account, admin, editors, forms, 404). It writes the
 title, description, canonical link, Open Graph and Twitter tags and JSON-LD
-into the head; `buildSeo` and the JSON-LD builders in `src/lib/seo.ts` are pure
-and tested. A new page needs one of the two, or it keeps the previous page's
-tags. Site-wide facts (origin, name, full name, default image) are in `src/app/site.ts`;
-the defaults in `index.html` (`data-seo`) are for crawlers without JavaScript.
-JSON-LD is serialized with `<` escaped, because posts and projects are user content.
+into the head. The builders, the site facts (`src/app/site.ts` re-exports
+them), the metadata of the fixed pages and the `postSeo`, `projectSeo` and
+`blogSeo` helpers live in `lib/seo` (`@unhalteproblem.de/seo`), because the
+backend's crawler pages use them too. A new page needs `<Seo>` or `<NoIndex>`,
+or it keeps the previous page's tags. The defaults in `index.html`
+(`data-seo`) are for crawlers without JavaScript; a test keeps them equal to
+the package. JSON-LD is serialized with `<` escaped, because posts and
+projects are user content.
 
-`public/robots.txt` blocks the private paths and the API (except
-`/api/media/`). `public/sitemap.xml` lists the static pages only: posts,
-subblogs and projects are found through links, and a generated sitemap would
-need a backend endpoint plus an nginx location.
+Crawlers and link-preview bots do not get the SPA at all: nginx sends them
+server-rendered pages from the backend (`services/backend/docs/seo.md`), and
+`/sitemap.xml` comes from the backend as well. `public/robots.txt` names it,
+blocks the private paths and the API (except `/api/media/`).
 
 ## Content to fill in
 

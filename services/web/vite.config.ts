@@ -15,6 +15,8 @@ export default defineConfig({
         target: backend,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
+      // Production serves the sitemap from the backend too.
+      "/sitemap.xml": backend,
     },
   },
   build: {
