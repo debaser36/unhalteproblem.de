@@ -288,6 +288,23 @@ export const MailConfig: Config.Config<Option.Option<MailSettings>> =
     ),
   );
 
+/**
+ * Claude, for the food planner's meal plans and price estimates. Optional:
+ * without `ANTHROPIC_API_KEY` the rest of the food planner works, and
+ * creating a meal plan answers 503. `CLAUDE_EFFORT` trades thoroughness
+ * against cost and time per plan.
+ */
+export const ClaudeConfig = Config.all({
+  apiKey: Config.option(Config.Redacted("ANTHROPIC_API_KEY")),
+  model: Config.NonEmptyString("CLAUDE_MODEL").pipe(
+    Config.withDefault("claude-opus-5-5"),
+  ),
+  effort: Config.Literals(
+    ["low", "medium", "high", "xhigh", "max"],
+    "CLAUDE_EFFORT",
+  ).pipe(Config.withDefault("medium" as const)),
+});
+
 /** How long audit log entries are kept before they are deleted. */
 export const AuditRetentionConfig = Config.schema(
   PositiveDuration,

@@ -3,6 +3,7 @@ import {
   Api,
   RequireAdmin,
   RequireBlogRequestModerator,
+  RequireFoodPlanner,
   RequireSuperAdmin,
 } from "@unhalteproblem.de/api";
 import { ByteSize, Effect, Layer, Logger, References } from "effect";
@@ -24,6 +25,7 @@ import {
 } from "#http/BlogRequests";
 import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
+import { FoodPlannerHandlers } from "#http/Food";
 import { LargeBodyLive } from "#http/LargeBody";
 import { MediaHandlers } from "#http/Media";
 import { ProjectAdminHandlers } from "#http/ProjectAdmin";
@@ -38,9 +40,13 @@ import { Sessions } from "#auth/Sessions";
 import { AuthCleanup } from "#auth/AuthCleanup";
 import { ContactRateLimit } from "#domains/contact/ContactRateLimit";
 import { DatabaseLive } from "#infrastructure/Database";
+import { Claude } from "#infrastructure/Claude";
 import { KeycloakAdmin } from "#infrastructure/KeycloakAdmin";
 import { LoginRateLimit } from "#auth/LoginRateLimit";
 import { Mailer } from "#infrastructure/Mailer";
+import { OpenFoodFacts } from "#infrastructure/OpenFoodFacts";
+import { OpenPrices } from "#infrastructure/OpenPrices";
+import { StatsNz } from "#infrastructure/StatsNz";
 import { OidcProvider } from "#auth/OidcProvider";
 import { Readiness } from "#infrastructure/Readiness";
 import { TokenVerifier } from "#auth/TokenVerifier";
@@ -51,7 +57,14 @@ const Repositories = Layer.mergeAll(
   LoginAttempts.layer,
   LogoutTokens.layer,
   DomainsLive.pipe(
-    Layer.provide([Mailer.layer, KeycloakAdmin.layer]),
+    Layer.provide([
+      Mailer.layer,
+      KeycloakAdmin.layer,
+      OpenPrices.layer,
+      OpenFoodFacts.layer,
+      StatsNz.layer,
+      Claude.layer,
+    ]),
     Layer.provideMerge(Sessions.layer),
   ),
 ).pipe(Layer.provideMerge(DatabaseLive));
@@ -64,6 +77,7 @@ const AuthServices = Layer.mergeAll(
   Authorization.middleware(RequireAdmin),
   Authorization.middleware(RequireSuperAdmin),
   Authorization.middleware(RequireBlogRequestModerator),
+  Authorization.middleware(RequireFoodPlanner),
   OidcProvider.layer,
   TokenVerifier.layer,
   AuthCleanup,
@@ -85,6 +99,7 @@ const Handlers = Layer.mergeAll(
   ProjectsHandlers,
   ProjectAdminHandlers,
   SeoHandlers,
+  FoodPlannerHandlers,
 ).pipe(
   Layer.provide([ContactRateLimit.layer, Readiness.layer]),
   Layer.provideMerge(AuthServices),

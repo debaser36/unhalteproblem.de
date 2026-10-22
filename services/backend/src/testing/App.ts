@@ -3,6 +3,7 @@ import {
   Api,
   RequireAdmin,
   RequireBlogRequestModerator,
+  RequireFoodPlanner,
   RequireSuperAdmin,
 } from "@unhalteproblem.de/api";
 import {
@@ -37,6 +38,7 @@ import {
 } from "#http/BlogRequests";
 import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
+import { FoodPlannerHandlers } from "#http/Food";
 import { LargeBodyLive } from "#http/LargeBody";
 import { MediaHandlers } from "#http/Media";
 import { ProjectAdminHandlers } from "#http/ProjectAdmin";
@@ -49,12 +51,17 @@ import { LogoutTokens } from "#auth/LogoutTokens";
 import { Sessions } from "#auth/Sessions";
 import { ContactRateLimit } from "#domains/contact/ContactRateLimit";
 import { LoginRateLimit } from "#auth/LoginRateLimit";
+import type { Claude } from "#infrastructure/Claude";
 import { KeycloakAdmin } from "#infrastructure/KeycloakAdmin";
 import { Mailer } from "#infrastructure/Mailer";
+import type { OpenFoodFacts } from "#infrastructure/OpenFoodFacts";
+import type { OpenPrices } from "#infrastructure/OpenPrices";
+import type { StatsNz } from "#infrastructure/StatsNz";
 import { CodeExchangeFailed, OidcProvider } from "#auth/OidcProvider";
 import { Readiness } from "#infrastructure/Readiness";
 import { TokenVerifier } from "#auth/TokenVerifier";
 import { DatabaseTest } from "./Database.ts";
+import { fakeFoodSources, makeScriptedClaude } from "./Food.ts";
 import { makeRecordingKeycloak } from "./KeycloakAdmin.ts";
 import { createServer, request as httpRequest } from "node:http";
 
@@ -103,6 +110,12 @@ export interface AppOptions {
   readonly mailer?: Layer.Layer<Mailer>;
   /** Stands in for Keycloak's admin API; by default it accepts everything (see `makeRecordingKeycloak`). */
   readonly keycloak?: Layer.Layer<KeycloakAdmin>;
+  /**
+   * Stand in for the food planner's sources; by default they have no data
+   * and Claude is not configured (see `testing/Food.ts`).
+   */
+  readonly foodSources?: Layer.Layer<OpenPrices | OpenFoodFacts | StatsNz>;
+  readonly claude?: Layer.Layer<Claude>;
   /** Login starts allowed per client. */
   readonly loginLimit?: number;
   /**
@@ -298,6 +311,10 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
       DomainsLive.pipe(
         Layer.provide(options.mailer ?? Mailer.layerDisabled),
         Layer.provide(options.keycloak ?? makeRecordingKeycloak().layer),
+        Layer.provide(options.foodSources ?? fakeFoodSources()),
+        Layer.provide(
+          options.claude ?? makeScriptedClaude([], { configured: false }).layer,
+        ),
         Layer.provideMerge(Sessions.layer),
       ),
     ).pipe(Layer.provideMerge(DatabaseTest)),
@@ -318,6 +335,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     ProjectsHandlers,
     ProjectAdminHandlers,
     SeoHandlers,
+    FoodPlannerHandlers,
   ).pipe(
     Layer.provide([
       SameOriginLive,
@@ -326,6 +344,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
       Authorization.middleware(RequireAdmin),
       Authorization.middleware(RequireSuperAdmin),
       Authorization.middleware(RequireBlogRequestModerator),
+      Authorization.middleware(RequireFoodPlanner),
       Layer.succeed(OidcProvider, makeProvider(options)),
       TokenVerifier.layerWith({
         issuer,
