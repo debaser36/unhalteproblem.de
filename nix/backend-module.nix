@@ -300,63 +300,65 @@ in
       # Runs before the location is chosen, so it needs to know nothing about
       # how the rest of the virtual host serves the SPA. rewrite appends the
       # current arguments, so they are replaced by the cleaned ones first.
-      services.nginx.virtualHosts.${cfg.nginx.virtualHost}.extraConfig = ''
-        if ($unhalteproblem_seo_uri != "") {
-          set $args $unhalteproblem_seo_args;
-          rewrite ^ $unhalteproblem_seo_uri last;
-        }
-      '';
+      services.nginx.virtualHosts.${cfg.nginx.virtualHost} = {
+        extraConfig = ''
+          if ($unhalteproblem_seo_uri != "") {
+            set $args $unhalteproblem_seo_args;
+            rewrite ^ $unhalteproblem_seo_uri last;
+          }
+        '';
 
-      services.nginx.virtualHosts.${cfg.nginx.virtualHost}.locations = {
-        # Everything else, including /api/auth/session and
-        # /api/auth/backchannel-logout (called server-to-server by Keycloak,
-        # so it must not share a per-IP limit), is not limited by nginx.
-        "/api/" = {
-          # The trailing slash strips the /api prefix: /api/health -> /health.
-          proxyPass = backendUrl "/";
-          extraConfig = proxyConfig;
-        };
-        "= /api/contact" = {
-          proxyPass = backendUrl "/contact";
-          extraConfig = proxyConfig + ''
-            limit_req zone=unhalteproblem_contact burst=5 nodelay;
-            limit_req_status 429;
-          '';
-        };
-        # /ready runs a query on every call: same limit as the login routes.
-        # The container's own healthcheck calls the backend directly.
-        "= /api/ready" = authRateLimited "/ready";
-        "= /api/auth/login" = authRateLimited "/auth/login";
-        "= /api/auth/callback" = authRateLimited "/auth/callback";
-        # The crawler pages (the target of the rewrite above) and the sitemap.
-        # They read the database, so they are rate limited as well.
-        "~ ^/api/seo/" = {
-          proxyPass = backendUrl "";
-          extraConfig = proxyConfig + ''
-            limit_req zone=unhalteproblem_seo burst=30 nodelay;
-            limit_req_status 429;
-            # The same URL answers people with the SPA.
-            add_header Vary User-Agent always;
-            rewrite ^/api(/.*)$ $1 break;
-          '';
-        };
-        "= /sitemap.xml" = {
-          proxyPass = backendUrl "/sitemap.xml";
-          extraConfig = proxyConfig + ''
-            limit_req zone=unhalteproblem_seo burst=5 nodelay;
-            limit_req_status 429;
-          '';
-        };
-        # Saving a post or project (512 KiB of JSON) and uploading an image
-        # (5 MiB) need more than the 32k of every other route; the backend
-        # enforces the exact limits per endpoint. A regex location can't
-        # proxy_pass with a URI, so the /api prefix is stripped by a rewrite.
-        "~ ^/api/(blogs/[^/]+/manage|admin/projects)(/|$)" = {
-          proxyPass = backendUrl "";
-          extraConfig = proxyHeaders + ''
-            client_max_body_size 6m;
-            rewrite ^/api(/.*)$ $1 break;
-          '';
+        locations = {
+          # Everything else, including /api/auth/session and
+          # /api/auth/backchannel-logout (called server-to-server by Keycloak,
+          # so it must not share a per-IP limit), is not limited by nginx.
+          "/api/" = {
+            # The trailing slash strips the /api prefix: /api/health -> /health.
+            proxyPass = backendUrl "/";
+            extraConfig = proxyConfig;
+          };
+          "= /api/contact" = {
+            proxyPass = backendUrl "/contact";
+            extraConfig = proxyConfig + ''
+              limit_req zone=unhalteproblem_contact burst=5 nodelay;
+              limit_req_status 429;
+            '';
+          };
+          # /ready runs a query on every call: same limit as the login routes.
+          # The container's own healthcheck calls the backend directly.
+          "= /api/ready" = authRateLimited "/ready";
+          "= /api/auth/login" = authRateLimited "/auth/login";
+          "= /api/auth/callback" = authRateLimited "/auth/callback";
+          # The crawler pages (the target of the rewrite above) and the sitemap.
+          # They read the database, so they are rate limited as well.
+          "~ ^/api/seo/" = {
+            proxyPass = backendUrl "";
+            extraConfig = proxyConfig + ''
+              limit_req zone=unhalteproblem_seo burst=30 nodelay;
+              limit_req_status 429;
+              # The same URL answers people with the SPA.
+              add_header Vary User-Agent always;
+              rewrite ^/api(/.*)$ $1 break;
+            '';
+          };
+          "= /sitemap.xml" = {
+            proxyPass = backendUrl "/sitemap.xml";
+            extraConfig = proxyConfig + ''
+              limit_req zone=unhalteproblem_seo burst=5 nodelay;
+              limit_req_status 429;
+            '';
+          };
+          # Saving a post or project (512 KiB of JSON) and uploading an image
+          # (5 MiB) need more than the 32k of every other route; the backend
+          # enforces the exact limits per endpoint. A regex location can't
+          # proxy_pass with a URI, so the /api prefix is stripped by a rewrite.
+          "~ ^/api/(blogs/[^/]+/manage|admin/projects)(/|$)" = {
+            proxyPass = backendUrl "";
+            extraConfig = proxyHeaders + ''
+              client_max_body_size 6m;
+              rewrite ^/api(/.*)$ $1 break;
+            '';
+          };
         };
       };
     })
