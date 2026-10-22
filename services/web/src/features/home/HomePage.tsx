@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router";
+import { Seo } from "#app/Seo.tsx";
 import { recentPostsAtom } from "#features/blog/blogAtoms.ts";
 import { NoPosts, PostList } from "#features/blog/PostList.tsx";
 import { FeaturedProjects } from "#features/projects/FeaturedProjects.tsx";
@@ -33,6 +34,7 @@ function SectionHeading({
 export function HomePage() {
   return (
     <Container width="wide">
+      <Seo path="/" />
       <Hero />
       <section aria-label="Latest posts" className="mt-8">
         <SectionHeading title="Latest posts" to="/blog" more="all posts" />

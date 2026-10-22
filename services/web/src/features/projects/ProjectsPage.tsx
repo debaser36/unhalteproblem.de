@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { hasRole, userAtom } from "#api/session.ts";
+import { Seo } from "#app/Seo.tsx";
 import { cn } from "#lib/cn.ts";
 import { ButtonLink } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
@@ -24,6 +25,11 @@ export function ProjectsPage() {
   const [filter, setFilter] = useState<ProjectStatus | "all">("all");
   return (
     <Container width="wide">
+      <Seo
+        title="Projects"
+        description="Software projects by Nico: what they do, how they are built and where to find the source."
+        path="/projects"
+      />
       <PageHeader
         path="~/projects"
         title="Projects"

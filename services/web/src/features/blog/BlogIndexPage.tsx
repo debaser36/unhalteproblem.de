@@ -2,6 +2,7 @@ import type { Blog } from "@unhalteproblem.de/api";
 import { ArrowUpRight, BookPlus } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { AsyncView } from "#api/AsyncView.tsx";
+import { Seo } from "#app/Seo.tsx";
 import { formatDate } from "#lib/format.ts";
 import { ButtonLink } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
@@ -24,6 +25,11 @@ export function BlogIndexPage() {
   const blogSort = isBlogSort(blogsParam) ? blogsParam : "title";
   return (
     <Container>
+      <Seo
+        title="Blog"
+        description="Notes on what Nico learns: programming, infrastructure, security and tools, sorted into subblogs."
+        path="/blog"
+      />
       <PageHeader
         path="~/blog"
         title="Blog"

@@ -8,6 +8,7 @@ import {
 import { Exit } from "effect";
 import { PenLine, Send, Undo2 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import { NoIndex } from "#app/Seo.tsx";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { failureMessage } from "#api/errors.ts";
 import { sessionAtom } from "#api/session.ts";
@@ -31,6 +32,7 @@ import { BlogRequestStatusBadge } from "./BlogRequestStatusBadge.tsx";
 export function RequestBlogPage() {
   return (
     <Container width="prose">
+      <NoIndex title="Start a blog" />
       <PageHeader path="~/blog/request" title="Start a blog">
         Want to write here? Tell us what your blog would be about. Once an admin
         approves it, the blog is created and you can write its posts.

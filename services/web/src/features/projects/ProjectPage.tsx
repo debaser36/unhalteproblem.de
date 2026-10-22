@@ -1,13 +1,17 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { PublishedProject } from "@unhalteproblem.de/api";
+import { mediaUrl, type PublishedProject } from "@unhalteproblem.de/api";
+import { DateTime } from "effect";
 import { ArrowLeft, PenLine } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { hasRole, userAtom } from "#api/session.ts";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
+import { Seo } from "#app/Seo.tsx";
+import { site } from "#app/site.ts";
 import { toEditorContent } from "#editor/convert.ts";
 import { RichDocument } from "#editor/RichDocument.tsx";
+import { breadcrumbsJsonLd, projectJsonLd } from "#lib/seo.ts";
 import { Button } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
 import { Loading } from "#ui/Spinner.tsx";
@@ -83,8 +87,40 @@ function Reading({
   readonly project: PublishedProject;
   readonly onEdit: (() => void) | undefined;
 }) {
+  const path = `/projects/${project.slug}`;
   return (
     <article className="animate-fade-up">
+      <Seo
+        title={project.title}
+        description={
+          project.summary !== ""
+            ? project.summary
+            : `${project.title}, a project by ${site.owner}.`
+        }
+        path={path}
+        image={
+          project.coverImage === null ? undefined : mediaUrl(project.coverImage)
+        }
+        jsonLd={[
+          projectJsonLd(site.origin, {
+            path,
+            title: project.title,
+            description: project.summary,
+            image:
+              project.coverImage === null
+                ? undefined
+                : mediaUrl(project.coverImage),
+            updatedAt: DateTime.formatIso(project.updatedAt),
+            repoUrl: project.repoUrl,
+            tags: project.tags,
+          }),
+          breadcrumbsJsonLd(site.origin, [
+            { name: "Home", path: "/" },
+            { name: "Projects", path: "/projects" },
+            { name: project.title, path },
+          ]),
+        ]}
+      />
       <ProjectHeader
         status={project.status}
         tags={project.tags}

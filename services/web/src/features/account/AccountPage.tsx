@@ -3,6 +3,7 @@ import type { User } from "@unhalteproblem.de/api";
 import { Exit } from "effect";
 import { LogOut, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { NoIndex } from "#app/Seo.tsx";
 import { ApiClient } from "#api/ApiClient.ts";
 import { failureMessage } from "#api/errors.ts";
 import { sessionKey } from "#api/session.ts";
@@ -20,6 +21,7 @@ const deleteAccount = ApiClient.mutation("account", "deleteAccount");
 export function AccountPage() {
   return (
     <Container width="prose">
+      <NoIndex title="Your account" />
       <PageHeader path="~/account" title="Your account" />
       <RequireUser>{(user) => <Account user={user} />}</RequireUser>
     </Container>

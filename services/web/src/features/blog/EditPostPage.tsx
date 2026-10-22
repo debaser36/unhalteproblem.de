@@ -1,6 +1,7 @@
 import { type BlogSlug, PostId } from "@unhalteproblem.de/api";
 import { Option, Schema } from "effect";
 import { useNavigate, useParams } from "react-router";
+import { NoIndex } from "#app/Seo.tsx";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
 import { RequireUser } from "#app/RequireUser.tsx";
@@ -19,17 +20,20 @@ export function EditPostPage() {
   const blog = blogParam(params.blog);
   if (Option.isNone(blog)) return <NotFoundPage what="blog" />;
   return (
-    <RequireUser role={blogEditorRole(blog.value)}>
-      {() => (
-        <Container width="prose">
-          {params.postId === "new" ? (
-            <NewPost blog={blog.value} />
-          ) : (
-            <ExistingPost blog={blog.value} postId={params.postId} />
-          )}
-        </Container>
-      )}
-    </RequireUser>
+    <>
+      <NoIndex title="Edit post" />
+      <RequireUser role={blogEditorRole(blog.value)}>
+        {() => (
+          <Container width="prose">
+            {params.postId === "new" ? (
+              <NewPost blog={blog.value} />
+            ) : (
+              <ExistingPost blog={blog.value} postId={params.postId} />
+            )}
+          </Container>
+        )}
+      </RequireUser>
+    </>
   );
 }
 

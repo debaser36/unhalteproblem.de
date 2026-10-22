@@ -2,6 +2,7 @@ import { blogEditorRole, type BlogSlug } from "@unhalteproblem.de/api";
 import { Option } from "effect";
 import { ExternalLink, PenLine, Plus } from "lucide-react";
 import { Link, useParams } from "react-router";
+import { NoIndex } from "#app/Seo.tsx";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
 import { RequireUser } from "#app/RequireUser.tsx";
@@ -21,9 +22,12 @@ export function ManagePostsPage() {
   const blog = blogParam(useParams().blog);
   if (Option.isNone(blog)) return <NotFoundPage what="blog" />;
   return (
-    <RequireUser role={blogEditorRole(blog.value)}>
-      {() => <Desk blog={blog.value} />}
-    </RequireUser>
+    <>
+      <NoIndex title="Manage posts" />
+      <RequireUser role={blogEditorRole(blog.value)}>
+        {() => <Desk blog={blog.value} />}
+      </RequireUser>
+    </>
   );
 }
 

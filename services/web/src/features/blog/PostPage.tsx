@@ -1,14 +1,21 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { BlogSlug, PublishedPost } from "@unhalteproblem.de/api";
-import { Option } from "effect";
+import {
+  mediaUrl,
+  type BlogSlug,
+  type PublishedPost,
+} from "@unhalteproblem.de/api";
+import { DateTime, Option } from "effect";
 import { ArrowLeft, PenLine } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { userAtom } from "#api/session.ts";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
+import { Seo } from "#app/Seo.tsx";
+import { site } from "#app/site.ts";
 import { toEditorContent } from "#editor/convert.ts";
 import { RichDocument } from "#editor/RichDocument.tsx";
+import { blogPostingJsonLd, breadcrumbsJsonLd } from "#lib/seo.ts";
 import { Button } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
 import { Loading } from "#ui/Spinner.tsx";
@@ -95,8 +102,48 @@ function Reading({
   readonly post: PublishedPost;
   readonly onEdit: (() => void) | undefined;
 }) {
+  const path = `/blog/${post.blog}/${post.slug}`;
+  const image =
+    post.coverImage === null ? undefined : mediaUrl(post.coverImage);
+  const publishedAt = DateTime.formatIso(post.publishedAt);
+  const updatedAt = DateTime.formatIso(post.updatedAt);
+  const description =
+    post.summary !== ""
+      ? post.summary
+      : `${post.title}, a post by ${post.author.name ?? site.owner}.`;
   return (
     <article className="animate-fade-up">
+      <Seo
+        title={post.title}
+        description={description}
+        path={path}
+        image={image}
+        article={{
+          publishedAt,
+          updatedAt,
+          author: post.author.name,
+          tags: post.tags,
+        }}
+        jsonLd={[
+          blogPostingJsonLd(site.origin, {
+            path,
+            title: post.title,
+            description,
+            image,
+            publishedAt,
+            updatedAt,
+            author: post.author.name,
+            tags: post.tags,
+            section: post.categories.main.name,
+          }),
+          breadcrumbsJsonLd(site.origin, [
+            { name: "Home", path: "/" },
+            { name: "Blog", path: "/blog" },
+            { name: post.blog, path: `/blog/${post.blog}` },
+            { name: post.title, path },
+          ]),
+        ]}
+      />
       <PostHeader
         blog={post.blog}
         publishedAt={post.publishedAt}

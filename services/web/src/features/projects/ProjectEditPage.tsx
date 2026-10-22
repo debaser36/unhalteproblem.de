@@ -1,6 +1,7 @@
 import { ProjectId } from "@unhalteproblem.de/api";
 import { Option, Schema } from "effect";
 import { useNavigate, useParams } from "react-router";
+import { NoIndex } from "#app/Seo.tsx";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
 import { RequireUser } from "#app/RequireUser.tsx";
@@ -17,24 +18,27 @@ export function ProjectEditPage() {
   const navigate = useNavigate();
   const done = () => navigate("/admin/projects");
   return (
-    <RequireUser role="admin">
-      {() => (
-        <Container width="prose">
-          {projectId === undefined ? (
-            <ProjectEditor
-              project={null}
-              onSaved={(saved) =>
-                navigate(editProjectPath(saved.id), { replace: true })
-              }
-              onClose={done}
-              onDeleted={done}
-            />
-          ) : (
-            <Existing id={projectId} onDone={done} />
-          )}
-        </Container>
-      )}
-    </RequireUser>
+    <>
+      <NoIndex title="Edit project" />
+      <RequireUser role="admin">
+        {() => (
+          <Container width="prose">
+            {projectId === undefined ? (
+              <ProjectEditor
+                project={null}
+                onSaved={(saved) =>
+                  navigate(editProjectPath(saved.id), { replace: true })
+                }
+                onClose={done}
+                onDeleted={done}
+              />
+            ) : (
+              <Existing id={projectId} onDone={done} />
+            )}
+          </Container>
+        )}
+      </RequireUser>
+    </>
   );
 }
 

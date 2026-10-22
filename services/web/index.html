@@ -5,15 +5,83 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#07090c" />
-    <meta
-      name="description"
-      content="unhalteproblem.de — notes, projects and experiments by Nico."
-    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>unhalteproblem.de</title>
+    <!--
+      The tags marked data-seo are the defaults for crawlers that do not run
+      JavaScript; src/app/Seo.tsx replaces them on every page. Keep them in
+      step with src/app/site.ts. There is no canonical link and no og:url on
+      purpose: one fixed value would claim every unrendered URL is the home page.
+    -->
+    <title>unhalteproblem.de — notes, projects and experiments by Nico</title>
+    <meta
+      data-seo
+      name="description"
+      content="Notes, projects and experiments by Nico: typed backends, infrastructure and the occasional frontend."
+    />
+    <meta
+      data-seo
+      name="robots"
+      content="index, follow, max-image-preview:large"
+    />
+    <meta data-seo property="og:site_name" content="unhalteproblem.de" />
+    <meta data-seo property="og:locale" content="en_US" />
+    <meta data-seo property="og:type" content="website" />
+    <meta data-seo property="og:title" content="unhalteproblem.de" />
+    <meta
+      data-seo
+      property="og:description"
+      content="Notes, projects and experiments by Nico: typed backends, infrastructure and the occasional frontend."
+    />
+    <meta
+      data-seo
+      property="og:image"
+      content="https://unhalteproblem.de/og-image.png"
+    />
+    <meta data-seo name="twitter:card" content="summary_large_image" />
+    <meta data-seo name="twitter:title" content="unhalteproblem.de" />
+    <meta
+      data-seo
+      name="twitter:description"
+      content="Notes, projects and experiments by Nico: typed backends, infrastructure and the occasional frontend."
+    />
+    <meta
+      data-seo
+      name="twitter:image"
+      content="https://unhalteproblem.de/og-image.png"
+    />
+    <!-- Site-wide entities: they stay on every page. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://unhalteproblem.de/#website",
+            "url": "https://unhalteproblem.de/",
+            "name": "unhalteproblem.de",
+            "description": "Notes, projects and experiments by Nico.",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://unhalteproblem.de/#person" }
+          },
+          {
+            "@type": "Person",
+            "@id": "https://unhalteproblem.de/#person",
+            "name": "Nico Burkholder",
+            "url": "https://unhalteproblem.de/about",
+            "sameAs": ["https://github.com/debaser36"]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <p>
+        unhalteproblem.de — notes, projects and experiments by Nico. This site
+        needs JavaScript to show its pages.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

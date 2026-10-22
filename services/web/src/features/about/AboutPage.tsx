@@ -1,4 +1,5 @@
 import { ArrowRight, Download } from "lucide-react";
+import { Seo } from "#app/Seo.tsx";
 import { site } from "#app/site.ts";
 import { Badge } from "#ui/Badge.tsx";
 import { ButtonLink, ExternalButtonLink } from "#ui/Button.tsx";
@@ -16,9 +17,29 @@ import {
   now,
 } from "./profile.ts";
 
+const aboutJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "ProfilePage",
+  mainEntity: {
+    "@type": "Person",
+    name: site.fullName,
+    url: site.origin,
+    sameAs: [site.githubUrl],
+    knowsAbout: expertise
+      .filter((skill) => skill.area !== "Spoken")
+      .flatMap((skill) => skill.items),
+  },
+};
+
 export function AboutPage() {
   return (
     <Container>
+      <Seo
+        title="About"
+        description={`${intro[0]} ${intro[1]}`}
+        path="/about"
+        jsonLd={[aboutJsonLd]}
+      />
       <PageHeader path="~/about" title="whoami">
         {intro[0]}
       </PageHeader>

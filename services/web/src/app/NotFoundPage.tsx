@@ -1,6 +1,7 @@
 import { Home } from "lucide-react";
 import { ButtonLink } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
+import { NoIndex } from "./Seo.tsx";
 
 /**
  * 404, with a nod to the site's name: whether this page exists was, for
@@ -9,6 +10,7 @@ import { Container } from "#ui/Container.tsx";
 export function NotFoundPage({ what = "page" }: { readonly what?: string }) {
   return (
     <Container width="prose" className="py-24">
+      <NoIndex title="Page not found" />
       <div className="animate-fade-up space-y-6 font-mono">
         <p className="text-sm text-muted">
           <span className="text-accent">$</span> cat ./{what}
