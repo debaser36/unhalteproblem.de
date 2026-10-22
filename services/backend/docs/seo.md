@@ -6,13 +6,13 @@ only once JavaScript has run. Crawlers that do not run it (link previews of
 chat apps and social networks, many smaller crawlers) would see the same
 generic page for every post. The `seo` API group gives them the real page.
 
-| Endpoint                           | Answers                                                               |
-| ---------------------------------- | --------------------------------------------------------------------- |
-| `GET /seo/pages/:page`             | home, about, contact, blog or projects (`SeoPage`)                    |
-| `GET /seo/blogs/:blog`             | a subblog with its newest 50 published posts                          |
-| `GET /seo/blogs/:blog/posts/:post` | a published post with its whole text                                  |
-| `GET /seo/projects/:project`       | a published project with its text                                     |
-| `GET /sitemap.xml`                 | the fixed pages and all published blogs, posts and projects (50k max) |
+| Endpoint                           | Answers                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| `GET /seo/pages/:page`             | home, about, contact, blog or projects (`SeoPage`)                     |
+| `GET /seo/blogs/:blog?page=N`      | a subblog with 50 published posts a page, newest first (page 1 to 100) |
+| `GET /seo/blogs/:blog/posts/:post` | a published post with its whole text                                   |
+| `GET /seo/projects/:project`       | a published project with its text                                      |
+| `GET /sitemap.xml`                 | the fixed pages and all published blogs, posts and projects (50k max)  |
 
 All of them are public and read only; drafts and unpublished projects answer
 404 like unknown ones (`PostNotFound`, `ProjectNotFound`, `BlogNotFound`).
@@ -43,6 +43,8 @@ The text of the fixed pages is their description (the SPA shows more).
 3. A server-level `rewrite ... last` applies it before a location is chosen,
    so the module needs no knowledge of how the host serves the SPA. People
    and other user agents are not affected.
+   Of the query string only a numeric `page` is passed on (`/blog/<blog>?page=2`);
+   everything else, tracking parameters included, is dropped.
 4. `/api/seo/` and `/sitemap.xml` have their own rate limit
    (`unhalteproblem_seo`, 10 requests/s per address), because they read the
    database. `/api/seo/` answers `Vary: User-Agent`.
@@ -57,6 +59,17 @@ warning; split it into a sitemap index then.
 
 `/robots.txt` (a static file of the website) names the sitemap, blocks the
 private paths and the rest of `/api/`, and allows `/api/media/` for images.
+
+## Pages of a blog's list
+
+A blog page lists 50 posts, with `Newer posts` and `Older posts` links
+(`rel="prev"` and `rel="next"`) to `?page=N`, so crawlers can walk the whole
+list. Page 2 and later are `noindex, follow` and name the blog itself as
+their canonical URL: they exist so that the posts are found, not to appear in
+search results. The website itself has no such pages (it loads more posts as
+you scroll), so people who open one get the blog page.
+The list is read with cursors, so page N reads the newest N x 50 posts and
+keeps the last 50; the limit of 100 pages bounds that.
 
 ## Security
 
@@ -86,5 +99,5 @@ img-src 'self'; style-src 'unsafe-inline'; sandbox` and
 - nginx's `add_header` in `/api/seo/` replaces the `add_header`s of the
   server block (HSTS and the like) for those responses; repeat them there if
   the host relies on them.
-- A blog page names only its newest 50 posts; older ones are reachable for
+- A blog's list stops at page 100 (5000 posts); later posts are reachable for
   crawlers through the sitemap only.

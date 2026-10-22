@@ -98,6 +98,15 @@ describe("buildSeo", () => {
     expect(meta(tags, "robots")).toEqual(["noindex, nofollow"]);
   });
 
+  it("can noindex a page and still follow its links", () => {
+    const tags = buildSeo(site, {
+      path: "/blog/b",
+      noindex: true,
+      follow: true,
+    });
+    expect(meta(tags, "robots")).toEqual(["noindex, follow"]);
+  });
+
   it("describes articles", () => {
     const tags = buildSeo(site, {
       title: "Post",

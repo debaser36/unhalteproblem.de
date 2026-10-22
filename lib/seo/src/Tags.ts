@@ -31,6 +31,11 @@ export interface SeoInput {
   readonly article?: SeoArticle;
   /** Keep the page out of search results (private and utility pages). */
   readonly noindex?: boolean;
+  /**
+   * With `noindex`: still follow the page's links, for list pages whose
+   * entries should be found (page 2 of a list). Private pages do not.
+   */
+  readonly follow?: boolean;
   /** Structured data; each entry becomes one JSON-LD script. */
   readonly jsonLd?: ReadonlyArray<Readonly<Record<string, unknown>>>;
 }
@@ -106,7 +111,9 @@ export function buildSeo(site: SeoSite, input: SeoInput): SeoTags {
       attribute: "name",
       key: "robots",
       content: input.noindex
-        ? "noindex, nofollow"
+        ? input.follow
+          ? "noindex, follow"
+          : "noindex, nofollow"
         : "index, follow, max-image-preview:large",
     },
     { attribute: "property", key: "og:site_name", content: site.name },

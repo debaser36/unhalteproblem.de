@@ -68,7 +68,7 @@ const render = (input: SeoInput, main: string) =>
     ),
   );
 
-/** How many posts a listing page names; the rest is a click away. */
+/** How many posts a page of a blog's list names. */
 const listed = 50;
 
 /** The most URLs a sitemap may have (sitemaps.org). */
@@ -224,12 +224,34 @@ export const SeoHandlers = HttpApiBuilder.group(
           );
         }),
       )
-      .handle("renderBlog", ({ params }) =>
+      .handle("renderBlog", ({ params, query }) =>
         Effect.gen(function* () {
           const info = yield* blogs.getBlog(params.blog);
-          const { posts } = yield* newest(Option.some(params.blog), listed);
+          const { page } = query;
+          // Cursors, not offsets: ask for everything up to the end of the page.
+          const upTo = yield* newest(Option.some(params.blog), page * listed);
+          const posts = upTo.posts.slice((page - 1) * listed);
+          const base = `/blog/${params.blog}`;
+          const at = (n: number) => (n === 1 ? base : `${base}?page=${n}`);
+          const paging = [
+            page > 1
+              ? `<a href="${escapeHtml(at(page - 1))}" rel="prev">Newer posts</a>`
+              : "",
+            Option.isSome(upTo.next)
+              ? `<a href="${escapeHtml(at(page + 1))}" rel="next">Older posts</a>`
+              : "",
+          ].filter((link) => link !== "");
+          const seo = blogSeo(info);
           return render(
-            blogSeo(info),
+            // Later pages are lists, not content: followed, not indexed.
+            page === 1
+              ? seo
+              : {
+                  ...seo,
+                  title: `${info.title} (page ${page})`,
+                  noindex: true,
+                  follow: true,
+                },
             `<h1>${escapeHtml(info.title)}</h1>\n<p>${escapeHtml(info.description)}</p>\n<p>${escapeHtml(info.categories.main.name)}</p>\n${list(
               posts.map(
                 ({ post }) =>
@@ -237,7 +259,11 @@ export const SeoHandlers = HttpApiBuilder.group(
                     post.summary === "" ? "" : ` — ${escapeHtml(post.summary)}`
                   }`,
               ),
-            )}`,
+            )}${
+              paging.length === 0
+                ? ""
+                : `\n<nav aria-label="Pages">${paging.join(" · ")}</nav>`
+            }`,
           );
         }),
       )

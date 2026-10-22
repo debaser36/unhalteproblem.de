@@ -66,7 +66,7 @@ const setup = Effect.gen(function* () {
         ),
       ),
     );
-  return { ...app, get, text, hostile };
+  return { ...app, editor, get, text, hostile };
 });
 
 describe("crawler pages", () => {
@@ -169,6 +169,58 @@ describe("crawler pages", () => {
       assert.include(body, 'href="/blog/alpha/hello"');
       assert.notInclude(body, "secret-draft");
       assert.include(body, '"@type":"BreadcrumbList"');
+    }),
+  );
+
+  it.effect("pages a blog's list and noindexes the later pages", () =>
+    Effect.gen(function* () {
+      const app = yield* setup;
+      // `hello` plus 54 more: 55 published posts, 50 to a page.
+      yield* Effect.forEach(
+        Array.from({ length: 54 }, (_, index) => `more-${index}`),
+        (slug) =>
+          app
+            .createPost(app.editor.cookie, "alpha", postInput(slug))
+            .pipe(
+              Effect.flatMap((post) =>
+                app.publish(app.editor.cookie, "alpha", post["id"]),
+              ),
+            ),
+      );
+      const links = (body: string) =>
+        (body.match(/href="\/blog\/alpha\/[a-z0-9-]+"/g) ?? []).length;
+
+      const first = (yield* app.text("/seo/blogs/alpha")).body;
+      assert.strictEqual(links(first), 50);
+      assert.include(first, '<a href="/blog/alpha?page=2" rel="next">');
+      assert.notInclude(first, 'rel="prev"');
+      assert.include(first, 'name="robots" content="index, follow');
+
+      const second = (yield* app.text("/seo/blogs/alpha?page=2")).body;
+      assert.strictEqual(links(second), 5);
+      assert.include(second, '<a href="/blog/alpha" rel="prev">');
+      assert.notInclude(second, 'rel="next"');
+      assert.include(second, 'name="robots" content="noindex, follow"');
+      assert.include(second, "(page 2) · unhalteproblem.de");
+      // Later pages point to the blog itself, not to a URL of their own.
+      assert.include(
+        second,
+        `<link rel="canonical" href="${origin}/blog/alpha">`,
+      );
+
+      // Every post is on exactly one page.
+      assert.strictEqual(links(first) + links(second), 55);
+
+      const beyond = yield* app.text("/seo/blogs/alpha?page=3");
+      assert.strictEqual(beyond.response.status, 200);
+      assert.strictEqual(links(beyond.body), 0);
+      for (const page of ["0", "101", "1.5", "x"]) {
+        assert.strictEqual(
+          (yield* app.get(`/seo/blogs/alpha?page=${page}`)).status,
+          400,
+          page,
+        );
+      }
     }),
   );
 
