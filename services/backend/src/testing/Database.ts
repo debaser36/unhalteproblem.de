@@ -1,6 +1,6 @@
 import { PgliteClient, PgliteMigrator } from "@effect/sql-pglite";
 import { Layer } from "effect";
-import { clientOptions, migrationLoader } from "#services/Database";
+import { clientOptions, migrationLoader } from "#infrastructure/Database";
 
 /**
  * A fresh in-memory Postgres (PGlite) with all migrations applied, for tests.

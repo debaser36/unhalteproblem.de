@@ -11,7 +11,7 @@ import {
 import { Schema } from "effect";
 import { Model } from "effect/schema";
 import { UserId } from "#domains/users/User";
-import { DocumentColumn } from "#repositories/Columns";
+import { DocumentColumn } from "#infrastructure/Columns";
 
 /**
  * The owner's projects, shown on the projects page: a write-up each, with

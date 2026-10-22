@@ -1,6 +1,6 @@
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlModel, SqlSchema } from "effect/sql";
-import { dieOnSchemaError } from "#repositories/Sql";
+import { dieOnSchemaError } from "#infrastructure/Sql";
 import type { UserId } from "#domains/users/User";
 import type { BlogId, PostId } from "./Blog.ts";
 import {

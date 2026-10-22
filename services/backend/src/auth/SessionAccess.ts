@@ -1,8 +1,8 @@
 import { Role } from "@unhalteproblem.de/api";
 import { Context, DateTime, Effect, Layer, type Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
-import { Session } from "#repositories/Sessions";
-import { dieOnSchemaError } from "#repositories/Sql";
+import { Session } from "./Sessions.ts";
+import { dieOnSchemaError } from "#infrastructure/Sql";
 
 /**
  * A session as the authenticated request needs it: the stored fields, plus

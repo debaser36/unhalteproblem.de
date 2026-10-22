@@ -16,7 +16,7 @@ import { ModerationRepository } from "#domains/moderation/ModerationRepository";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import { UserQueries } from "#domains/users/UserQueries";
 import { UserRepository } from "#domains/users/UserRepository";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "#auth/Sessions";
 import { DatabaseTest } from "./Database.ts";
 
 /**

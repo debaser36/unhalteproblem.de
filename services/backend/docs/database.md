@@ -6,7 +6,7 @@ migrations from `src/migrations/` in one transaction (recorded in
 `effect_sql_migrations`) before it serves requests, and it doesn't start if
 the database is unreachable or a migration fails.
 
-Migrations are imported statically (`src/services/Database.ts`), because the
+Migrations are imported statically (`src/infrastructure/Database.ts`), because the
 service runs as a single bundled file. Committed migrations are never edited;
 changes go into a new, numbered migration. Tests run all migrations on an
 in-memory PGlite database (`#testing/Database`).

@@ -8,7 +8,7 @@ import {
   Schema,
 } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
-import { countDeleted } from "#repositories/Sql";
+import { countDeleted } from "#infrastructure/Sql";
 import { type ContactMessageId, StoredContactMessage } from "./Contact.ts";
 
 /**

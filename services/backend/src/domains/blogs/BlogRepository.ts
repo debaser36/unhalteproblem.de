@@ -13,7 +13,7 @@ import {
   type Statement,
 } from "effect/sql";
 import { UserId } from "#domains/users/User";
-import { dieOnSchemaError } from "#repositories/Sql";
+import { dieOnSchemaError } from "#infrastructure/Sql";
 import {
   type BlogId,
   BlogRow,

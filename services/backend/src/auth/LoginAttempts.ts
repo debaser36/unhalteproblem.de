@@ -9,7 +9,7 @@ import {
 } from "effect";
 import { Model } from "effect/schema";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
-import { deleteExpiredRows, dieOnSchemaError } from "./Sql.ts";
+import { deleteExpiredRows, dieOnSchemaError } from "#infrastructure/Sql";
 
 /**
  * A browser login in flight, from the redirect to the OpenID Provider until

@@ -32,18 +32,18 @@ import { RequestLogging } from "#http/RequestLogging";
 import { SameOriginLive } from "#http/SameOrigin";
 import { SeoHandlers } from "#http/Seo";
 import { SystemHandlers } from "#http/System";
-import { LoginAttempts } from "#repositories/LoginAttempts";
-import { LogoutTokens } from "#repositories/LogoutTokens";
-import { Sessions } from "#repositories/Sessions";
-import { AuthCleanup } from "#services/AuthCleanup";
-import { ContactRateLimit } from "#services/ContactRateLimit";
-import { DatabaseLive } from "#services/Database";
-import { KeycloakAdmin } from "#services/KeycloakAdmin";
-import { LoginRateLimit } from "#services/LoginRateLimit";
-import { Mailer } from "#services/Mailer";
-import { OidcProvider } from "#services/OidcProvider";
-import { Readiness } from "#services/Readiness";
-import { TokenVerifier } from "#services/TokenVerifier";
+import { LoginAttempts } from "#auth/LoginAttempts";
+import { LogoutTokens } from "#auth/LogoutTokens";
+import { Sessions } from "#auth/Sessions";
+import { AuthCleanup } from "#auth/AuthCleanup";
+import { ContactRateLimit } from "#domains/contact/ContactRateLimit";
+import { DatabaseLive } from "#infrastructure/Database";
+import { KeycloakAdmin } from "#infrastructure/KeycloakAdmin";
+import { LoginRateLimit } from "#auth/LoginRateLimit";
+import { Mailer } from "#infrastructure/Mailer";
+import { OidcProvider } from "#auth/OidcProvider";
+import { Readiness } from "#infrastructure/Readiness";
+import { TokenVerifier } from "#auth/TokenVerifier";
 
 // One database pool (and one migration run) shared by all repositories and
 // domains. The users domain ends sessions when it restricts a user.

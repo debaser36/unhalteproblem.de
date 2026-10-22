@@ -1,5 +1,5 @@
 import { Effect, Layer } from "effect";
-import { type Mail, Mailer } from "#services/Mailer";
+import { type Mail, Mailer } from "#infrastructure/Mailer";
 
 /**
  * A `Mailer` that records the mails instead of sending them. Test support

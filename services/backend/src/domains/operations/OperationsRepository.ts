@@ -1,6 +1,6 @@
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
-import { dieOnSchemaError } from "#repositories/Sql";
+import { dieOnSchemaError } from "#infrastructure/Sql";
 
 /**
  * What the admin panel shows about the database and the outbox. Numbers

@@ -7,7 +7,7 @@ import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
 import { AuditCommands } from "#domains/audit/AuditCommands";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "#auth/Sessions";
 import { DeleteKeycloakUser } from "./AccountDeletion.ts";
 import * as User from "./User.ts";
 import { UserRepository } from "./UserRepository.ts";

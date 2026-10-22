@@ -4,7 +4,7 @@ import { Effect, Layer } from "effect";
 import { HttpServer } from "effect/http";
 import { HttpApiTest } from "effect/http-api";
 import { ContactCommands } from "#domains/contact/ContactCommands";
-import { ContactRateLimit } from "#services/ContactRateLimit";
+import { ContactRateLimit } from "#domains/contact/ContactRateLimit";
 import { MiddlewaresRejectAll } from "#testing/Authentication";
 import { ContactHandlers } from "./Contact.ts";
 

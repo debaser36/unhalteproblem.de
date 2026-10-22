@@ -21,7 +21,7 @@ import type {
 } from "#domains/media/Media";
 import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
 import type { UserId } from "#domains/users/User";
-import { isUniqueViolation } from "#repositories/Columns";
+import { isUniqueViolation } from "#infrastructure/Columns";
 import {
   BlogCreated,
   BlogId,

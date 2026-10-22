@@ -1,6 +1,6 @@
 import { Context, DateTime, Effect, Layer } from "effect";
 import { SqlClient, type SqlError } from "effect/sql";
-import { deleteExpiredRows } from "./Sql.ts";
+import { deleteExpiredRows } from "#infrastructure/Sql";
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

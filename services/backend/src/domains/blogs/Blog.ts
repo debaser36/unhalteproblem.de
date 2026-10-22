@@ -13,7 +13,7 @@ import {
 import { DateTime, Option, Schema } from "effect";
 import { Model } from "effect/schema";
 import { UserId } from "#domains/users/User";
-import { DocumentColumn } from "#repositories/Columns";
+import { DocumentColumn } from "#infrastructure/Columns";
 import { CategoryId } from "./Category.ts";
 
 /**

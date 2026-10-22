@@ -12,7 +12,7 @@ import { Cause, DateTime, Effect, Exit, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { hashSecret } from "#auth/Secrets";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "#auth/Sessions";
 import {
   asAdmin,
   asSuperAdmin,

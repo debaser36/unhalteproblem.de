@@ -5,7 +5,7 @@ import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { Outbox } from "#cqrs/Outbox";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "#auth/Sessions";
 import { hashSecret } from "#auth/Secrets";
 import { makeRecordingKeycloak } from "#testing/KeycloakAdmin";
 import { login, member, published, UsersTest } from "#testing/Users";

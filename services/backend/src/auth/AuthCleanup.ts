@@ -1,7 +1,7 @@
 import { Effect, Layer, Schedule } from "effect";
-import { LoginAttempts } from "#repositories/LoginAttempts";
-import { LogoutTokens } from "#repositories/LogoutTokens";
-import { Sessions } from "#repositories/Sessions";
+import { LoginAttempts } from "./LoginAttempts.ts";
+import { LogoutTokens } from "./LogoutTokens.ts";
+import { Sessions } from "./Sessions.ts";
 
 /**
  * Deletes expired login attempts, sessions and remembered logout token ids

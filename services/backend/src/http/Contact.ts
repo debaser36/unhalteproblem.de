@@ -2,7 +2,7 @@ import { Api, RateLimited } from "@unhalteproblem.de/api";
 import { Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { ContactCommands } from "#domains/contact/ContactCommands";
-import { ContactRateLimit } from "#services/ContactRateLimit";
+import { ContactRateLimit } from "#domains/contact/ContactRateLimit";
 import { clientKey } from "./ClientIp.ts";
 
 export const ContactHandlers = HttpApiBuilder.group(

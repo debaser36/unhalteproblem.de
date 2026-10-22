@@ -1,7 +1,11 @@
 import { Context, DateTime, Effect, Layer, type Option, Schema } from "effect";
 import { Model } from "effect/schema";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
-import { countDeleted, deleteExpiredRows, dieOnSchemaError } from "./Sql.ts";
+import {
+  countDeleted,
+  deleteExpiredRows,
+  dieOnSchemaError,
+} from "#infrastructure/Sql";
 
 /**
  * The profile claims kept with a session, named as in the ID token. Stored

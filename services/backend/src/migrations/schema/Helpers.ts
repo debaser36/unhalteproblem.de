@@ -1,7 +1,7 @@
 import { PgliteClient, PgliteMigrator } from "@effect/sql-pglite";
 import { Effect, Layer } from "effect";
 import { SqlClient } from "effect/sql";
-import { clientOptions, migrations } from "#services/Database";
+import { clientOptions, migrations } from "#infrastructure/Database";
 
 /** Loads the migrations with ids up to `id`. */
 export const loaderUpTo = (id: number) =>

@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, type Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlModel, SqlSchema } from "effect/sql";
-import { dieOnSchemaError } from "#repositories/Sql";
+import { dieOnSchemaError } from "#infrastructure/Sql";
 import { type ProjectId, ProjectRow, type ProjectSlug } from "./Project.ts";
 
 const make = Effect.gen(function* () {

@@ -20,7 +20,7 @@ import { AuditCommands } from "#domains/audit/AuditCommands";
 import { BlogDirectory } from "#domains/blogs/BlogDirectory";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import { initialRoles, type UserId, UserNotFound } from "#domains/users/User";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "#auth/Sessions";
 import {
   type Party,
   Restriction,

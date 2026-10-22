@@ -2,7 +2,7 @@ import { assert, describe, it, layer } from "@effect/vitest";
 import { DateTime, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "#auth/Sessions";
 import { KernelTest, login, published, UsersTest } from "#testing/Users";
 import { UserProfileChanged, UserRegistered } from "./User.ts";
 import { UserCommands } from "./UserCommands.ts";

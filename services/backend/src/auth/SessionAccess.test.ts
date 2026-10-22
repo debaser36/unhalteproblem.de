@@ -3,7 +3,7 @@ import { DateTime, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "./Sessions.ts";
 import { asAdmin, asSuperAdmin, member, UsersTest } from "#testing/Users";
 import { hashSecret } from "./Secrets.ts";
 import { SessionAccess } from "./SessionAccess.ts";

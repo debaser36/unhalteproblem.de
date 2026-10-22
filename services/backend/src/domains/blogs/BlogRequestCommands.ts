@@ -14,7 +14,7 @@ import { AuditCommands } from "#domains/audit/AuditCommands";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import type { UserId, UserNotFound } from "#domains/users/User";
 import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
-import { isUniqueViolation } from "#repositories/Columns";
+import { isUniqueViolation } from "#infrastructure/Columns";
 import {
   BlogCreated,
   BlogId,

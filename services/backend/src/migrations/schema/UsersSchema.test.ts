@@ -1,7 +1,7 @@
 import { assert, describe, layer } from "@effect/vitest";
 import { Effect, Exit } from "effect";
 import { SqlClient } from "effect/sql";
-import { migrations } from "#services/Database";
+import { migrations } from "#infrastructure/Database";
 import { DatabaseTest } from "#testing/Database";
 import { describeIndexes, insertUser } from "./Helpers.ts";
 

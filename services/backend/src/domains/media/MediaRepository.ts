@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, type Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
-import { dieOnSchemaError } from "#repositories/Sql";
+import { dieOnSchemaError } from "#infrastructure/Sql";
 import { type MediaId, StoredMedia } from "./Media.ts";
 
 const make = Effect.gen(function* () {

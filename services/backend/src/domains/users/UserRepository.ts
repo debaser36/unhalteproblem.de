@@ -9,7 +9,7 @@ import {
   Schema,
 } from "effect";
 import { SqlClient, type SqlError, SqlModel, SqlSchema } from "effect/sql";
-import { dieOnSchemaError } from "#repositories/Sql";
+import { dieOnSchemaError } from "#infrastructure/Sql";
 import { User, type UserId } from "./User.ts";
 
 const make = Effect.gen(function* () {

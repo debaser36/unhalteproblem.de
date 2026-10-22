@@ -1,7 +1,7 @@
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
 import type { UserId } from "#domains/users/User";
-import { countDeleted, dieOnSchemaError } from "#repositories/Sql";
+import { countDeleted, dieOnSchemaError } from "#infrastructure/Sql";
 import { type AuditEntry, AuditAction, AuditRecord } from "./Audit.ts";
 
 const make = Effect.gen(function* () {

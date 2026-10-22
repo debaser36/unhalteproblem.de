@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import type { Role } from "@unhalteproblem.de/api";
 import { DateTime, Effect, Option } from "effect";
 import { hashSecret } from "#auth/Secrets";
-import { Sessions } from "#repositories/Sessions";
+import { Sessions } from "#auth/Sessions";
 import {
   cookieValue,
   login,

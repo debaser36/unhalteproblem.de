@@ -1,7 +1,7 @@
 import { Subject } from "@unhalteproblem.de/oidc";
 import { Effect, Layer, Schema } from "effect";
 import * as Outbox from "#cqrs/Outbox";
-import { KeycloakAdmin } from "#services/KeycloakAdmin";
+import { KeycloakAdmin } from "#infrastructure/KeycloakAdmin";
 
 /**
  * Delete the user in Keycloak after they deleted their account here. The

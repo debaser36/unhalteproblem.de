@@ -1,6 +1,6 @@
 import { Effect, Layer, Option } from "effect";
 import * as Outbox from "#cqrs/Outbox";
-import { Mailer } from "#services/Mailer";
+import { Mailer } from "#infrastructure/Mailer";
 import { SendContactMail, type SendContactMailPayload } from "./Contact.ts";
 import { ContactRepository } from "./ContactRepository.ts";
 

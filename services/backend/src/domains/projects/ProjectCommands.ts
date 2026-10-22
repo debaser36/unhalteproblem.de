@@ -14,7 +14,7 @@ import {
 } from "#domains/media/Media";
 import { MediaCommands } from "#domains/media/MediaCommands";
 import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
-import { isUniqueViolation } from "#repositories/Columns";
+import { isUniqueViolation } from "#infrastructure/Columns";
 import {
   ProjectDeleted,
   ProjectEditConflict,

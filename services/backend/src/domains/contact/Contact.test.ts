@@ -17,7 +17,7 @@ import { Transaction } from "#cqrs/Transaction";
 import { AuditCommands } from "#domains/audit/AuditCommands";
 import { AuditRepository } from "#domains/audit/AuditRepository";
 import { UserDirectoryLive } from "#domains/users/Users";
-import { MailFailed, Mailer } from "#services/Mailer";
+import { MailFailed, Mailer } from "#infrastructure/Mailer";
 import { DatabaseTest } from "#testing/Database";
 import { makeRecordingMailer } from "#testing/Mailer";
 import {

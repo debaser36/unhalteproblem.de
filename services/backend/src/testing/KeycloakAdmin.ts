@@ -1,5 +1,5 @@
 import { Effect, Layer } from "effect";
-import { KeycloakAdmin } from "#services/KeycloakAdmin";
+import { KeycloakAdmin } from "#infrastructure/KeycloakAdmin";
 
 /**
  * A `KeycloakAdmin` that records the subjects it was asked to delete instead

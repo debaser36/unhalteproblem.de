@@ -11,9 +11,8 @@
     "#cqrs/*": "./src/cqrs/*.ts",
     "#domains/*": "./src/domains/*.ts",
     "#http/*": "./src/http/*.ts",
+    "#infrastructure/*": "./src/infrastructure/*.ts",
     "#migrations/*": "./src/migrations/*.ts",
-    "#repositories/*": "./src/repositories/*.ts",
-    "#services/*": "./src/services/*.ts",
     "#testing/*": "./src/testing/*.ts"
   },
   "scripts": {

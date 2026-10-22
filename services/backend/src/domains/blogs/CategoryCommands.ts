@@ -8,7 +8,7 @@ import * as Command from "#cqrs/Command";
 import { Transaction } from "#cqrs/Transaction";
 import { AuditCommands } from "#domains/audit/AuditCommands";
 import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
-import { isUniqueViolation } from "#repositories/Columns";
+import { isUniqueViolation } from "#infrastructure/Columns";
 import {
   CategoryInUse,
   CategoryMergeIntoSelf,

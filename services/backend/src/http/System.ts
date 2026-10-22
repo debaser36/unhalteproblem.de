@@ -1,7 +1,7 @@
 import { Api, ServiceUnavailable } from "@unhalteproblem.de/api";
 import { Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
-import { Readiness } from "#services/Readiness";
+import { Readiness } from "#infrastructure/Readiness";
 
 export const SystemHandlers = HttpApiBuilder.group(
   Api,

@@ -3,7 +3,7 @@ import { PgliteMigrator } from "@effect/sql-pglite";
 import { Effect } from "effect";
 import { SqlClient } from "effect/sql";
 import { readdirSync } from "node:fs";
-import { migrations } from "#services/Database";
+import { migrations } from "#infrastructure/Database";
 import {
   loaderUpTo,
   databaseUpTo,
@@ -11,7 +11,7 @@ import {
   insertUser,
 } from "./Helpers.ts";
 
-const migrationsDirectory = new URL("../../migrations/", import.meta.url);
+const migrationsDirectory = new URL("../", import.meta.url);
 
 describe("migrations", () => {
   it("registers every file in src/migrations, numbered without gaps", () => {
