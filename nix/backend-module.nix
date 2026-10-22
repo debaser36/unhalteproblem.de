@@ -175,8 +175,11 @@ in
       description = ''
         nginx virtual host that gets a /api/ location proxying to the backend
         (the /api prefix is stripped), with rate limits on /api/contact,
-        /api/auth/login, /api/auth/callback and /api/ready. The virtual host itself (TLS,
-        root) is configured elsewhere. null leaves nginx alone.
+        /api/auth/login, /api/auth/callback and /api/ready. Requests from
+        crawlers and link-preview bots (by user agent) for the website's
+        public pages are answered with the backend's server-rendered pages
+        instead, and /sitemap.xml comes from the backend. The virtual host
+        itself (TLS, root) is configured elsewhere. null leaves nginx alone.
       '';
     };
 
@@ -262,6 +265,38 @@ in
       services.nginx.appendHttpConfig = ''
         limit_req_zone $binary_remote_addr zone=unhalteproblem_contact:1m rate=6r/m;
         limit_req_zone $binary_remote_addr zone=unhalteproblem_auth:1m rate=30r/m;
+        limit_req_zone $binary_remote_addr zone=unhalteproblem_seo:1m rate=10r/s;
+
+        # Crawlers and link-preview bots get server-rendered pages instead of
+        # the SPA's empty shell (see services/backend/docs/seo.md). Only tokens
+        # of fetchers, never of apps: the in-app browsers of Twitter, LinkedIn,
+        # Slack and the like put those names in their user agents too, and
+        # their users must get the SPA. Bots say so (Twitterbot, Slackbot,
+        # Discordbot, LinkedInBot, TelegramBot, Googlebot, bingbot, ...).
+        map $http_user_agent $unhalteproblem_crawler {
+          default 0;
+          "~*(bot|crawl|spider|slurp|facebookexternalhit|embedly|whatsapp/|mastodon/|skypeuripreview|slack-imgproxy)" 1;
+        }
+
+        # The crawler page behind each of the website's public URLs. Anything
+        # else (editors, forms, unknown paths) stays with the SPA.
+        map "$unhalteproblem_crawler$uri" $unhalteproblem_seo_uri {
+          default "";
+          "~^1/?$" /api/seo/pages/home;
+          "~^1/(?<page>about|contact|blog|projects)/?$" /api/seo/pages/$page;
+          "~^1/blog/(?<blog>[a-z0-9-]+)/?$" /api/seo/blogs/$blog;
+          "~^1/blog/(?<blog>[a-z0-9-]+)/(?<post>[a-z0-9-]+)/?$" /api/seo/blogs/$blog/posts/$post;
+          "~^1/projects/(?<project>[a-z0-9-]+)/?$" /api/seo/projects/$project;
+        }
+      '';
+
+      # Runs before the location is chosen, so it needs to know nothing about
+      # how the rest of the virtual host serves the SPA. The trailing ? drops
+      # the query string.
+      services.nginx.virtualHosts.${cfg.nginx.virtualHost}.extraConfig = ''
+        if ($unhalteproblem_seo_uri != "") {
+          rewrite ^ $unhalteproblem_seo_uri? last;
+        }
       '';
 
       services.nginx.virtualHosts.${cfg.nginx.virtualHost}.locations = {
@@ -285,6 +320,25 @@ in
         "= /api/ready" = authRateLimited "/ready";
         "= /api/auth/login" = authRateLimited "/auth/login";
         "= /api/auth/callback" = authRateLimited "/auth/callback";
+        # The crawler pages (the target of the rewrite above) and the sitemap.
+        # They read the database, so they are rate limited as well.
+        "~ ^/api/seo/" = {
+          proxyPass = backendUrl "";
+          extraConfig = proxyConfig + ''
+            limit_req zone=unhalteproblem_seo burst=30 nodelay;
+            limit_req_status 429;
+            # The same URL answers people with the SPA.
+            add_header Vary User-Agent always;
+            rewrite ^/api(/.*)$ $1 break;
+          '';
+        };
+        "= /sitemap.xml" = {
+          proxyPass = backendUrl "/sitemap.xml";
+          extraConfig = proxyConfig + ''
+            limit_req zone=unhalteproblem_seo burst=5 nodelay;
+            limit_req_status 429;
+          '';
+        };
         # Saving a post or project (512 KiB of JSON) and uploading an image
         # (5 MiB) need more than the 32k of every other route; the backend
         # enforces the exact limits per endpoint. A regex location can't
