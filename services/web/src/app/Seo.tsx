@@ -1,7 +1,7 @@
+import { buildSeo, type SeoInput, type SeoTags } from "@unhalteproblem.de/seo";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
 import { site } from "#app/site.ts";
-import { buildSeo, type SeoInput, type SeoTags } from "#lib/seo.ts";
 
 /** Marks the head elements this component owns; `index.html` sets it too. */
 const owned = "data-seo";

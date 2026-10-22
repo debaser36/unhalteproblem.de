@@ -1,4 +1,5 @@
 import type { Blog } from "@unhalteproblem.de/api";
+import { staticPages } from "@unhalteproblem.de/seo";
 import { ArrowUpRight, BookPlus } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { AsyncView } from "#api/AsyncView.tsx";
@@ -25,11 +26,7 @@ export function BlogIndexPage() {
   const blogSort = isBlogSort(blogsParam) ? blogsParam : "title";
   return (
     <Container>
-      <Seo
-        title="Blog"
-        description="Notes on what Nico learns: programming, infrastructure, security and tools, sorted into subblogs."
-        path="/blog"
-      />
+      <Seo {...staticPages.blog} />
       <PageHeader
         path="~/blog"
         title="Blog"

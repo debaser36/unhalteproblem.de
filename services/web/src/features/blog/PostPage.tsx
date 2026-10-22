@@ -4,6 +4,7 @@ import {
   type BlogSlug,
   type PublishedPost,
 } from "@unhalteproblem.de/api";
+import { blogPostingJsonLd, breadcrumbsJsonLd } from "@unhalteproblem.de/seo";
 import { DateTime, Option } from "effect";
 import { ArrowLeft, PenLine } from "lucide-react";
 import { useState } from "react";
@@ -15,7 +16,6 @@ import { Seo } from "#app/Seo.tsx";
 import { site } from "#app/site.ts";
 import { toEditorContent } from "#editor/convert.ts";
 import { RichDocument } from "#editor/RichDocument.tsx";
-import { blogPostingJsonLd, breadcrumbsJsonLd } from "#lib/seo.ts";
 import { Button } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
 import { Loading } from "#ui/Spinner.tsx";

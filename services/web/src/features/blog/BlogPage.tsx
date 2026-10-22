@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { BlogSlug } from "@unhalteproblem.de/api";
+import { breadcrumbsJsonLd } from "@unhalteproblem.de/seo";
 import { Option } from "effect";
 import { PenSquare } from "lucide-react";
 import { useParams } from "react-router";
@@ -8,7 +9,6 @@ import { userAtom } from "#api/session.ts";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
 import { Seo } from "#app/Seo.tsx";
 import { site } from "#app/site.ts";
-import { breadcrumbsJsonLd } from "#lib/seo.ts";
 import { ButtonLink } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
 import { PageHeader } from "#ui/PageHeader.tsx";

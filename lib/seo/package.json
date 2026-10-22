@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@unhalteproblem.de/seo",
+  "description": "What the website tells search engines and link previews: site facts, page metadata, tag and structured-data builders and the HTML of server-rendered crawler pages",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit -p .",
+    "lint": "oxlint",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "catalog:",
+    "@unhalteproblem.de/tsconfig": "workspace:*",
+    "oxlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

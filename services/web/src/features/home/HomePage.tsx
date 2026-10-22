@@ -1,3 +1,4 @@
+import { staticPages } from "@unhalteproblem.de/seo";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router";
 import { Seo } from "#app/Seo.tsx";
@@ -34,7 +35,7 @@ function SectionHeading({
 export function HomePage() {
   return (
     <Container width="wide">
-      <Seo path="/" />
+      <Seo {...staticPages.home} />
       <Hero />
       <section aria-label="Latest posts" className="mt-8">
         <SectionHeading title="Latest posts" to="/blog" more="all posts" />

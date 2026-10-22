@@ -38,6 +38,7 @@
     "@tiptap/react": "^3.32.0",
     "@tiptap/starter-kit": "^3.32.0",
     "@unhalteproblem.de/api": "workspace:*",
+    "@unhalteproblem.de/seo": "workspace:*",
     "effect": "catalog:",
     "lowlight": "^3.3.0",
     "lucide-react": "^1.56.0",

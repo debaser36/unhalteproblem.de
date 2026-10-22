@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { mediaUrl, type PublishedProject } from "@unhalteproblem.de/api";
+import { breadcrumbsJsonLd, projectJsonLd } from "@unhalteproblem.de/seo";
 import { DateTime } from "effect";
 import { ArrowLeft, PenLine } from "lucide-react";
 import { useState } from "react";
@@ -11,7 +12,6 @@ import { Seo } from "#app/Seo.tsx";
 import { site } from "#app/site.ts";
 import { toEditorContent } from "#editor/convert.ts";
 import { RichDocument } from "#editor/RichDocument.tsx";
-import { breadcrumbsJsonLd, projectJsonLd } from "#lib/seo.ts";
 import { Button } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
 import { Loading } from "#ui/Spinner.tsx";

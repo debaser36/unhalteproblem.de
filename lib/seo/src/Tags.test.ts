@@ -9,7 +9,7 @@ import {
   projectJsonLd,
   serializeJsonLd,
   toDescription,
-} from "./seo.ts";
+} from "./Tags.ts";
 
 const site = {
   origin: "https://example.org",

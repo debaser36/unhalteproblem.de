@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { ProjectListItem, ProjectStatus } from "@unhalteproblem.de/api";
+import { staticPages } from "@unhalteproblem.de/seo";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { AsyncView } from "#api/AsyncView.tsx";
@@ -25,11 +26,7 @@ export function ProjectsPage() {
   const [filter, setFilter] = useState<ProjectStatus | "all">("all");
   return (
     <Container width="wide">
-      <Seo
-        title="Projects"
-        description="Software projects by Nico: what they do, how they are built and where to find the source."
-        path="/projects"
-      />
+      <Seo {...staticPages.projects} />
       <PageHeader
         path="~/projects"
         title="Projects"

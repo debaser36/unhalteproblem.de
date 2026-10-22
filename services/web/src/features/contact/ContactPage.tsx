@@ -1,5 +1,6 @@
 import { useAtomSet } from "@effect/atom-react";
 import { ContactMessageLimits } from "@unhalteproblem.de/api";
+import { staticPages } from "@unhalteproblem.de/seo";
 import { Exit } from "effect";
 import { Mail, Send } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -52,11 +53,7 @@ export function ContactPage() {
 
   return (
     <Container width="prose">
-      <Seo
-        title="Contact"
-        description="Questions, ideas or a project you want to talk about: send Nico a message."
-        path="/contact"
-      />
+      <Seo {...staticPages.contact} />
       <PageHeader path="~/contact" title="Get in touch">
         Questions, ideas, a project you want to talk about, or a bug you found
         on this site: write me a message and I will get back to you by mail.
