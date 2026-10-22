@@ -6,6 +6,7 @@ import {
   FolderGit2,
   Inbox,
   ScrollText,
+  Shapes,
   Users,
 } from "lucide-react";
 import { NavLink, Route, Routes } from "react-router";
@@ -16,6 +17,7 @@ import { Container } from "#ui/Container.tsx";
 import { AuditLogPage } from "./AuditLogPage.tsx";
 import { BlogRequestsAdminPage } from "./BlogRequestsAdminPage.tsx";
 import { BlogsAdminPage } from "./BlogsAdminPage.tsx";
+import { CategoriesAdminPage } from "./CategoriesAdminPage.tsx";
 import { ContactInboxPage } from "./ContactInboxPage.tsx";
 import { DatabasePage } from "./DatabasePage.tsx";
 import { OutboxPage } from "./OutboxPage.tsx";
@@ -31,6 +33,7 @@ const sections = [
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/blogs", label: "Blogs", icon: BookOpen },
   { to: "/admin/blog-requests", label: "Blog requests", icon: BookPlus },
+  { to: "/admin/categories", label: "Categories", icon: Shapes },
   { to: "/admin/projects", label: "Projects", icon: FolderGit2 },
   { to: "/admin/outbox", label: "Outbox", icon: Activity },
   { to: "/admin/audit", label: "Audit log", icon: ScrollText },
@@ -80,6 +83,7 @@ export function AdminApp() {
                 <Route path="users" element={<UsersPage />} />
                 <Route path="users/:userId" element={<UserPage />} />
                 <Route path="blogs" element={<BlogsAdminPage />} />
+                <Route path="categories" element={<CategoriesAdminPage />} />
                 <Route
                   path="blog-requests"
                   element={<BlogRequestsAdminPage />}

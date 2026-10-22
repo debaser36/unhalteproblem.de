@@ -103,6 +103,7 @@ function Reading({
         readingMinutes={post.readingMinutes}
         author={post.author}
         tags={post.tags}
+        categories={post.categories}
         coverImage={post.coverImage}
         aside={
           onEdit !== undefined && (

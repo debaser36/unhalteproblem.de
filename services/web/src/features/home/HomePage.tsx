@@ -40,7 +40,7 @@ export function HomePage() {
           showBlog
           paged={false}
           page={(cursor) =>
-            recentPostsAtom({ cursor, tag: undefined, limit: 4 })
+            recentPostsAtom({ cursor, sort: "newest", limit: 4 })
           }
           empty={<NoPosts>The first post is still being written.</NoPosts>}
         />

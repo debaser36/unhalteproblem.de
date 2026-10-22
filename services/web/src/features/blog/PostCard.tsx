@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { formatDate, isoDate } from "#lib/format.ts";
 import { Badge } from "#ui/Badge.tsx";
 import { Card } from "#ui/Card.tsx";
+import { CategoryBadges } from "./CategoryBadges.tsx";
 
 /** A post in a list: cover, title, summary and the facts a reader scans for. */
 export function PostCard({
@@ -38,6 +39,7 @@ export function PostCard({
               <Clock size={12} /> {post.readingMinutes} min
             </span>
           )}
+          {post.author.name !== null && <span>by {post.author.name}</span>}
         </p>
         <h3 className="text-xl font-semibold text-fg transition-colors group-hover:text-accent">
           {/* The link covers the whole card. */}
@@ -51,8 +53,13 @@ export function PostCard({
         {post.summary !== "" && (
           <p className="line-clamp-3 text-sm text-fg-soft">{post.summary}</p>
         )}
+        <CategoryBadges
+          categories={post.categories}
+          base={showBlog ? "/blog" : `/blog/${post.blog}`}
+          className="mt-auto pt-2"
+        />
         {post.tags.length > 0 && (
-          <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+          <div className="flex flex-wrap gap-1.5">
             {post.tags.map((tag) => (
               <Badge key={tag}>#{tag}</Badge>
             ))}

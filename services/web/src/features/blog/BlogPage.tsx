@@ -1,21 +1,21 @@
 import { useAtomValue } from "@effect/atom-react";
-import { type BlogSlug, Tag } from "@unhalteproblem.de/api";
-import { Option, Schema } from "effect";
-import { PenSquare, X } from "lucide-react";
-import { Link, useParams, useSearchParams } from "react-router";
+import type { BlogSlug } from "@unhalteproblem.de/api";
+import { Option } from "effect";
+import { PenSquare } from "lucide-react";
+import { useParams } from "react-router";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { userAtom } from "#api/session.ts";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
-import { Badge } from "#ui/Badge.tsx";
 import { ButtonLink } from "#ui/Button.tsx";
 import { Container } from "#ui/Container.tsx";
 import { PageHeader } from "#ui/PageHeader.tsx";
 import { Loading } from "#ui/Spinner.tsx";
 import { blogAtom, postPageAtom } from "./blogAtoms.ts";
+import { CategoryBadges } from "./CategoryBadges.tsx";
 import { blogParam, canEdit } from "./editing.ts";
+import { PostFilters } from "./PostFilters.tsx";
+import { filterKey, usePostFilter } from "./postFilter.ts";
 import { NoPosts, PostList } from "./PostList.tsx";
-
-const decodeTag = Schema.decodeUnknownOption(Tag);
 
 export function BlogPage() {
   const blog = blogParam(useParams().blog);
@@ -25,8 +25,11 @@ export function BlogPage() {
 
 function Blog({ blog }: { readonly blog: BlogSlug }) {
   const user = useAtomValue(userAtom);
-  const [search] = useSearchParams();
-  const tag = Option.getOrUndefined(decodeTag(search.get("tag") ?? undefined));
+  const [filter, setFilter] = usePostFilter();
+  const filtered =
+    filter.tag !== undefined ||
+    filter.category !== undefined ||
+    filter.author !== undefined;
 
   return (
     <AsyncView
@@ -55,26 +58,20 @@ function Blog({ blog }: { readonly blog: BlogSlug }) {
           >
             {info.description}
           </PageHeader>
-          {tag !== undefined && (
-            <p className="mb-6 flex items-center gap-2 text-sm text-muted">
-              Posts tagged
-              <Badge tone="accent">#{tag}</Badge>
-              <Link
-                to={`/blog/${blog}`}
-                className="inline-flex items-center gap-1 hover:text-fg"
-              >
-                <X size={14} /> all posts
-              </Link>
-            </p>
-          )}
+          <CategoryBadges
+            categories={info.categories}
+            base={`/blog/${blog}`}
+            className="-mt-4 mb-8"
+          />
+          <PostFilters filter={filter} onChange={setFilter} />
           <PostList
-            key={tag ?? ""}
-            page={(cursor) => postPageAtom(blog, { cursor, tag })}
+            key={filterKey(filter)}
+            page={(cursor) => postPageAtom(blog, { ...filter, cursor })}
             empty={
               <NoPosts>
-                {tag === undefined
-                  ? "Nothing published here yet."
-                  : "No posts with this tag."}
+                {filtered
+                  ? "No posts match these filters."
+                  : "Nothing published here yet."}
               </NoPosts>
             }
           />

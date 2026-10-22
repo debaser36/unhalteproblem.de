@@ -12,7 +12,17 @@ import { Link } from "react-router";
 import { ApiClient } from "#api/ApiClient.ts";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { failureMessage } from "#api/errors.ts";
-import { blogsAtom, blogsKey, blogKey } from "#features/blog/blogAtoms.ts";
+import {
+  blogsAtom,
+  blogsKey,
+  blogKey,
+  categoriesKey,
+} from "#features/blog/blogAtoms.ts";
+import {
+  type CategoryChoice,
+  CategoryFields,
+} from "#features/blog/CategoryFields.tsx";
+import { categoriesInput } from "#lib/categories.ts";
 import { slugify } from "#lib/slug.ts";
 import { formatDate } from "#lib/format.ts";
 import { Button } from "#ui/Button.tsx";
@@ -25,6 +35,8 @@ import { AdminHeading } from "./AdminHeading.tsx";
 const createBlog = ApiClient.mutation("admin", "createBlog");
 const updateBlog = ApiClient.mutation("admin", "updateBlog");
 const decodeSlug = Schema.decodeUnknownOption(BlogSlug);
+
+const initialCategories: CategoryChoice = { main: "Miscellaneous", extra: [] };
 
 export function BlogsAdminPage() {
   return (
@@ -64,20 +76,24 @@ function CreateBlogForm() {
   const [slug, setSlug] = useState<string>();
   const [description, setDescription] = useState("");
   const [pending, setPending] = useState(false);
+  const [categories, setCategories] =
+    useState<CategoryChoice>(initialCategories);
+  const chosen = categoriesInput(categories.main, categories.extra);
   const effectiveSlug = slug ?? slugify(title, BlogSlugMaxLength);
   const validSlug = Option.isSome(decodeSlug(effectiveSlug));
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!validSlug) return;
+    if (!validSlug || typeof chosen === "string") return;
     setPending(true);
     const exit = await create({
       payload: {
         slug: effectiveSlug,
         title: title.trim(),
         description: description.trim(),
+        categories: chosen,
       },
-      reactivityKeys: [blogsKey],
+      reactivityKeys: [blogsKey, categoriesKey],
     });
     setPending(false);
     const error = failureMessage(exit, {
@@ -91,6 +107,7 @@ function CreateBlogForm() {
       setTitle("");
       setSlug(undefined);
       setDescription("");
+      setCategories(initialCategories);
     }
   };
 
@@ -139,10 +156,16 @@ function CreateBlogForm() {
             />
           )}
         </Field>
+        <CategoryFields
+          value={categories}
+          onChange={setCategories}
+          error={typeof chosen === "string" ? chosen : undefined}
+        />
         <Button
           type="submit"
           variant="primary"
           loading={pending}
+          disabled={typeof chosen === "string"}
           icon={<Plus size={15} />}
         >
           Create

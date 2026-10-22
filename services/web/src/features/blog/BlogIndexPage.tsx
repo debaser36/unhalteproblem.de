@@ -1,18 +1,27 @@
 import type { Blog } from "@unhalteproblem.de/api";
 import { ArrowUpRight, BookPlus } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { AsyncView } from "#api/AsyncView.tsx";
 import { formatDate } from "#lib/format.ts";
 import { ButtonLink } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { Container } from "#ui/Container.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
+import { Select } from "#ui/Field.tsx";
 import { PageHeader } from "#ui/PageHeader.tsx";
 import { Skeleton } from "#ui/Skeleton.tsx";
 import { blogsAtom, recentPostsAtom } from "./blogAtoms.ts";
+import { blogSorts, isBlogSort, sortBlogs } from "./blogSort.ts";
+import { CategoryBadges } from "./CategoryBadges.tsx";
+import { PostFilters } from "./PostFilters.tsx";
+import { filterKey, usePostFilter } from "./postFilter.ts";
 import { NoPosts, PostList } from "./PostList.tsx";
 
 export function BlogIndexPage() {
+  const [filter, setFilter] = usePostFilter();
+  const [search, setSearch] = useSearchParams();
+  const blogsParam = search.get("blogs");
+  const blogSort = isBlogSort(blogsParam) ? blogsParam : "title";
   return (
     <Container>
       <PageHeader
@@ -32,6 +41,33 @@ export function BlogIndexPage() {
         Pick one, or read everything below.
       </PageHeader>
 
+      <label className="mb-4 inline-flex items-center gap-2 text-sm text-muted">
+        <span className="font-mono text-xs whitespace-nowrap uppercase">
+          Blogs by
+        </span>
+        <Select
+          className="w-auto"
+          value={blogSort}
+          onChange={(e) =>
+            setSearch(
+              (current) => {
+                const next = new URLSearchParams(current);
+                if (e.target.value === "title") next.delete("blogs");
+                else next.set("blogs", e.target.value);
+                return next;
+              },
+              { replace: true },
+            )
+          }
+        >
+          {Object.entries(blogSorts).map(([sort, label]) => (
+            <option key={sort} value={sort}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </label>
+
       <AsyncView
         atom={blogsAtom}
         loading={
@@ -42,10 +78,17 @@ export function BlogIndexPage() {
           </div>
         }
       >
-        {(blogs) =>
-          blogs.length === 0 ? (
-            <EmptyState title="No subblogs yet.">
-              An admin creates them in the admin panel.
+        {(all) => {
+          const blogs = sortBlogs(all, blogSort, filter.category);
+          return blogs.length === 0 ? (
+            <EmptyState
+              title={
+                all.length === 0
+                  ? "No subblogs yet."
+                  : "No subblogs in this category."
+              }
+            >
+              {all.length === 0 && "An admin creates them in the admin panel."}
             </EmptyState>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -53,17 +96,19 @@ export function BlogIndexPage() {
                 <BlogCard key={blog.slug} blog={blog} />
               ))}
             </div>
-          )
-        }
+          );
+        }}
       </AsyncView>
 
       <section aria-labelledby="latest" className="mt-16 space-y-6">
         <h2 id="latest" className="text-2xl font-semibold text-fg">
           <span className="font-mono text-accent">$</span> tail -f posts
         </h2>
+        <PostFilters filter={filter} onChange={setFilter} />
         <PostList
+          key={filterKey(filter)}
           showBlog
-          page={(cursor) => recentPostsAtom({ cursor, tag: undefined })}
+          page={(cursor) => recentPostsAtom({ ...filter, cursor })}
           empty={<NoPosts />}
         />
       </section>
@@ -91,6 +136,7 @@ function BlogCard({ blog }: { readonly blog: Blog }) {
       {blog.description !== "" && (
         <p className="line-clamp-3 text-sm text-fg-soft">{blog.description}</p>
       )}
+      <CategoryBadges categories={blog.categories} />
       <p className="mt-auto font-mono text-xs text-muted">
         {blog.postCount} {blog.postCount === 1 ? "post" : "posts"}
         {blog.latestPostAt !== null && (

@@ -1,4 +1,4 @@
-import { useAtomSet } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import {
   type BlogSlug,
   BlogLimits,
@@ -10,6 +10,7 @@ import {
 } from "@unhalteproblem.de/api";
 import type { JSONContent } from "@tiptap/react";
 import { Exit, Option, Schema } from "effect";
+import { AsyncResult } from "effect/reactivity";
 import { Eye, EyeOff } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { errorTag, failureMessage } from "#api/errors.ts";
@@ -24,6 +25,7 @@ import { useSaveShortcut, useUnsavedChangesWarning } from "#editor/hooks.ts";
 import { RichDocument } from "#editor/RichDocument.tsx";
 import { uploadMessages } from "#editor/uploadMessages.ts";
 import { slugify } from "#lib/slug.ts";
+import { categoriesInput } from "#lib/categories.ts";
 import { parseTags } from "#lib/tags.ts";
 import { Alert } from "#ui/Alert.tsx";
 import { AutoTextarea } from "#ui/AutoTextarea.tsx";
@@ -31,7 +33,9 @@ import { Button } from "#ui/Button.tsx";
 import { Dialog } from "#ui/Dialog.tsx";
 import { Field, Input } from "#ui/Field.tsx";
 import { useToast } from "#ui/toasts.ts";
+import { type CategoryChoice, CategoryFields } from "./CategoryFields.tsx";
 import {
+  blogAtom,
   createPost,
   deletePost,
   postChanged,
@@ -102,6 +106,26 @@ export function PostEditor({
   const [slugEdited, setSlugEdited] = useState(post !== null);
   const [tags, setTags] = useState(post?.tags.join(", ") ?? "");
   const [cover, setCover] = useState<MediaId | null>(post?.coverImage ?? null);
+  // A new post starts in its subblog's main category, once that is loaded.
+  const blogInfo = useAtomValue(blogAtom(blog));
+  const [categories, setCategories] = useState<CategoryChoice | undefined>(
+    post === null
+      ? undefined
+      : {
+          main: post.categories.main.name,
+          extra: post.categories.extra.map(({ name }) => name),
+        },
+  );
+  const categoryChoice: CategoryChoice = categories ?? {
+    main: AsyncResult.isSuccess(blogInfo)
+      ? blogInfo.value.categories.main.name
+      : "",
+    extra: [],
+  };
+  const chosenCategories = categoriesInput(
+    categoryChoice.main,
+    categoryChoice.extra,
+  );
   // The editor reads its content once; the ref follows the edits for saving.
   const [initialContent] = useState(() =>
     toEditorContent(post?.content ?? emptyDocument),
@@ -127,6 +151,10 @@ export function PostEditor({
     if (!slugValid) {
       return "The URL slug may only contain a-z, 0-9 and single hyphens.";
     }
+    if (typeof chosenCategories === "string") {
+      setSettingsOpen(true);
+      return chosenCategories;
+    }
     const document = fromEditorContent(content.current);
     if (Exit.isFailure(document)) return documentProblem(document) ?? "";
     return {
@@ -134,6 +162,7 @@ export function PostEditor({
       title: title.trim(),
       summary: summary.trim(),
       tags: parseTags(tags),
+      categories: chosenCategories,
       coverImage: cover,
       content: document.value,
     };
@@ -290,6 +319,18 @@ export function PostEditor({
               />
             )}
           </Field>
+          <CategoryFields
+            value={categoryChoice}
+            error={
+              categories !== undefined && typeof chosenCategories === "string"
+                ? chosenCategories
+                : undefined
+            }
+            onChange={(next) => {
+              setCategories(next);
+              changed();
+            }}
+          />
           <Field label="Tags" hint="Comma separated, at most 10.">
             {(control) => (
               <Input
@@ -320,7 +361,7 @@ export function PostEditor({
       <PostHeader
         blog={blog}
         publishedAt={saved?.publishedAt ?? null}
-        author={saved?.author ?? { name: null }}
+        author={saved?.author ?? { id: null, name: null }}
         tags={parseTags(tags)}
         coverImage={cover}
         title={

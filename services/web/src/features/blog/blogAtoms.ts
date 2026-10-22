@@ -1,4 +1,12 @@
-import type { BlogSlug, PostCursor, PostId, Tag } from "@unhalteproblem.de/api";
+import type {
+  BlogSlug,
+  CategorySlug,
+  PostCursor,
+  PostId,
+  PostSort,
+  Tag,
+  UserId,
+} from "@unhalteproblem.de/api";
 import { ApiClient } from "#api/ApiClient.ts";
 
 /** Reactivity key of the subblog list (titles, post counts). */
@@ -10,11 +18,15 @@ export const blogKey = (blog: BlogSlug) => `blog/${blog}`;
 /** Reactivity key of the feed across all subblogs. */
 export const feedKey = "posts";
 
+/** Reactivity key of the category list (names and counts). */
+export const categoriesKey = "categories";
+
 /** The keys a change to a post of `blog` makes stale. */
 export const postChanged = (blog: BlogSlug) => [
   blogKey(blog),
   blogsKey,
   feedKey,
+  categoriesKey,
 ];
 
 export const blogsAtom = ApiClient.query("blogs", "listBlogs", {
@@ -28,16 +40,33 @@ export const blogAtom = (blog: BlogSlug) =>
     reactivityKeys: [blogsKey, blogKey(blog)],
   });
 
-export interface PageRequest {
+/** What a post list shows: its order and filters. */
+export interface PostFilter {
+  readonly sort: PostSort;
+  readonly tag?: Tag | undefined;
+  readonly category?: CategorySlug | undefined;
+  readonly author?: UserId | undefined;
+}
+
+export interface PageRequest extends PostFilter {
   readonly cursor: PostCursor | undefined;
-  readonly tag: Tag | undefined;
   readonly limit?: number;
 }
 
-const pageQuery = ({ cursor, tag, limit = 10 }: PageRequest) => ({
+const pageQuery = ({
+  cursor,
+  sort,
+  tag,
+  category,
+  author,
+  limit = 10,
+}: PageRequest) => ({
   limit,
+  sort,
   ...(cursor === undefined ? {} : { cursor }),
   ...(tag === undefined ? {} : { tag }),
+  ...(category === undefined ? {} : { category }),
+  ...(author === undefined ? {} : { author }),
 });
 
 export const postPageAtom = (blog: BlogSlug, page: PageRequest) =>
@@ -77,3 +106,12 @@ export const publishPost = ApiClient.mutation("blogEditor", "publishPost");
 export const unpublishPost = ApiClient.mutation("blogEditor", "unpublishPost");
 export const deletePost = ApiClient.mutation("blogEditor", "deletePost");
 export const uploadMedia = ApiClient.mutation("blogEditor", "uploadMedia");
+export const setBlogCategories = ApiClient.mutation(
+  "blogEditor",
+  "setBlogCategories",
+);
+
+export const categoriesAtom = ApiClient.query("blogs", "listCategories", {
+  reactivityKeys: [categoriesKey],
+  timeToLive: "5 minutes",
+});

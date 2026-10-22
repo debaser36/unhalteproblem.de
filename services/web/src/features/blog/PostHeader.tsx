@@ -1,5 +1,6 @@
 import {
   type BlogSlug,
+  type Categories,
   mediaUrl,
   type MediaId,
   type PostAuthor,
@@ -10,6 +11,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { formatDate, isoDate } from "#lib/format.ts";
 import { Badge } from "#ui/Badge.tsx";
+import { CategoryBadges } from "./CategoryBadges.tsx";
 
 /**
  * The top of a post: where it lives, when and by whom, title, summary and
@@ -21,6 +23,7 @@ export function PostHeader({
   title,
   summary,
   tags,
+  categories,
   coverImage,
   publishedAt,
   readingMinutes,
@@ -31,6 +34,8 @@ export function PostHeader({
   readonly title: ReactNode;
   readonly summary: ReactNode;
   readonly tags: ReadonlyArray<string>;
+  /** Shown as links to the posts with them; the editor has fields instead. */
+  readonly categories?: Categories;
   readonly coverImage: MediaId | null;
   readonly publishedAt: DateTime.Utc | null;
   readonly readingMinutes?: number;
@@ -55,12 +60,27 @@ export function PostHeader({
               <Clock size={13} /> {readingMinutes} min read
             </span>
           )}
-          {author.name !== null && <span>by {author.name}</span>}
+          {author.name !== null &&
+            (author.id === null ? (
+              <span>by {author.name}</span>
+            ) : (
+              <span>
+                by{" "}
+                <Link
+                  to={`/blog?author=${author.id}`}
+                  className="hover:text-fg hover:underline"
+                  title={`More posts by ${author.name}`}
+                >
+                  {author.name}
+                </Link>
+              </span>
+            ))}
         </p>
         {aside}
       </div>
       {title}
       {summary}
+      {categories !== undefined && <CategoryBadges categories={categories} />}
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {tags.map((tag) => (

@@ -12,7 +12,8 @@ import { Container } from "#ui/Container.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
 import { PageHeader } from "#ui/PageHeader.tsx";
 import { Table, Td, Th } from "#ui/Table.tsx";
-import { managedPostsAtom } from "./blogAtoms.ts";
+import { BlogCategoriesCard } from "./BlogCategoriesCard.tsx";
+import { blogAtom, managedPostsAtom } from "./blogAtoms.ts";
 import { blogParam } from "./editing.ts";
 
 /** An editor's desk: every post of the subblog, drafts included. */
@@ -48,6 +49,9 @@ function Desk({ blog }: { readonly blog: BlogSlug }) {
         </Link>
         , drafts included. Published posts are edited right on their page.
       </PageHeader>
+      <AsyncView atom={blogAtom(blog)} loading={null}>
+        {(info) => <BlogCategoriesCard blog={blog} info={info} />}
+      </AsyncView>
       <AsyncView atom={managedPostsAtom(blog)}>
         {(posts) =>
           posts.length === 0 ? (
