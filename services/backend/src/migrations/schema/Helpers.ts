@@ -69,11 +69,17 @@ export const describeIndexes = (sql: SqlClient.SqlClient, table: string) =>
   `.pipe(Effect.map((indexes) => indexes.map((i) => i.indexdef)));
 
 /** The fixed roles of the contract's `Role`, as the role checks list them. */
-export const fixedRoles = ["normalUser", "admin", "superAdmin"] as const;
+export const fixedRoles = [
+  "normalUser",
+  "admin",
+  "superAdmin",
+  "foodPlanner",
+] as const;
 
 /**
- * user_roles_role_check and user_role_changes_role_check since 0012: a fixed
- * role or `blogEditor:<slug>`, as Postgres prints the definition.
+ * user_roles_role_check and user_role_changes_role_check since 0019 (0012
+ * plus `foodPlanner`): a fixed role or `blogEditor:<slug>`, as Postgres
+ * prints the definition.
  */
 export const roleCheck =
   `CHECK (((role = ANY (ARRAY[${fixedRoles.map((role) => `'${role}'::text`).join(", ")}]))` +
@@ -288,6 +294,158 @@ export const insertBlogRequest = (
       ${request.createdAt ?? "2026-01-01T00:00:00Z"}::timestamptz,
       ${request.decidedAt ?? null}::timestamptz, ${request.decidedBy ?? null},
       ${request.reason ?? null}, ${request.blogId ?? null}
+    )
+    RETURNING id
+  `.pipe(Effect.map(([row]) => row.id));
+
+/** Inserts a food item, a German Open Food Facts product by default. */
+export const insertFoodItem = (
+  sql: SqlClient.SqlClient,
+  item: {
+    readonly sourceRef: string;
+    readonly country?: string;
+    readonly source?: string;
+    readonly name?: string;
+    readonly brand?: string | null;
+    readonly quantityAmount?: number | string | null;
+    readonly quantityUnit?: string | null;
+    readonly vegetarian?: boolean | null;
+    readonly vegan?: boolean | null;
+    readonly categories?: ReadonlyArray<string | null>;
+    readonly ingredients?: ReadonlyArray<string | null>;
+    readonly allergens?: ReadonlyArray<string | null>;
+  },
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO food_items (
+      id, country, source, source_ref, name, brand, quantity_amount,
+      quantity_unit, vegetarian, vegan, categories, ingredients, allergens,
+      created_at, updated_at
+    )
+    VALUES (
+      gen_random_uuid(), ${item.country ?? "DE"},
+      ${item.source ?? "openFoodFacts"}, ${item.sourceRef},
+      ${item.name ?? "Name"}, ${item.brand ?? null},
+      ${item.quantityAmount ?? null}::numeric, ${item.quantityUnit ?? null},
+      ${item.vegetarian ?? null}::boolean, ${item.vegan ?? null}::boolean,
+      ${item.categories ?? []}::text[], ${item.ingredients ?? []}::text[],
+      ${item.allergens ?? []}::text[],
+      '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
+    )
+    RETURNING id
+  `.pipe(Effect.map(([row]) => row.id));
+
+/** Inserts a price of a food item, an Open Prices price in EUR by default. */
+export const insertFoodPrice = (
+  sql: SqlClient.SqlClient,
+  price: {
+    readonly foodItemId: string;
+    readonly sourceRef: string;
+    readonly source?: string;
+    readonly amount?: number | string;
+    readonly currency?: string;
+    readonly observedOn?: string;
+    readonly accuracy?: number;
+    readonly discounted?: boolean;
+    readonly whereText?: string;
+  },
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO food_prices (
+      food_item_id, source, source_ref, amount, currency, observed_on,
+      accuracy, discounted, where_text, created_at
+    )
+    VALUES (
+      ${price.foodItemId}, ${price.source ?? "openPrices"}, ${price.sourceRef},
+      ${price.amount ?? 1.99}::numeric, ${price.currency ?? "EUR"},
+      ${price.observedOn ?? "2026-09-01"}::date, ${price.accuracy ?? 90},
+      ${price.discounted ?? false}, ${price.whereText ?? "Store"},
+      '2026-01-01T00:00:00Z'
+    )
+    RETURNING id
+  `.pipe(Effect.map(([row]) => String(row.id)));
+
+/** Inserts an import job, a queued German Open Prices import by default. */
+export const insertFoodImport = (
+  sql: SqlClient.SqlClient,
+  job: {
+    readonly country?: string;
+    readonly source?: string;
+    readonly status?: string;
+    readonly requestedBy?: string | null;
+    readonly requestedAt?: string;
+    readonly startedAt?: string | null;
+    readonly finishedAt?: string | null;
+    readonly items?: number;
+    readonly prices?: number;
+    readonly error?: string | null;
+  },
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO food_imports (
+      id, country, source, status, requested_by, requested_at, started_at,
+      finished_at, items, prices, error
+    )
+    VALUES (
+      gen_random_uuid(), ${job.country ?? "DE"}, ${job.source ?? "openPrices"},
+      ${job.status ?? "queued"}, ${job.requestedBy ?? null},
+      ${job.requestedAt ?? "2026-01-01T00:00:00Z"}::timestamptz,
+      ${job.startedAt ?? null}::timestamptz,
+      ${job.finishedAt ?? null}::timestamptz, ${job.items ?? 0},
+      ${job.prices ?? 0}, ${job.error ?? null}
+    )
+    RETURNING id
+  `.pipe(Effect.map(([row]) => row.id));
+
+/** The columns of a ready meal plan, for {@link insertMealPlan}. */
+export const readyMealPlan = {
+  status: "ready",
+  plan: { days: [], shoppingList: [], notes: [] },
+  totalCost: "42.50",
+  estimatedShare: 20,
+  accuracy: 70,
+  model: "model-1",
+  finishedAt: "2026-01-01T00:01:00Z",
+} as const;
+
+/** Inserts a meal plan, a pending German one by default. */
+export const insertMealPlan = (
+  sql: SqlClient.SqlClient,
+  mealPlan: {
+    readonly userId: string;
+    readonly country?: string;
+    readonly currency?: string;
+    readonly status?: string;
+    readonly request?: unknown;
+    readonly plan?: unknown;
+    readonly totalCost?: number | string | null;
+    readonly cheapestTotal?: number | string | null;
+    readonly estimatedShare?: number | null;
+    readonly accuracy?: number | null;
+    readonly model?: string | null;
+    readonly failureReason?: string | null;
+    readonly createdAt?: string;
+    readonly finishedAt?: string | null;
+  },
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO meal_plans (
+      id, user_id, country, currency, status, request, plan, total_cost,
+      cheapest_total, estimated_share, accuracy, model, failure_reason,
+      created_at, finished_at
+    )
+    VALUES (
+      gen_random_uuid(), ${mealPlan.userId}, ${mealPlan.country ?? "DE"},
+      ${mealPlan.currency ?? "EUR"}, ${mealPlan.status ?? "pending"},
+      ${JSON.stringify(mealPlan.request ?? { days: 7 })}::jsonb,
+      ${mealPlan.plan == null ? null : JSON.stringify(mealPlan.plan)}::jsonb,
+      ${mealPlan.totalCost ?? null}::numeric,
+      ${mealPlan.cheapestTotal ?? null}::numeric,
+      ${mealPlan.estimatedShare ?? null}::smallint,
+      ${mealPlan.accuracy ?? null}::smallint, ${mealPlan.model ?? null},
+      ${mealPlan.failureReason ?? null},
+      ${mealPlan.createdAt ?? "2026-01-01T00:00:00Z"}::timestamptz,
+      ${mealPlan.finishedAt ?? null}::timestamptz
     )
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));

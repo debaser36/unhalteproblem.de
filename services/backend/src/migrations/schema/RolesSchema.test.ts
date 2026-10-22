@@ -60,7 +60,7 @@ describe("DatabaseTest", () => {
           [
             // Added by 0004.
             "user_roles_granted_by_fkey: FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL",
-            // Replaced by 0012.
+            // Replaced by 0012 and 0019.
             `user_roles_role_check: ${roleCheck}`,
             "user_roles_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
             "user_roles_user_id_role_pkey: PRIMARY KEY (user_id, role)",
@@ -212,7 +212,7 @@ describe("DatabaseTest", () => {
               "user_role_changes_change_check: CHECK ((change = ANY (ARRAY['granted'::text, 'revoked'::text])))",
               "user_role_changes_changed_by_fkey: FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL",
               "user_role_changes_id_pkey: PRIMARY KEY (id)",
-              // Replaced by 0012, like user_roles_role_check.
+              // Replaced by 0012 and 0019, like user_roles_role_check.
               `user_role_changes_role_check: ${roleCheck}`,
               "user_role_changes_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
             ],

@@ -28,6 +28,7 @@ const migrationNames = [
   "audit_content_changes",
   "create_blog_requests",
   "create_categories",
+  "create_food_planner",
 ];
 
 interface OutboxFields {

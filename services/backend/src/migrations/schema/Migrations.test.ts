@@ -615,3 +615,70 @@ describe("0018_create_categories", () => {
     { timeout: 30_000 },
   );
 });
+
+describe("0019_create_food_planner", () => {
+  // Runs the migrations before 0019 first, so roles and their log exist
+  // before the checks are replaced.
+  const DatabaseBefore0019 = databaseUpTo(18);
+
+  it.effect(
+    "keeps the existing roles and adds foodPlanner to the replaced checks",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "food-planner-alice");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role) VALUES
+            (${alice}, 'normalUser'),
+            (${alice}, 'blogEditor:rust-notes')
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${alice}, 'blogEditor:rust-notes', 'granted', now())
+        `;
+        // Not allowed before 0019.
+        const before = yield* sql`
+          INSERT INTO user_roles (user_id, role)
+          VALUES (${alice}, 'foodPlanner')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(19) });
+        assert.deepStrictEqual(applied, [[19, "create_food_planner"]]);
+
+        const roles = yield* sql<{ readonly role: string }>`
+          SELECT role FROM user_roles WHERE user_id = ${alice} ORDER BY role
+        `;
+        assert.deepStrictEqual(
+          roles.map((row) => row.role),
+          ["blogEditor:rust-notes", "normalUser"],
+        );
+
+        // Same names, and validated (not NOT VALID) on both tables.
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conname IN (
+            'user_roles_role_check', 'user_role_changes_role_check'
+          )
+          ORDER BY conname
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "user_role_changes_role_check", convalidated: true },
+          { conname: "user_roles_role_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO user_roles (user_id, role)
+          VALUES (${alice}, 'foodPlanner')
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${alice}, 'foodPlanner', 'granted', now())
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0019)),
+    { timeout: 30_000 },
+  );
+});

@@ -24,6 +24,7 @@ import auditAdminInsights from "#migrations/0015_audit_admin_insights";
 import auditContentChanges from "#migrations/0016_audit_content_changes";
 import createBlogRequests from "#migrations/0017_create_blog_requests";
 import createCategories from "#migrations/0018_create_categories";
+import createFoodPlanner from "#migrations/0019_create_food_planner";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -51,6 +52,7 @@ export const migrations = {
   "0016_audit_content_changes": auditContentChanges,
   "0017_create_blog_requests": createBlogRequests,
   "0018_create_categories": createCategories,
+  "0019_create_food_planner": createFoodPlanner,
 };
 
 /** Loads {@link migrations} in id order. */
