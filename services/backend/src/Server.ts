@@ -30,6 +30,7 @@ import { ProjectAdminHandlers } from "#http/ProjectAdmin";
 import { ProjectsHandlers } from "#http/Projects";
 import { RequestLogging } from "#http/RequestLogging";
 import { SameOriginLive } from "#http/SameOrigin";
+import { SeoHandlers } from "#http/Seo";
 import { SystemHandlers } from "#http/System";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
@@ -83,6 +84,7 @@ const Handlers = Layer.mergeAll(
   MediaHandlers,
   ProjectsHandlers,
   ProjectAdminHandlers,
+  SeoHandlers,
 ).pipe(
   Layer.provide([ContactRateLimit.layer, Readiness.layer]),
   Layer.provideMerge(AuthServices),

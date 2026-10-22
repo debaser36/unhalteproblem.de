@@ -311,6 +311,9 @@ importers:
       '@unhalteproblem.de/oidc':
         specifier: workspace:*
         version: link:../../lib/oidc
+      '@unhalteproblem.de/seo':
+        specifier: workspace:*
+        version: link:../../lib/seo
       effect:
         specifier: 'catalog:'
         version: 4.0.5

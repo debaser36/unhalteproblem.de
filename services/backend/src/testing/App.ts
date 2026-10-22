@@ -42,6 +42,7 @@ import { MediaHandlers } from "#http/Media";
 import { ProjectAdminHandlers } from "#http/ProjectAdmin";
 import { ProjectsHandlers } from "#http/Projects";
 import { SameOriginLive } from "#http/SameOrigin";
+import { SeoHandlers } from "#http/Seo";
 import { SystemHandlers } from "#http/System";
 import { LoginAttempts } from "#repositories/LoginAttempts";
 import { LogoutTokens } from "#repositories/LogoutTokens";
@@ -316,6 +317,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     MediaHandlers,
     ProjectsHandlers,
     ProjectAdminHandlers,
+    SeoHandlers,
   ).pipe(
     Layer.provide([
       SameOriginLive,

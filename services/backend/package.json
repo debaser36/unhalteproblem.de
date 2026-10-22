@@ -29,6 +29,7 @@
     "@effect/sql-pg": "catalog:",
     "@unhalteproblem.de/api": "workspace:*",
     "@unhalteproblem.de/oidc": "workspace:*",
+    "@unhalteproblem.de/seo": "workspace:*",
     "effect": "catalog:",
     "jose": "^6.2.12",
     "nodemailer": "^10.1.2"

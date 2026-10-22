@@ -74,6 +74,7 @@ Each topic lives in its own file under `docs/`; read only the one you need.
 | [docs/blogs.md](docs/blogs.md)                       | Subblogs and posts                                                            |
 | [docs/projects.md](docs/projects.md)                 | Projects                                                                      |
 | [docs/media.md](docs/media.md)                       | Image upload and serving                                                      |
+| [docs/seo.md](docs/seo.md)                           | Crawler pages, sitemap, nginx routing                                         |
 | [docs/contact.md](docs/contact.md)                   | Contact form and mail                                                         |
 | [docs/rate-limiting.md](docs/rate-limiting.md)       | Client IP and rate limiting                                                   |
 | [docs/logging.md](docs/logging.md)                   | Request ids and request logging                                               |
