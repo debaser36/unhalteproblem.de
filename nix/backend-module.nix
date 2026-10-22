@@ -288,14 +288,22 @@ in
           "~^1/blog/(?<blog>[a-z0-9-]+)/(?<post>[a-z0-9-]+)/?$" /api/seo/blogs/$blog/posts/$post;
           "~^1/projects/(?<project>[a-z0-9-]+)/?$" /api/seo/projects/$project;
         }
+
+        # The only query parameter the crawler pages take is the page number
+        # of a blog's list; everything else (tracking, filters) is dropped.
+        map $arg_page $unhalteproblem_seo_args {
+          default "";
+          "~^[0-9]{1,3}$" "page=$arg_page";
+        }
       '';
 
       # Runs before the location is chosen, so it needs to know nothing about
-      # how the rest of the virtual host serves the SPA. The trailing ? drops
-      # the query string.
+      # how the rest of the virtual host serves the SPA. rewrite appends the
+      # current arguments, so they are replaced by the cleaned ones first.
       services.nginx.virtualHosts.${cfg.nginx.virtualHost}.extraConfig = ''
         if ($unhalteproblem_seo_uri != "") {
-          rewrite ^ $unhalteproblem_seo_uri? last;
+          set $args $unhalteproblem_seo_args;
+          rewrite ^ $unhalteproblem_seo_uri last;
         }
       '';
 
