@@ -179,7 +179,7 @@ const decodeBlogSlug = Schema.decodeUnknownOption(BlogSlug);
 function GrantRoleForm({ user }: { readonly user: AdminUserDetails }) {
   const grant = useAction(grantRole, { errors: messages });
   const [kind, setKind] = useState<
-    "admin" | "superAdmin" | "normalUser" | "blogEditor"
+    "admin" | "superAdmin" | "normalUser" | "foodPlanner" | "blogEditor"
   >("blogEditor");
   const [blog, setBlog] = useState("");
   const slug = decodeBlogSlug(blog.trim());
@@ -215,6 +215,7 @@ function GrantRoleForm({ user }: { readonly user: AdminUserDetails }) {
             <option value="blogEditor">blogEditor:</option>
             <option value="admin">admin</option>
             <option value="superAdmin">superAdmin</option>
+            <option value="foodPlanner">foodPlanner</option>
             <option value="normalUser">normalUser</option>
           </Select>
         )}
