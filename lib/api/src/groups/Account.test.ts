@@ -13,6 +13,7 @@ import { Authentication, CurrentUser, SessionCookie } from "#Authentication";
 import { RequireBlogEditor } from "#Authorization";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
+import { RequireFoodPlanner } from "./Food.ts";
 import type { Role } from "#domain/Auth";
 import { AccountDeletionNotAllowed } from "#errors/AccountDeletionNotAllowed";
 import { Forbidden } from "#errors/Forbidden";
@@ -158,6 +159,7 @@ const unusedMiddleware = Effect.die("not used by these tests");
 const AdminMiddlewareStubs = Layer.mergeAll(
   Layer.succeed(RequireAdmin, () => unusedMiddleware),
   Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
+  Layer.succeed(RequireFoodPlanner, () => Effect.die("not used by this group")),
   Layer.succeed(RequireBlogRequestModerator, () => unusedMiddleware),
   Layer.succeed(LargeBody, () => unusedMiddleware),
   Layer.succeed(RequireBlogEditor, () => unusedMiddleware),

@@ -7,6 +7,7 @@ import { BlogRequestAdminGroup } from "#groups/BlogRequestAdmin";
 import { BlogRequestsGroup } from "#groups/BlogRequests";
 import { BlogsGroup } from "#groups/Blogs";
 import { ContactGroup } from "#groups/Contact";
+import { FoodPlannerGroup } from "#groups/Food";
 import { MediaGroup } from "#groups/Media";
 import { ProjectAdminGroup } from "#groups/ProjectAdmin";
 import { ProjectsGroup } from "#groups/Projects";
@@ -38,6 +39,7 @@ export class Api extends HttpApi.make("unhalteproblem")
   .add(BlogRequestsGroup)
   .add(BlogRequestAdminGroup)
   .add(SeoGroup)
+  .add(FoodPlannerGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "unhalteproblem.de API",

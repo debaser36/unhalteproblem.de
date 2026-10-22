@@ -27,6 +27,7 @@ export {
 export { BlogRequestsGroup } from "#groups/BlogRequests";
 export { BlogsGroup } from "#groups/Blogs";
 export { ContactGroup } from "#groups/Contact";
+export { FoodPlannerGroup, RequireFoodPlanner } from "#groups/Food";
 export { MediaGroup } from "#groups/Media";
 export { ProjectAdminGroup } from "#groups/ProjectAdmin";
 export { ProjectsGroup } from "#groups/Projects";
@@ -180,8 +181,45 @@ export {
   type TaskListNode,
   type TextNode,
 } from "#domain/Document";
+export {
+  currencyOfCountry,
+  Diet,
+  FoodCountry,
+  FoodCurrency,
+  FoodDataSource,
+  FoodImport,
+  FoodImportId,
+  FoodImportSource,
+  FoodImportStatus,
+  FoodItem,
+  FoodItemDetails,
+  FoodItemId,
+  FoodItemPage,
+  FoodItemQuery,
+  FoodItemSource,
+  FoodLimits,
+  FoodPrice,
+  Meal,
+  MealIngredient,
+  MealPlan,
+  MealPlanDay,
+  MealPlanFailure,
+  MealPlanFailureReason,
+  MealPlanId,
+  MealPlanRequest,
+  MealPlanStatus,
+  MealPlanSummary,
+  MealSlot,
+  Money,
+  PriceSource,
+  Quantity,
+  QuantityUnit,
+  ShoppingListEntry,
+  StartFoodImportPayload,
+} from "#domain/Food";
 export { HealthStatus, ReadyStatus } from "#domain/Health";
 export { HttpUrl, HttpUrlMaxLength } from "#domain/HttpUrl";
+export { IsoDate } from "#domain/IsoDate";
 export { IsoDateTimeUtc } from "#domain/IsoDateTimeUtc";
 export {
   MediaContentType,
@@ -228,8 +266,14 @@ export { CategoryMergeIntoSelf } from "#errors/CategoryMergeIntoSelf";
 export { CategoryNameTaken } from "#errors/CategoryNameTaken";
 export { CategoryNotFound } from "#errors/CategoryNotFound";
 export { ContactMessageNotFound } from "#errors/ContactMessageNotFound";
+export { FoodImportAlreadyRunning } from "#errors/FoodImportAlreadyRunning";
+export { FoodImportNotFound } from "#errors/FoodImportNotFound";
+export { FoodImportNotSupported } from "#errors/FoodImportNotSupported";
+export { FoodItemNotFound } from "#errors/FoodItemNotFound";
 export { Forbidden } from "#errors/Forbidden";
 export { InvalidUpload } from "#errors/InvalidUpload";
+export { MealPlanNotFound } from "#errors/MealPlanNotFound";
+export { MealPlannerUnavailable } from "#errors/MealPlannerUnavailable";
 export { MediaNotFound } from "#errors/MediaNotFound";
 export { MediaTooLarge } from "#errors/MediaTooLarge";
 export { NotRestricted } from "#errors/NotRestricted";

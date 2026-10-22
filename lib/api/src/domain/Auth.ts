@@ -55,13 +55,14 @@ export const LoginQuery = Schema.Struct({
 export type LoginQuery = typeof LoginQuery.Type;
 
 /**
- * The roles that are not scoped to anything: `normalUser`, `admin` and
- * `superAdmin` (see `Role`).
+ * The roles that are not scoped to anything: `normalUser`, `admin`,
+ * `superAdmin` and `foodPlanner` (see `Role`).
  */
 export const GlobalRole = Schema.Literals([
   "normalUser",
   "admin",
   "superAdmin",
+  "foodPlanner",
 ]).annotate({
   identifier: "GlobalRole",
   description: "A role that is not scoped to a subblog.",
@@ -123,6 +124,7 @@ export const blogOfEditorRole = (role: Role): Option.Option<BlogSlug> =>
  * - `normalUser`: every registered user; granted at registration.
  * - `admin`: administers the website.
  * - `superAdmin`: the highest level of administration.
+ * - `foodPlanner`: uses the food planner (food data, imports, meal plans).
  * - `blogEditor:<slug>` (`BlogEditorRole`): edits the posts of the subblog
  *   `<slug>`, and only that one; one such role per subblog.
  *
@@ -139,8 +141,9 @@ export const blogOfEditorRole = (role: Role): Option.Option<BlogSlug> =>
 export const Role = Schema.Union([GlobalRole, BlogEditorRole]).annotate({
   identifier: "Role",
   description:
-    "An authorization role: `normalUser`, `admin`, `superAdmin` or " +
-    "`blogEditor:<slug>` (edits the posts of the subblog `<slug>` only). " +
+    "An authorization role: `normalUser`, `admin`, `superAdmin`, " +
+    "`foodPlanner` (uses the food planner: food data, imports, meal plans) " +
+    "or `blogEditor:<slug>` (edits the posts of the subblog `<slug>` only). " +
     "Roles are flat (none implies another) and a user can hold several.",
 });
 export type Role = typeof Role.Type;

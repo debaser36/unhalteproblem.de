@@ -339,7 +339,11 @@ describe("requirement types", () => {
       RequireRoles<"admin" | `blogEditor:${string}`>
     >();
     expectTypeOf<Role>().toEqualTypeOf<
-      "normalUser" | "admin" | "superAdmin" | `blogEditor:${string}`
+      | "normalUser"
+      | "admin"
+      | "superAdmin"
+      | "foodPlanner"
+      | `blogEditor:${string}`
     >();
   });
 

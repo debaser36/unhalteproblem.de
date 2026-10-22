@@ -33,6 +33,7 @@ import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
+import { RequireFoodPlanner } from "./Food.ts";
 import { BlogEditorGroup } from "./BlogEditor.ts";
 
 describe("blog endpoints in the OpenAPI document", () => {
@@ -443,6 +444,9 @@ layer(
           RequireBlogEditorStub,
           Layer.succeed(RequireAdmin, () => unusedMiddleware),
           Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
+          Layer.succeed(RequireFoodPlanner, () =>
+            Effect.die("not used by this group"),
+          ),
           Layer.succeed(RequireBlogRequestModerator, () => unusedMiddleware),
         ),
       ),
