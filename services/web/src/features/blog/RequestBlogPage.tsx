@@ -1,16 +1,15 @@
-import { useAtomRefresh, useAtomSet } from "@effect/atom-react";
+import { useAtomRefresh } from "@effect/atom-react";
 import {
   BlogLimits,
   type BlogRequest,
   blogEditorRole,
   type User,
 } from "@unhalteproblem.de/api";
-import { Exit } from "effect";
 import { PenLine, Send, Undo2 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { NoIndex } from "#app/Seo.tsx";
 import { AsyncView } from "#api/AsyncView.tsx";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { sessionAtom } from "#api/session.ts";
 import { RequireUser } from "#app/RequireUser.tsx";
 import { formatDate } from "#lib/format.ts";
@@ -19,7 +18,6 @@ import { Card } from "#ui/Card.tsx";
 import { Container } from "#ui/Container.tsx";
 import { Field, Input, Textarea } from "#ui/Field.tsx";
 import { PageHeader } from "#ui/PageHeader.tsx";
-import { useToast } from "#ui/toasts.ts";
 import {
   blogRequestsKey,
   myBlogRequestsAtom,
@@ -86,28 +84,22 @@ function Requests({
 }
 
 function RequestForm() {
-  const submit = useAtomSet(requestBlog, { mode: "promiseExit" });
-  const toast = useToast();
+  const submit = useAction(requestBlog, {
+    success: "Request sent. An admin will look at it.",
+    errors: {
+      BlogRequestAlreadyPending: "You have a request waiting already.",
+    },
+  });
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [pending, setPending] = useState(false);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setPending(true);
-    const exit = await submit({
+    const error = await submit.run({
       payload: { title: title.trim(), description: description.trim() },
       reactivityKeys: [blogRequestsKey],
     });
-    setPending(false);
-    const error = failureMessage(exit, {
-      BlogRequestAlreadyPending: "You have a request waiting already.",
-    });
-    toast(
-      error === undefined ? "success" : "error",
-      error ?? "Request sent. An admin will look at it.",
-    );
-    if (Exit.isSuccess(exit)) {
+    if (error === undefined) {
       setTitle("");
       setDescription("");
     }
@@ -144,7 +136,7 @@ function RequestForm() {
         <Button
           type="submit"
           variant="primary"
-          loading={pending}
+          loading={submit.pending}
           disabled={title.trim() === ""}
           icon={<Send size={15} />}
         >
@@ -156,25 +148,16 @@ function RequestForm() {
 }
 
 function RequestCard({ request }: { readonly request: BlogRequest }) {
-  const withdraw = useAtomSet(withdrawBlogRequest, { mode: "promiseExit" });
-  const toast = useToast();
-  const [pending, setPending] = useState(false);
+  const withdraw = useAction(withdrawBlogRequest, {
+    success: "Request withdrawn.",
+    errors: { BlogRequestNotPending: "It has been decided meanwhile." },
+  });
 
-  const onWithdraw = async () => {
-    setPending(true);
-    const exit = await withdraw({
+  const onWithdraw = () =>
+    withdraw.run({
       params: { requestId: request.id },
       reactivityKeys: [blogRequestsKey],
     });
-    setPending(false);
-    const error = failureMessage(exit, {
-      BlogRequestNotPending: "It has been decided meanwhile.",
-    });
-    toast(
-      error === undefined ? "success" : "error",
-      error ?? "Request withdrawn.",
-    );
-  };
 
   return (
     <Card className="p-5">
@@ -206,7 +189,7 @@ function RequestCard({ request }: { readonly request: BlogRequest }) {
           className="mt-4"
           size="sm"
           variant="ghost"
-          loading={pending}
+          loading={withdraw.pending}
           icon={<Undo2 size={14} />}
           onClick={onWithdraw}
         >

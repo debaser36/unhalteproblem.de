@@ -1,11 +1,9 @@
-import { useAtomSet } from "@effect/atom-react";
 import type { User } from "@unhalteproblem.de/api";
-import { Exit } from "effect";
 import { LogOut, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { NoIndex } from "#app/Seo.tsx";
 import { ApiClient } from "#api/ApiClient.ts";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { sessionKey } from "#api/session.ts";
 import { RequireUser } from "#app/RequireUser.tsx";
 import { Alert } from "#ui/Alert.tsx";
@@ -74,26 +72,23 @@ function Account({ user }: { readonly user: User }) {
 }
 
 function DangerZone() {
-  const remove = useAtomSet(deleteAccount, { mode: "promiseExit" });
+  const remove = useAction(deleteAccount, {
+    errors: {
+      AccountDeletionNotAllowed:
+        "A superAdmin cannot delete their account. Ask another superAdmin to revoke the role first.",
+    },
+  });
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
 
   const confirm = async () => {
-    setPending(true);
     setError(undefined);
-    const exit = await remove({ reactivityKeys: [sessionKey] });
-    setPending(false);
-    if (Exit.isSuccess(exit)) {
+    const failure = await remove.run({ reactivityKeys: [sessionKey] });
+    if (failure === undefined) {
       window.location.assign("/");
     } else {
       setOpen(false);
-      setError(
-        failureMessage(exit, {
-          AccountDeletionNotAllowed:
-            "A superAdmin cannot delete their account. Ask another superAdmin to revoke the role first.",
-        }),
-      );
+      setError(failure);
     }
   };
 
@@ -126,7 +121,7 @@ function DangerZone() {
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button variant="danger" loading={pending} onClick={confirm}>
+            <Button variant="danger" loading={remove.pending} onClick={confirm}>
               Delete forever
             </Button>
           </>

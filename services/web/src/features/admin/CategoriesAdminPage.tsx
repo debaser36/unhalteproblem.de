@@ -1,16 +1,14 @@
-import { useAtomSet } from "@effect/atom-react";
 import {
   type Category,
   CategoryLimits,
   categorySlugOf,
   PresetCategories,
 } from "@unhalteproblem.de/api";
-import { Exit } from "effect";
 import { Check, GitMerge, Pencil, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ApiClient } from "#api/ApiClient.ts";
 import { AsyncView } from "#api/AsyncView.tsx";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import {
   blogsKey,
   categoriesAtom,
@@ -24,7 +22,6 @@ import { Dialog } from "#ui/Dialog.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
 import { Input, Select } from "#ui/Field.tsx";
 import { Table, Td, Th } from "#ui/Table.tsx";
-import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 
 const renameCategory = ApiClient.mutation("admin", "renameCategory");
@@ -94,57 +91,50 @@ function CategoryRow({
   readonly category: Category;
   readonly others: ReadonlyArray<Category>;
 }) {
-  const rename = useAtomSet(renameCategory, { mode: "promiseExit" });
-  const merge = useAtomSet(mergeCategory, { mode: "promiseExit" });
-  const remove = useAtomSet(deleteCategory, { mode: "promiseExit" });
-  const toast = useToast();
+  const rename = useAction(renameCategory, { errors: messages });
+  const merge = useAction(mergeCategory, { errors: messages });
+  const remove = useAction(deleteCategory, { errors: messages });
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [dialog, setDialog] = useState<"merge" | "delete">();
   const [into, setInto] = useState("");
-  const [pending, setPending] = useState(false);
-
-  const report = (exit: Exit.Exit<unknown, unknown>, success: string) => {
-    const error = failureMessage(exit, messages);
-    toast(error === undefined ? "success" : "error", error ?? success);
-    return Exit.isSuccess(exit);
-  };
+  const pending = rename.pending || merge.pending || remove.pending;
 
   const onRename = async (event: FormEvent) => {
     event.preventDefault();
     const next = cleanCategoryName(name);
     if (next === "" || categorySlugOf(next) === "") return;
-    setPending(true);
-    const exit = await rename({
-      params: { category: category.slug },
-      payload: { name: next },
-      reactivityKeys: changedKeys,
-    });
-    setPending(false);
-    if (report(exit, `Renamed to ${next}.`)) setEditing(false);
+    const error = await rename.run(
+      {
+        params: { category: category.slug },
+        payload: { name: next },
+        reactivityKeys: changedKeys,
+      },
+      { success: `Renamed to ${next}.` },
+    );
+    if (error === undefined) setEditing(false);
   };
 
   const onMerge = async () => {
     const target = others.find((other) => other.slug === into);
     if (target === undefined) return;
-    setPending(true);
-    const exit = await merge({
-      params: { category: category.slug },
-      payload: { into: target.slug },
-      reactivityKeys: changedKeys,
-    });
-    setPending(false);
-    if (report(exit, `Merged into ${target.name}.`)) setDialog(undefined);
+    const error = await merge.run(
+      {
+        params: { category: category.slug },
+        payload: { into: target.slug },
+        reactivityKeys: changedKeys,
+      },
+      { success: `Merged into ${target.name}.` },
+    );
+    if (error === undefined) setDialog(undefined);
   };
 
   const onDelete = async () => {
-    setPending(true);
-    const exit = await remove({
-      params: { category: category.slug },
-      reactivityKeys: changedKeys,
-    });
-    setPending(false);
-    if (report(exit, `Deleted ${category.name}.`)) setDialog(undefined);
+    const error = await remove.run(
+      { params: { category: category.slug }, reactivityKeys: changedKeys },
+      { success: `Deleted ${category.name}.` },
+    );
+    if (error === undefined) setDialog(undefined);
   };
 
   return (

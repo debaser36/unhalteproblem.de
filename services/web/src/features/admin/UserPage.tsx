@@ -1,4 +1,4 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import {
   type AdminUserDetails,
   BlogSlug,
@@ -7,13 +7,13 @@ import {
   RestrictionNoteMaxLength,
   UserId,
 } from "@unhalteproblem.de/api";
-import { Exit, Option, Schema } from "effect";
+import { Option, Schema } from "effect";
 import { ArrowLeft, Ban, Plus, ShieldCheck, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useParams } from "react-router";
 import { AsyncResult } from "effect/reactivity";
 import { AsyncView } from "#api/AsyncView.tsx";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { hasRole, sessionKey, userAtom } from "#api/session.ts";
 import { NotFoundPage } from "#app/NotFoundPage.tsx";
 import { blogsAtom } from "#features/blog/blogAtoms.ts";
@@ -22,7 +22,6 @@ import { Badge } from "#ui/Badge.tsx";
 import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { Field, Input, Select, Textarea } from "#ui/Field.tsx";
-import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 import {
   grantRole,
@@ -128,19 +127,12 @@ function Roles({
   readonly user: AdminUserDetails;
   readonly canManage: boolean;
 }) {
-  const revoke = useAtomSet(revokeRole, { mode: "promiseExit" });
-  const toast = useToast();
-  const onRevoke = async (role: Role) => {
-    const exit = await revoke({
-      params: { userId: user.id, role },
-      ...changed,
-    });
-    const error = failureMessage(exit, messages);
-    toast(
-      error === undefined ? "success" : "error",
-      error ?? `Revoked ${role}.`,
+  const revoke = useAction(revokeRole, { errors: messages });
+  const onRevoke = (role: Role) =>
+    revoke.run(
+      { params: { userId: user.id, role }, ...changed },
+      { success: `Revoked ${role}.` },
     );
-  };
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-semibold text-fg">
@@ -185,13 +177,11 @@ function Roles({
 const decodeBlogSlug = Schema.decodeUnknownOption(BlogSlug);
 
 function GrantRoleForm({ user }: { readonly user: AdminUserDetails }) {
-  const grant = useAtomSet(grantRole, { mode: "promiseExit" });
-  const toast = useToast();
+  const grant = useAction(grantRole, { errors: messages });
   const [kind, setKind] = useState<
     "admin" | "superAdmin" | "normalUser" | "blogEditor"
   >("blogEditor");
   const [blog, setBlog] = useState("");
-  const [pending, setPending] = useState(false);
   const slug = decodeBlogSlug(blog.trim());
   const role: Role | undefined =
     kind === "blogEditor"
@@ -203,15 +193,11 @@ function GrantRoleForm({ user }: { readonly user: AdminUserDetails }) {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (role === undefined) return;
-    setPending(true);
-    const exit = await grant({ params: { userId: user.id, role }, ...changed });
-    setPending(false);
-    const error = failureMessage(exit, messages);
-    toast(
-      error === undefined ? "success" : "error",
-      error ?? `Granted ${role}.`,
+    const error = await grant.run(
+      { params: { userId: user.id, role }, ...changed },
+      { success: `Granted ${role}.` },
     );
-    if (Exit.isSuccess(exit)) setBlog("");
+    if (error === undefined) setBlog("");
   };
 
   return (
@@ -251,7 +237,7 @@ function GrantRoleForm({ user }: { readonly user: AdminUserDetails }) {
         type="submit"
         variant="secondary"
         disabled={role === undefined}
-        loading={pending}
+        loading={grant.pending}
         icon={<Plus size={15} />}
       >
         Grant
@@ -276,41 +262,32 @@ function BlogSlugOptions() {
 }
 
 function RestrictionCard({ user }: { readonly user: AdminUserDetails }) {
-  const restrict = useAtomSet(restrictUser, { mode: "promiseExit" });
-  const lift = useAtomSet(liftRestriction, { mode: "promiseExit" });
-  const toast = useToast();
+  const restrict = useAction(restrictUser, {
+    success: "Account restricted.",
+    errors: messages,
+  });
+  const lift = useAction(liftRestriction, {
+    success: "Restriction lifted.",
+    errors: messages,
+  });
   const [note, setNote] = useState("");
-  const [pending, setPending] = useState(false);
   const active = user.restriction;
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const trimmed = note.trim();
-    setPending(true);
     const error =
       active === null
-        ? failureMessage(
-            await restrict({
-              params: { userId: user.id },
-              payload: { note: trimmed },
-              ...changed,
-            }),
-            messages,
-          )
-        : failureMessage(
-            await lift({
-              params: { userId: user.id },
-              payload: trimmed === "" ? {} : { note: trimmed },
-              ...changed,
-            }),
-            messages,
-          );
-    setPending(false);
-    toast(
-      error === undefined ? "success" : "error",
-      error ??
-        (active === null ? "Account restricted." : "Restriction lifted."),
-    );
+        ? await restrict.run({
+            params: { userId: user.id },
+            payload: { note: trimmed },
+            ...changed,
+          })
+        : await lift.run({
+            params: { userId: user.id },
+            payload: trimmed === "" ? {} : { note: trimmed },
+            ...changed,
+          });
     if (error === undefined) setNote("");
   };
 
@@ -347,7 +324,7 @@ function RestrictionCard({ user }: { readonly user: AdminUserDetails }) {
         <Button
           type="submit"
           variant={active === null ? "danger" : "secondary"}
-          loading={pending}
+          loading={restrict.pending || lift.pending}
         >
           {active === null
             ? "Restrict and log out everywhere"

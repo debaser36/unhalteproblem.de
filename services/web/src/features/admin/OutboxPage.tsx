@@ -1,16 +1,14 @@
-import { useAtomSet } from "@effect/atom-react";
 import type { OutboxMessage, OutboxState } from "@unhalteproblem.de/api";
 import { RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { AsyncView } from "#api/AsyncView.tsx";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { cn } from "#lib/cn.ts";
 import { formatDateTime } from "#lib/format.ts";
 import { Badge } from "#ui/Badge.tsx";
 import { Button } from "#ui/Button.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
 import { Table, Td, Th } from "#ui/Table.tsx";
-import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 import {
   auditKey,
@@ -79,23 +77,19 @@ export function OutboxPage() {
 }
 
 function Row({ message }: { readonly message: OutboxMessage }) {
-  const retry = useAtomSet(retryOutboxMessage, { mode: "promiseExit" });
-  const toast = useToast();
-  const [pending, setPending] = useState(false);
+  const retry = useAction(retryOutboxMessage, {
+    success: "Retrying now.",
+    errors: {
+      OutboxMessageNotFound: "The message is gone: it was handled meanwhile.",
+    },
+  });
   const failing = message.deadAt !== null || message.attempts > 0;
 
-  const onRetry = async () => {
-    setPending(true);
-    const exit = await retry({
+  const onRetry = () =>
+    retry.run({
       params: { messageId: message.id },
       reactivityKeys: [outboxKey, auditKey],
     });
-    setPending(false);
-    const error = failureMessage(exit, {
-      OutboxMessageNotFound: "The message is gone: it was handled meanwhile.",
-    });
-    toast(error === undefined ? "success" : "error", error ?? "Retrying now.");
-  };
 
   return (
     <tr className="hover:bg-surface-2/50">
@@ -127,7 +121,7 @@ function Row({ message }: { readonly message: OutboxMessage }) {
           <Button
             size="sm"
             variant="ghost"
-            loading={pending}
+            loading={retry.pending}
             icon={<RotateCcw size={14} />}
             onClick={onRetry}
           >

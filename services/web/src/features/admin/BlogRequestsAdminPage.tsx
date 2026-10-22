@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import {
   type AdminBlogRequest,
   BlogRequestLimits,
@@ -6,13 +5,13 @@ import {
   BlogSlug,
   BlogSlugMaxLength,
 } from "@unhalteproblem.de/api";
-import { Exit, Option, Schema } from "effect";
+import { Option, Schema } from "effect";
 import { Check, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { ApiClient } from "#api/ApiClient.ts";
 import { AsyncView } from "#api/AsyncView.tsx";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { blogsKey } from "#features/blog/blogAtoms.ts";
 import { blogRequestsKey } from "#features/blog/blogRequestAtoms.ts";
 import { BlogRequestStatusBadge } from "#features/blog/BlogRequestStatusBadge.tsx";
@@ -24,7 +23,6 @@ import { Card } from "#ui/Card.tsx";
 import { Dialog } from "#ui/Dialog.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
 import { Field, Input, Textarea } from "#ui/Field.tsx";
-import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 import { usersKey } from "./adminAtoms.ts";
 import { auditKey } from "./insightsAtoms.ts";
@@ -145,55 +143,49 @@ function RequestCard({ request }: { readonly request: AdminBlogRequest }) {
   );
 }
 
+const decisionErrors = {
+  BlogRequestNotPending: "It has been decided or withdrawn meanwhile.",
+  BlogRequestNotFound: "This request doesn't exist anymore.",
+  BlogSlugTaken: "A blog with this slug exists already.",
+  UserNotFound: "The user has deleted their account.",
+  Forbidden: "You can't decide your own request.",
+};
+
 function Decision({ request }: { readonly request: AdminBlogRequest }) {
-  const approve = useAtomSet(approveRequest, { mode: "promiseExit" });
-  const reject = useAtomSet(rejectRequest, { mode: "promiseExit" });
-  const toast = useToast();
+  const approve = useAction(approveRequest, { errors: decisionErrors });
+  const reject = useAction(rejectRequest, {
+    success: "Rejected.",
+    errors: decisionErrors,
+  });
   const [slug, setSlug] = useState(() =>
     slugify(request.title, BlogSlugMaxLength),
   );
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
-  const [pending, setPending] = useState(false);
+  const pending = approve.pending || reject.pending;
   const validSlug = Option.isSome(decodeSlug(slug));
-
-  const messages = {
-    BlogRequestNotPending: "It has been decided or withdrawn meanwhile.",
-    BlogRequestNotFound: "This request doesn't exist anymore.",
-    BlogSlugTaken: "A blog with this slug exists already.",
-    UserNotFound: "The user has deleted their account.",
-    Forbidden: "You can't decide your own request.",
-  };
 
   const onApprove = async (event: FormEvent) => {
     event.preventDefault();
     if (!validSlug) return;
-    setPending(true);
-    const exit = await approve({
-      params: { requestId: request.id },
-      payload: { slug },
-      reactivityKeys: decided,
-    });
-    setPending(false);
-    const error = failureMessage(exit, messages);
-    toast(
-      error === undefined ? "success" : "error",
-      error ?? `Created ${slug}.`,
+    await approve.run(
+      {
+        params: { requestId: request.id },
+        payload: { slug },
+        reactivityKeys: decided,
+      },
+      { success: `Created ${slug}.` },
     );
   };
 
   const onReject = async () => {
-    setPending(true);
     const trimmed = reason.trim();
-    const exit = await reject({
+    const error = await reject.run({
       params: { requestId: request.id },
       payload: trimmed === "" ? {} : { reason: trimmed },
       reactivityKeys: decided,
     });
-    setPending(false);
-    const error = failureMessage(exit, messages);
-    toast(error === undefined ? "success" : "error", error ?? "Rejected.");
-    if (Exit.isSuccess(exit)) setRejecting(false);
+    if (error === undefined) setRejecting(false);
   };
 
   return (

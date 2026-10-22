@@ -1,19 +1,16 @@
-import { useAtomSet } from "@effect/atom-react";
 import type {
   ContactMessageCursor,
   ReceivedContactMessage,
 } from "@unhalteproblem.de/api";
-import { Exit } from "effect";
 import { Mail, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { AsyncView } from "#api/AsyncView.tsx";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { formatDateTime } from "#lib/format.ts";
 import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { Dialog } from "#ui/Dialog.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
-import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 import {
   auditKey,
@@ -72,25 +69,18 @@ function MessageCard({
 }: {
   readonly message: ReceivedContactMessage;
 }) {
-  const remove = useAtomSet(deleteContactMessage, { mode: "promiseExit" });
-  const toast = useToast();
+  const remove = useAction(deleteContactMessage, {
+    success: "Message deleted.",
+    errors: { ContactMessageNotFound: "It was deleted already." },
+  });
   const [confirm, setConfirm] = useState(false);
-  const [pending, setPending] = useState(false);
 
   const onDelete = async () => {
-    setPending(true);
-    const exit = await remove({
+    await remove.run({
       params: { messageId: message.id },
       reactivityKeys: [inboxKey, auditKey],
     });
-    setPending(false);
     setConfirm(false);
-    toast(
-      Exit.isSuccess(exit) ? "success" : "error",
-      failureMessage(exit, {
-        ContactMessageNotFound: "It was deleted already.",
-      }) ?? "Message deleted.",
-    );
   };
 
   return (
@@ -132,7 +122,11 @@ function MessageCard({
             <Button variant="ghost" onClick={() => setConfirm(false)}>
               Cancel
             </Button>
-            <Button variant="danger" loading={pending} onClick={onDelete}>
+            <Button
+              variant="danger"
+              loading={remove.pending}
+              onClick={onDelete}
+            >
               Delete
             </Button>
           </>

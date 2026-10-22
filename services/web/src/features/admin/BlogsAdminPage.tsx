@@ -1,17 +1,16 @@
-import { useAtomSet } from "@effect/atom-react";
 import {
   type Blog,
   BlogLimits,
   BlogSlug,
   BlogSlugMaxLength,
 } from "@unhalteproblem.de/api";
-import { Exit, Option, Schema } from "effect";
+import { Option, Schema } from "effect";
 import { Check, Pencil, Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { ApiClient } from "#api/ApiClient.ts";
 import { AsyncView } from "#api/AsyncView.tsx";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import {
   blogsAtom,
   blogsKey,
@@ -29,7 +28,6 @@ import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
 import { Field, Input, Textarea } from "#ui/Field.tsx";
-import { useToast } from "#ui/toasts.ts";
 import { AdminHeading } from "./AdminHeading.tsx";
 
 const createBlog = ApiClient.mutation("admin", "createBlog");
@@ -70,12 +68,12 @@ export function BlogsAdminPage() {
 }
 
 function CreateBlogForm() {
-  const create = useAtomSet(createBlog, { mode: "promiseExit" });
-  const toast = useToast();
+  const create = useAction(createBlog, {
+    errors: { BlogSlugTaken: "A blog with this slug exists already." },
+  });
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState<string>();
   const [description, setDescription] = useState("");
-  const [pending, setPending] = useState(false);
   const [categories, setCategories] =
     useState<CategoryChoice>(initialCategories);
   const chosen = categoriesInput(categories.main, categories.extra);
@@ -85,25 +83,19 @@ function CreateBlogForm() {
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!validSlug || typeof chosen === "string") return;
-    setPending(true);
-    const exit = await create({
-      payload: {
-        slug: effectiveSlug,
-        title: title.trim(),
-        description: description.trim(),
-        categories: chosen,
+    const error = await create.run(
+      {
+        payload: {
+          slug: effectiveSlug,
+          title: title.trim(),
+          description: description.trim(),
+          categories: chosen,
+        },
+        reactivityKeys: [blogsKey, categoriesKey],
       },
-      reactivityKeys: [blogsKey, categoriesKey],
-    });
-    setPending(false);
-    const error = failureMessage(exit, {
-      BlogSlugTaken: "A blog with this slug exists already.",
-    });
-    toast(
-      error === undefined ? "success" : "error",
-      error ?? `Created ${effectiveSlug}.`,
+      { success: `Created ${effectiveSlug}.` },
     );
-    if (Exit.isSuccess(exit)) {
+    if (error === undefined) {
       setTitle("");
       setSlug(undefined);
       setDescription("");
@@ -164,7 +156,7 @@ function CreateBlogForm() {
         <Button
           type="submit"
           variant="primary"
-          loading={pending}
+          loading={create.pending}
           disabled={typeof chosen === "string"}
           icon={<Plus size={15} />}
         >
@@ -176,25 +168,19 @@ function CreateBlogForm() {
 }
 
 function BlogRow({ blog }: { readonly blog: Blog }) {
-  const update = useAtomSet(updateBlog, { mode: "promiseExit" });
-  const toast = useToast();
+  const update = useAction(updateBlog, { success: "Saved." });
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(blog.title);
   const [description, setDescription] = useState(blog.description);
-  const [pending, setPending] = useState(false);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setPending(true);
-    const exit = await update({
+    const error = await update.run({
       params: { blog: blog.slug },
       payload: { title: title.trim(), description: description.trim() },
       reactivityKeys: [blogsKey, blogKey(blog.slug)],
     });
-    setPending(false);
-    const error = failureMessage(exit);
-    toast(error === undefined ? "success" : "error", error ?? "Saved.");
-    if (Exit.isSuccess(exit)) setEditing(false);
+    if (error === undefined) setEditing(false);
   };
 
   return (
@@ -228,7 +214,7 @@ function BlogRow({ blog }: { readonly blog: Blog }) {
               type="submit"
               size="sm"
               variant="primary"
-              loading={pending}
+              loading={update.pending}
               icon={<Check size={14} />}
             >
               Save

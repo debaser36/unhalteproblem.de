@@ -1,11 +1,9 @@
-import { useAtomSet } from "@effect/atom-react";
 import { ContactMessageLimits } from "@unhalteproblem.de/api";
 import { staticPages } from "@unhalteproblem.de/seo";
-import { Exit } from "effect";
 import { Mail, Send } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ApiClient } from "#api/ApiClient.ts";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { Seo } from "#app/Seo.tsx";
 import { Alert } from "#ui/Alert.tsx";
 import { Button } from "#ui/Button.tsx";
@@ -17,37 +15,34 @@ import { PageHeader } from "#ui/PageHeader.tsx";
 const submitContact = ApiClient.mutation("contact", "submit");
 
 export function ContactPage() {
-  const submit = useAtomSet(submitContact, { mode: "promiseExit" });
+  const submit = useAction(submitContact, {
+    errors: {
+      RateLimited:
+        "You have sent several messages already. Please try again in an hour.",
+    },
+  });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const [sent, setSent] = useState(false);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setPending(true);
     setError(undefined);
     // The contract accepts trimmed values only.
-    const exit = await submit({
+    const failure = await submit.run({
       payload: {
         name: name.trim(),
         email: email.trim(),
         message: message.trim(),
       },
     });
-    setPending(false);
-    if (Exit.isSuccess(exit)) {
+    if (failure === undefined) {
       setSent(true);
       setMessage("");
     } else {
-      setError(
-        failureMessage(exit, {
-          RateLimited:
-            "You have sent several messages already. Please try again in an hour.",
-        }),
-      );
+      setError(failure);
     }
   };
 
@@ -124,7 +119,7 @@ export function ContactPage() {
               <Button
                 type="submit"
                 variant="primary"
-                loading={pending}
+                loading={submit.pending}
                 icon={<Send size={15} />}
               >
                 Send

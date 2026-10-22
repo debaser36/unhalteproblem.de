@@ -1,12 +1,10 @@
-import { useAtomSet } from "@effect/atom-react";
 import type { Blog, BlogSlug } from "@unhalteproblem.de/api";
 import { Check } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { failureMessage } from "#api/errors.ts";
+import { useAction } from "#api/useAction.ts";
 import { categoriesInput } from "#lib/categories.ts";
 import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
-import { useToast } from "#ui/toasts.ts";
 import {
   blogKey,
   blogsKey,
@@ -25,10 +23,8 @@ export function BlogCategoriesCard({
   readonly blog: BlogSlug;
   readonly info: Blog;
 }) {
-  const save = useAtomSet(setBlogCategories, { mode: "promiseExit" });
-  const toast = useToast();
+  const save = useAction(setBlogCategories, { success: "Saved." });
   const [choice, setChoice] = useState<CategoryChoice>();
-  const [pending, setPending] = useState(false);
   const chosen =
     choice === undefined
       ? undefined
@@ -37,15 +33,11 @@ export function BlogCategoriesCard({
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (chosen === undefined || typeof chosen === "string") return;
-    setPending(true);
-    const exit = await save({
+    const error = await save.run({
       params: { blog },
       payload: chosen,
       reactivityKeys: [blogKey(blog), blogsKey, feedKey, categoriesKey],
     });
-    setPending(false);
-    const error = failureMessage(exit);
-    toast(error === undefined ? "success" : "error", error ?? "Saved.");
     if (error === undefined) setChoice(undefined);
   };
 
@@ -83,7 +75,7 @@ export function BlogCategoriesCard({
               type="submit"
               size="sm"
               variant="primary"
-              loading={pending}
+              loading={save.pending}
               disabled={typeof chosen === "string"}
               icon={<Check size={14} />}
             >
