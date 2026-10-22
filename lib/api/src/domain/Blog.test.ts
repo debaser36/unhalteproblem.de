@@ -7,6 +7,7 @@ import {
   CreateBlogPayload,
   PostCursor,
   PostCursorMaxLength,
+  type PostCursorPosition,
   PostId,
   PostInput,
   PostPageLimits,
@@ -15,6 +16,7 @@ import {
   UpdatePostPayload,
 } from "./Blog.ts";
 import { emptyDocument } from "./Document.ts";
+import { UserId } from "./UserId.ts";
 
 describe("BlogSlug", () => {
   const decode = Schema.decodeUnknownExit(BlogSlug);
@@ -74,6 +76,7 @@ const postInput: typeof PostInput.Encoded = {
   summary: "",
   tags: ["rust", "type-systems"],
   coverImage: null,
+  categories: { main: "Programming", extra: ["Web Development"] },
   content: emptyDocument,
 };
 
@@ -134,7 +137,12 @@ describe("PostInput", () => {
 describe("Blog payloads", () => {
   it("validate title and description", () => {
     const decode = Schema.decodeUnknownExit(CreateBlogPayload);
-    const ok = { slug: "rust-notes", title: "Rust notes", description: "" };
+    const ok = {
+      slug: "rust-notes",
+      title: "Rust notes",
+      description: "",
+      categories: { main: "Programming", extra: [] },
+    };
     assert.isTrue(Exit.isSuccess(decode(ok)));
     for (const bad of [
       { ...ok, title: "" },
@@ -142,6 +150,7 @@ describe("Blog payloads", () => {
       { ...ok, description: " x" },
       { ...ok, description: "d".repeat(1001) },
       { ...ok, slug: "Rust" },
+      { slug: "rust-notes", title: "Rust notes", description: "" },
     ]) {
       assert.isTrue(Exit.isFailure(decode(bad)));
     }
@@ -157,36 +166,68 @@ describe("Blog payloads", () => {
 });
 
 describe("PostCursor", () => {
-  const position = {
-    publishedAt: DateTime.makeUnsafe("2026-07-04T08:09:10.123Z"),
-    id: PostId.make(postId),
-  };
+  const publishedAt = DateTime.makeUnsafe("2026-07-04T08:09:10.123Z");
+  const millis = DateTime.toEpochMillis(publishedAt);
+  const id = PostId.make(postId);
+  const base64Url = (text: string) =>
+    btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  const unBase64Url = (text: string) =>
+    atob(text.replaceAll("-", "+").replaceAll("_", "/"));
 
-  it("round-trips in both directions", () => {
+  const cases: ReadonlyArray<[PostCursorPosition, string]> = [
+    [{ sort: "newest", publishedAt, id }, `["n",${millis},"${postId}"]`],
+    [{ sort: "oldest", publishedAt, id }, `["o",${millis},"${postId}"]`],
+    [
+      { sort: "updated", updatedAt: publishedAt, id },
+      `["u",${millis},"${postId}"]`,
+    ],
+    [{ sort: "title", title: "Hello", id }, `["t","Hello","${postId}"]`],
+    [{ sort: "readingTime", words: 420, id }, `["r",420,"${postId}"]`],
+    [
+      { sort: "category", category: "Security", publishedAt, id },
+      `["c","Security",${millis},"${postId}"]`,
+    ],
+    [
+      { sort: "author", author: "Ada", publishedAt, id },
+      `["a","Ada",${millis},"${postId}"]`,
+    ],
+    [
+      { sort: "author", author: null, publishedAt, id },
+      `["a",null,${millis},"${postId}"]`,
+    ],
+  ];
+
+  it.each(cases)("round-trips %j", (position, json) => {
     const encoded = Schema.encodeSync(PostCursor)(position);
     assert.match(encoded, /^[A-Za-z0-9_-]+$/);
     assert.isAtMost(encoded.length, PostCursorMaxLength);
+    assert.strictEqual(unBase64Url(encoded), json);
     assert.deepStrictEqual(Schema.decodeSync(PostCursor)(encoded), position);
-    assert.strictEqual(
-      Schema.encodeSync(PostCursor)(Schema.decodeSync(PostCursor)(encoded)),
-      encoded,
-    );
-    assert.strictEqual(
-      atob(encoded.replaceAll("-", "+").replaceAll("_", "/")),
-      `[${DateTime.toEpochMillis(position.publishedAt)},"${postId}"]`,
-    );
+  });
+
+  it("fits the longest title in the limit", () => {
+    const title = "ä".repeat(BlogLimits.postTitleMaxLength);
+    const encoded = Schema.encodeSync(PostCursor)({
+      sort: "title",
+      title,
+      id,
+    });
+    assert.isAtMost(encoded.length, PostCursorMaxLength);
   });
 
   it("rejects malformed cursors", () => {
     const decode = Schema.decodeUnknownExit(PostCursor);
-    const base64Url = (text: string) =>
-      btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
     for (const bad of [
       "",
       "not*base64url",
       base64Url("[]"),
-      base64Url(`[1767268800000,"not-a-uuid"]`),
-      base64Url(`["yesterday","${postId}"]`),
+      base64Url(`[1767268800000,"${postId}"]`),
+      base64Url(`["n",1767268800000,"not-a-uuid"]`),
+      base64Url(`["n","yesterday","${postId}"]`),
+      base64Url(`["x",1767268800000,"${postId}"]`),
+      base64Url(`["r",-1,"${postId}"]`),
+      base64Url(`["r",1.5,"${postId}"]`),
+      base64Url(`["c",1,1767268800000,"${postId}"]`),
       "A".repeat(PostCursorMaxLength + 1),
     ]) {
       assert.isTrue(Exit.isFailure(decode(bad)), bad);
@@ -196,21 +237,59 @@ describe("PostCursor", () => {
 
 describe("PostPageQuery", () => {
   const decode = Schema.decodeUnknownExit(PostPageQuery);
+  const newestCursor = Schema.encodeSync(PostCursor)({
+    sort: "newest",
+    publishedAt: DateTime.makeUnsafe("2026-07-04T08:09:10.123Z"),
+    id: PostId.make(postId),
+  });
+  const authorId = "0b9c8d7e-6f5a-4b3c-8d2e-1a8f7e6d5c4b";
 
-  it("fills in the default limit and keeps the tag", () => {
+  it("fills in the default limit and sort and keeps the filters", () => {
     assert.deepStrictEqual(
       decode({}),
-      Exit.succeed({ limit: PostPageLimits.defaultLimit }),
+      Exit.succeed({ limit: PostPageLimits.defaultLimit, sort: "newest" }),
     );
     assert.deepStrictEqual(
-      decode({ limit: 50, tag: "rust" }),
-      Exit.succeed({ limit: 50, tag: "rust" }),
+      decode({
+        limit: 50,
+        sort: "title",
+        tag: "rust",
+        category: "web-development",
+        author: authorId,
+      }),
+      Exit.succeed({
+        limit: 50,
+        sort: "title",
+        tag: "rust",
+        category: "web-development",
+        author: UserId.make(authorId),
+      }),
     );
   });
 
-  it("rejects limits out of range and invalid tags", () => {
-    for (const bad of [{ limit: 0 }, { limit: 51 }, { tag: "Rust" }]) {
+  it("rejects limits out of range, unknown sorts and invalid filters", () => {
+    for (const bad of [
+      { limit: 0 },
+      { limit: 51 },
+      { tag: "Rust" },
+      { sort: "random" },
+      { category: "Web Development" },
+      { author: "ada" },
+    ]) {
       assert.isTrue(Exit.isFailure(decode(bad)));
     }
+  });
+
+  it("requires the cursor to match the sort", () => {
+    assert.isTrue(Exit.isSuccess(decode({ cursor: newestCursor })));
+    assert.isTrue(
+      Exit.isSuccess(decode({ cursor: newestCursor, sort: "newest" })),
+    );
+    assert.isTrue(
+      Exit.isFailure(decode({ cursor: newestCursor, sort: "oldest" })),
+    );
+    assert.isTrue(
+      Exit.isFailure(decode({ cursor: newestCursor, sort: "title" })),
+    );
   });
 });

@@ -119,6 +119,10 @@ describe("admin insights endpoints in the OpenAPI document", () => {
         "project_deleted",
         "blog_request_approved",
         "blog_request_rejected",
+        "category_created",
+        "category_renamed",
+        "category_merged",
+        "category_deleted",
       ],
     );
     for (const name of ["AuditLogEntryId", "OutboxMessageId"]) {

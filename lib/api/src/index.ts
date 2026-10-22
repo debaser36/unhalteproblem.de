@@ -89,7 +89,7 @@ export {
   PostAuthor,
   PostCursor,
   PostCursorMaxLength,
-  type PostCursorPosition,
+  PostCursorPosition,
   PostId,
   PostInput,
   PostListItem,
@@ -97,6 +97,7 @@ export {
   PostPageLimits,
   PostPageQuery,
   PostSlug,
+  PostSort,
   PostStatus,
   PostSummary,
   PostTags,
@@ -107,6 +108,20 @@ export {
   UpdateBlogPayload,
   UpdatePostPayload,
 } from "#domain/Blog";
+export {
+  Categories,
+  CategoriesInput,
+  Category,
+  CategoryLimits,
+  CategoryName,
+  CategoryRef,
+  CategorySlug,
+  categorySlugOf,
+  DefaultCategorySlug,
+  MergeCategoryPayload,
+  PresetCategories,
+  RenameCategoryPayload,
+} from "#domain/Category";
 export {
   AdminBlogRequest,
   AdminBlogRequestQuery,
@@ -206,6 +221,10 @@ export { BlogRequestAlreadyPending } from "#errors/BlogRequestAlreadyPending";
 export { BlogRequestNotFound } from "#errors/BlogRequestNotFound";
 export { BlogRequestNotPending } from "#errors/BlogRequestNotPending";
 export { BlogSlugTaken } from "#errors/BlogSlugTaken";
+export { CategoryInUse } from "#errors/CategoryInUse";
+export { CategoryMergeIntoSelf } from "#errors/CategoryMergeIntoSelf";
+export { CategoryNameTaken } from "#errors/CategoryNameTaken";
+export { CategoryNotFound } from "#errors/CategoryNotFound";
 export { ContactMessageNotFound } from "#errors/ContactMessageNotFound";
 export { Forbidden } from "#errors/Forbidden";
 export { InvalidUpload } from "#errors/InvalidUpload";

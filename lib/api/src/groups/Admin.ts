@@ -16,9 +16,19 @@ import {
   CreateBlogPayload,
   UpdateBlogPayload,
 } from "#domain/Blog";
+import {
+  Category,
+  MergeCategoryPayload,
+  RenameCategoryPayload,
+  CategorySlug,
+} from "#domain/Category";
 import { AlreadyRestricted } from "#errors/AlreadyRestricted";
 import { BlogNotFound } from "#errors/BlogNotFound";
 import { BlogSlugTaken } from "#errors/BlogSlugTaken";
+import { CategoryInUse } from "#errors/CategoryInUse";
+import { CategoryMergeIntoSelf } from "#errors/CategoryMergeIntoSelf";
+import { CategoryNameTaken } from "#errors/CategoryNameTaken";
+import { CategoryNotFound } from "#errors/CategoryNotFound";
 import { NotRestricted } from "#errors/NotRestricted";
 import { RestrictionNotAllowed } from "#errors/RestrictionNotAllowed";
 import { RoleChangeNotAllowed } from "#errors/RoleChangeNotAllowed";
@@ -31,6 +41,9 @@ import {
   HttpApiSchema,
   OpenApi,
 } from "effect/http-api";
+
+/** Path parameters of the endpoints for one category. */
+const CategoryParams = { category: CategorySlug };
 
 /** Requires `admin`: user administration (listing, restrictions) and subblogs. */
 export const RequireAdmin = RequireRoles("admin");
@@ -245,7 +258,7 @@ export class AdminGroup extends HttpApiGroup.make("admin")
             "part of the subblog's URLs and of its editor role " +
             "`blogEditor:<slug>`, which superAdmins grant with " +
             "`grantRole`. Answers 409 `BlogSlugTaken` if a subblog with the " +
-            "slug exists.",
+            "slug exists. Takes the subblog's categories by name.",
         }),
       ),
     HttpApiEndpoint.patch("updateBlog", "/admin/blogs/:blog", {
@@ -266,6 +279,67 @@ export class AdminGroup extends HttpApiGroup.make("admin")
             "unknown slug.",
         }),
       ),
+    HttpApiEndpoint.patch("renameCategory", "/admin/categories/:category", {
+      params: CategoryParams,
+      payload: RenameCategoryPayload,
+      success: Category,
+      error: [CategoryNotFound, CategoryNameTaken],
+    })
+      .middleware(RequireAdmin)
+      .middleware(SameOrigin)
+      .annotateMerge(
+        OpenApi.annotations({
+          summary: "Rename a category",
+          description:
+            "Requires `admin` and a same-origin request. Sets the " +
+            "category's name; its slug changes to the slug derived from the " +
+            "new name, and blogs and posts keep the category. Answers the " +
+            "category. Answers 404 `CategoryNotFound` for an unknown slug " +
+            "and 409 `CategoryNameTaken` if the new name's slug belongs " +
+            "to another category (merge them instead).",
+        }),
+      ),
+    HttpApiEndpoint.post("mergeCategory", "/admin/categories/:category/merge", {
+      params: CategoryParams,
+      payload: MergeCategoryPayload,
+      success: Category,
+      error: [CategoryNotFound, CategoryMergeIntoSelf],
+    })
+      .middleware(RequireAdmin)
+      .middleware(SameOrigin)
+      .annotateMerge(
+        OpenApi.annotations({
+          summary: "Merge a category into another",
+          description:
+            "Requires `admin` and a same-origin request. Every blog and " +
+            "post using the category in the path (the source) uses `into` " +
+            "(the target) instead; duplicates are dropped, and a source " +
+            "main category stays the main one. The source is deleted. " +
+            "Answers the target. Answers 404 `CategoryNotFound` if the " +
+            "source or the target does not exist (`category` is the " +
+            "missing slug) and 409 `CategoryMergeIntoSelf` if both are " +
+            "the same.",
+        }),
+      ),
+    HttpApiEndpoint.delete("deleteCategory", "/admin/categories/:category", {
+      params: CategoryParams,
+      success: HttpApiSchema.NoContent.annotate({
+        description: "The category is deleted.",
+      }),
+      error: [CategoryNotFound, CategoryInUse],
+    })
+      .middleware(RequireAdmin)
+      .middleware(SameOrigin)
+      .annotateMerge(
+        OpenApi.annotations({
+          summary: "Delete a category",
+          description:
+            "Requires `admin` and a same-origin request. Deletes an unused " +
+            "category. Answers 404 `CategoryNotFound` for an unknown slug " +
+            "and 409 `CategoryInUse` with the numbers of blogs and posts " +
+            "(drafts included) still having it; merge it first.",
+        }),
+      ),
   )
   // Protects every endpoint above; added after them, so it runs before
   // their role middlewares and answers 401 before any 403.
@@ -275,7 +349,8 @@ export class AdminGroup extends HttpApiGroup.make("admin")
       title: "Admin",
       description:
         "User and subblog administration. Admins list users, restrict or " +
-        "lift restrictions, and create and rename subblogs; superAdmins " +
+        "lift restrictions, create and rename subblogs, and rename, merge " +
+        "and delete categories; superAdmins " +
         "grant and revoke roles. Every change to a user is recorded with " +
         "who made it and when.",
     }),

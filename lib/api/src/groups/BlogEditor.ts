@@ -1,6 +1,7 @@
 import { Authentication } from "#Authentication";
 import { RequireBlogEditor } from "#Authorization";
 import {
+  Blog,
   BlogSlug,
   ManagedPost,
   ManagedPostListItem,
@@ -8,6 +9,7 @@ import {
   PostInput,
   UpdatePostPayload,
 } from "#domain/Blog";
+import { CategoriesInput } from "#domain/Category";
 import { BlogNotFound } from "#errors/BlogNotFound";
 import { Forbidden } from "#errors/Forbidden";
 import { PostEditConflict } from "#errors/PostEditConflict";
@@ -116,7 +118,8 @@ export class BlogEditorGroup extends HttpApiGroup.make("blogEditor")
           description:
             editorRule +
             " Requires a same-origin request. Creates a draft (version 1) " +
-            "authored by the caller and answers 201 with it. Answers 409 " +
+            "authored by the caller and answers 201 with it. Category names " +
+            "that match no category create new ones. Answers 409 " +
             "`PostSlugTaken` if another post of the subblog has the slug, " +
             "and 404 `BlogNotFound` if the subblog does not exist.",
         }),
@@ -136,7 +139,8 @@ export class BlogEditorGroup extends HttpApiGroup.make("blogEditor")
             editorRule +
             " Requires a same-origin request. Replaces the post's editable " +
             "fields, keeps its status, increments `version` and answers " +
-            "with the saved post. Optimistic locking: `version` must be " +
+            "with the saved post. Category names that match no category " +
+            "create new ones. Optimistic locking: `version` must be " +
             "the post's current version (the one the edit started from); " +
             "otherwise nothing is saved and it answers 409 " +
             "`PostEditConflict` with the current version. Answers 409 " +
@@ -202,6 +206,26 @@ export class BlogEditorGroup extends HttpApiGroup.make("blogEditor")
             " Requires a same-origin request. Deletes the post, draft or " +
             "published, irreversibly. Its images stay. Answers 404 " +
             "`PostNotFound` for an unknown id.",
+        }),
+      ),
+    HttpApiEndpoint.put("setBlogCategories", "/blogs/:blog/manage/categories", {
+      params: BlogParams,
+      payload: CategoriesInput,
+      success: Blog,
+      error: [Forbidden, BlogNotFound],
+    })
+      .middleware(SameOrigin)
+      .annotateMerge(
+        OpenApi.annotations({
+          summary: "Set the categories of a subblog",
+          description:
+            editorRule +
+            " Requires a same-origin request. Replaces the subblog's main " +
+            "and extra categories and answers with the subblog. Categories " +
+            "are given by name and matched by their derived slug; a name " +
+            "that matches no category creates a new one, visible to " +
+            "everyone at once. Answers 404 `BlogNotFound` if the subblog " +
+            "does not exist.",
         }),
       ),
     HttpApiEndpoint.post("uploadMedia", "/blogs/:blog/manage/media", {

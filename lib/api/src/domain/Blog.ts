@@ -1,8 +1,10 @@
+import { Categories, CategoriesInput, CategorySlug } from "#domain/Category";
 import { Document } from "#domain/Document";
 import { IsoDateTimeUtc } from "#domain/IsoDateTimeUtc";
 import { MediaId } from "#domain/Media";
 import { noNul, slugString } from "#domain/Text";
-import { type DateTime, Effect, Schema, SchemaGetter } from "effect";
+import { UserId } from "#domain/UserId";
+import { Effect, Schema, SchemaGetter } from "effect";
 
 /** Length limit of `BlogSlug`. */
 export const BlogSlugMaxLength = 64;
@@ -80,6 +82,8 @@ export const Blog = Schema.Struct({
   postCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   /** `publishedAt` of the newest published post; `null` without posts. */
   latestPostAt: Schema.NullOr(IsoDateTimeUtc),
+  /** The main category and up to three extra ones. */
+  categories: Categories,
 }).annotate({
   identifier: "Blog",
   description:
@@ -94,6 +98,8 @@ export const CreateBlogPayload = Schema.Struct({
   slug: BlogSlug,
   title: BlogTitle,
   description: BlogDescription,
+  /** Names of the categories; unknown names create new categories. */
+  categories: CategoriesInput,
 }).annotate({ identifier: "CreateBlogPayload" });
 export type CreateBlogPayload = typeof CreateBlogPayload.Type;
 
@@ -199,6 +205,11 @@ export type PostVersion = typeof PostVersion.Type;
 /** Who wrote a post. */
 export const PostAuthor = Schema.Struct({
   /**
+   * The author's user id, to filter posts by author; `null` if the
+   * account has been deleted.
+   */
+  id: Schema.NullOr(UserId),
+  /**
    * The display name (the full name, else the username); `null` if the
    * account has been deleted or has neither.
    */
@@ -225,6 +236,7 @@ export const PostListItem = Schema.Struct({
   author: PostAuthor,
   /** Estimated reading time in whole minutes. */
   readingMinutes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  categories: Categories,
 }).annotate({
   identifier: "PostListItem",
   description: "A published post without its content, for lists.",
@@ -260,6 +272,7 @@ const managedPostFields = {
   /** The version to send back with `updatePost`. */
   version: PostVersion,
   author: PostAuthor,
+  categories: Categories,
 };
 
 /** A post of any status as its editors see it, without content. */
@@ -288,6 +301,8 @@ const postInputFields = {
   summary: PostSummary,
   tags: PostTags,
   coverImage: Schema.NullOr(MediaId),
+  /** Names of the categories; unknown names create new categories. */
+  categories: CategoriesInput,
   content: Document,
 };
 
@@ -323,62 +338,207 @@ export const PostPageLimits = {
 } as const;
 
 /**
- * Longest accepted encoded `PostCursor`. A real cursor is about 70
- * characters (`[<epoch millis>,"<uuid>"]` in base64url), like `UserCursor`.
+ * The order of a post list. Every order ends with `id` as the tie breaker,
+ * so pages never overlap or skip posts.
+ *
+ * - `newest`: `publishedAt` descending (the default);
+ * - `oldest`: `publishedAt` ascending;
+ * - `updated`: `updatedAt` descending (last updated first);
+ * - `title`: title A to Z;
+ * - `readingTime`: shortest first (by the number of words);
+ * - `category`: name of the main category A to Z, then newest;
+ * - `author`: display name of the author A to Z, deleted or unknown
+ *   authors last, then newest.
  */
-export const PostCursorMaxLength = 128;
-
-/** Decoded form of `PostCursor`: the position of one post in the order. */
-export interface PostCursorPosition {
-  /** `publishedAt` of the post, at millisecond precision. */
-  readonly publishedAt: DateTime.Utc;
-  readonly id: PostId;
-}
+export const PostSort = Schema.Literals([
+  "newest",
+  "oldest",
+  "updated",
+  "title",
+  "readingTime",
+  "category",
+  "author",
+]).annotate({
+  identifier: "PostSort",
+  description:
+    "The order of a post list: `newest` (default) and `oldest` by " +
+    "publication time, `updated` (last updated first), `title` (A to Z), " +
+    "`readingTime` (shortest first), `category` (main category name A to " +
+    "Z, then newest) and `author` (author name A to Z, deleted or unknown " +
+    "authors last, then newest). Ties are broken by post id.",
+});
+export type PostSort = typeof PostSort.Type;
 
 /**
- * Position in a list of published posts: the `publishedAt` and `id` of the
+ * Longest accepted encoded `PostCursor`. The cursor holds the sort keys of
+ * one post as JSON: a title of at most 200 UTF-16 units (3 UTF-8 bytes per
+ * unit at most, 6 JSON bytes for escaped control characters, so 1200 bytes
+ * in the very worst case), a main category name of at most 48 units, an
+ * author name and a UUID. The base64url form is 4/3 as long, so the worst
+ * title alone needs about 1600 characters; 4096 leaves room for author
+ * names of several hundred characters. Real cursors have 70 to 250
+ * characters.
+ */
+export const PostCursorMaxLength = 4096;
+
+const cursorTime = Schema.DateTimeUtc;
+// Only the Type of `PostId`: the wire tuples below have validated it.
+const cursorId = Schema.toType(PostId);
+const cursorWords = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
+/**
+ * Decoded form of `PostCursor`: the sort and the sort keys of the last post
+ * of a page, tagged by `sort`. Times have millisecond precision.
+ */
+export const PostCursorPosition = Schema.Union([
+  Schema.Struct({
+    sort: Schema.Literals(["newest", "oldest"]),
+    publishedAt: cursorTime,
+    id: cursorId,
+  }),
+  Schema.Struct({
+    sort: Schema.Literal("updated"),
+    updatedAt: cursorTime,
+    id: cursorId,
+  }),
+  Schema.Struct({
+    sort: Schema.Literal("title"),
+    title: Schema.String,
+    id: cursorId,
+  }),
+  Schema.Struct({
+    sort: Schema.Literal("readingTime"),
+    /** Word count of the post, the sort key behind `readingMinutes`. */
+    words: cursorWords,
+    id: cursorId,
+  }),
+  Schema.Struct({
+    sort: Schema.Literal("category"),
+    /** Name of the main category. */
+    category: Schema.String,
+    publishedAt: cursorTime,
+    id: cursorId,
+  }),
+  Schema.Struct({
+    sort: Schema.Literal("author"),
+    /** Display name of the author; `null` for deleted or unknown authors. */
+    author: Schema.NullOr(Schema.String),
+    publishedAt: cursorTime,
+    id: cursorId,
+  }),
+]);
+export type PostCursorPosition = typeof PostCursorPosition.Type;
+
+// The JSON wire form: a tuple tagged by the first element.
+const PostCursorWire = Schema.Union([
+  Schema.Tuple([
+    Schema.Literals(["n", "o"]),
+    Schema.DateTimeUtcFromMillis,
+    PostId,
+  ]),
+  Schema.Tuple([Schema.Literal("u"), Schema.DateTimeUtcFromMillis, PostId]),
+  Schema.Tuple([Schema.Literal("t"), Schema.String, PostId]),
+  Schema.Tuple([Schema.Literal("r"), cursorWords, PostId]),
+  Schema.Tuple([
+    Schema.Literal("c"),
+    Schema.String,
+    Schema.DateTimeUtcFromMillis,
+    PostId,
+  ]),
+  Schema.Tuple([
+    Schema.Literal("a"),
+    Schema.NullOr(Schema.String),
+    Schema.DateTimeUtcFromMillis,
+    PostId,
+  ]),
+]);
+
+/**
+ * Position in a list of published posts: the sort and the sort keys of the
  * last post of a page. Clients treat it as an opaque string and pass
- * `nextCursor` back as `cursor`.
+ * `nextCursor` back as `cursor`, with the same `sort`.
  *
- * Encoded: base64url (no padding) of the JSON array
- * `[publishedAtEpochMillis, postId]`. Decoded: `{ publishedAt, id }`.
- * Anything else fails decoding (400), like `UserCursor`.
+ * Encoded: base64url (no padding) of a JSON array tagged by its first
+ * element, `[<tag>, ...sort keys, postId]`, times as epoch milliseconds:
+ *
+ * - `["n", publishedAt, id]` (`newest`), `["o", publishedAt, id]` (`oldest`)
+ * - `["u", updatedAt, id]` (`updated`)
+ * - `["t", title, id]` (`title`)
+ * - `["r", words, id]` (`readingTime`)
+ * - `["c", mainCategoryName, publishedAt, id]` (`category`)
+ * - `["a", authorName | null, publishedAt, id]` (`author`)
+ *
+ * Decoded: `PostCursorPosition`, `{ sort, ...keys, id }`. Anything else
+ * fails decoding (400), like `UserCursor`.
  */
 export const PostCursor = Schema.String.annotate({
   description:
     "Opaque position in a post list: pass the `nextCursor` of a page as " +
-    "`cursor` to get the next one.",
+    "`cursor` to get the next one, with the same `sort`.",
 }).pipe(
   Schema.check(Schema.isMaxLength(PostCursorMaxLength)),
   Schema.decodeTo(Schema.StringFromBase64Url),
-  Schema.decodeTo(
-    Schema.fromJsonString(Schema.Tuple([Schema.DateTimeUtcFromMillis, PostId])),
-  ),
-  Schema.decodeTo(
-    Schema.Struct({
-      publishedAt: Schema.DateTimeUtc,
-      // Only the Type of `PostId`: the tuple above has validated it.
-      id: Schema.toType(PostId),
+  Schema.decodeTo(Schema.fromJsonString(PostCursorWire)),
+  Schema.decodeTo(PostCursorPosition, {
+    decode: SchemaGetter.transform((wire): PostCursorPosition => {
+      switch (wire[0]) {
+        case "n":
+          return { sort: "newest", publishedAt: wire[1], id: wire[2] };
+        case "o":
+          return { sort: "oldest", publishedAt: wire[1], id: wire[2] };
+        case "u":
+          return { sort: "updated", updatedAt: wire[1], id: wire[2] };
+        case "t":
+          return { sort: "title", title: wire[1], id: wire[2] };
+        case "r":
+          return { sort: "readingTime", words: wire[1], id: wire[2] };
+        case "c":
+          return {
+            sort: "category",
+            category: wire[1],
+            publishedAt: wire[2],
+            id: wire[3],
+          };
+        case "a":
+          return {
+            sort: "author",
+            author: wire[1],
+            publishedAt: wire[2],
+            id: wire[3],
+          };
+      }
     }),
-    {
-      decode: SchemaGetter.transform(([publishedAt, id]) => ({
-        publishedAt,
-        id,
-      })),
-      encode: SchemaGetter.transform(
-        ({ publishedAt, id }) => [publishedAt, id] as const,
-      ),
-    },
-  ),
+    encode: SchemaGetter.transform((position): typeof PostCursorWire.Type => {
+      switch (position.sort) {
+        case "newest":
+          return ["n", position.publishedAt, position.id];
+        case "oldest":
+          return ["o", position.publishedAt, position.id];
+        case "updated":
+          return ["u", position.updatedAt, position.id];
+        case "title":
+          return ["t", position.title, position.id];
+        case "readingTime":
+          return ["r", position.words, position.id];
+        case "category":
+          return ["c", position.category, position.publishedAt, position.id];
+        case "author":
+          return ["a", position.author, position.publishedAt, position.id];
+      }
+    }),
+  }),
   Schema.annotate({ identifier: "PostCursor" }),
 );
 export type PostCursor = typeof PostCursor.Type;
 
 /**
  * Query of the published post lists (`listPosts`, `recentPosts`). Posts are
- * ordered by `publishedAt`, then `id`, descending (newest first). Decoding
- * fills in the default `limit`; in the generated client `limit` is
- * therefore required (pass `PostPageLimits.defaultLimit`).
+ * ordered by `sort` (newest published first by default, see `PostSort`) and
+ * can be filtered by `tag`, `category` (main or extra) and `author`. A
+ * `cursor` only fits the `sort` it was created with: otherwise decoding
+ * fails (400). Decoding fills in the default `limit` and `sort`; in the
+ * generated client both are therefore required (pass
+ * `PostPageLimits.defaultLimit` and `"newest"`).
  */
 export const PostPageQuery = Schema.Struct({
   /** Page size, 1 to 50; 10 by default. */
@@ -394,16 +554,44 @@ export const PostPageQuery = Schema.Struct({
         Effect.succeed(PostPageLimits.defaultLimit),
       ),
     ),
+  /** The order of the list; `newest` by default. */
+  sort: PostSort.annotateKey({
+    description: "The order of the list; `newest` if absent.",
+  }).pipe(Schema.withDecodingDefaultKey(Effect.succeed("newest" as const))),
   /** The `nextCursor` of the previous page; absent for the first page. */
   cursor: Schema.optionalKey(PostCursor).annotateKey({
     description:
-      "The `nextCursor` of the previous page; leave out for the first page.",
+      "The `nextCursor` of the previous page, requested with the same " +
+      "`sort`; leave out for the first page.",
   }),
   /** Only posts with this tag. */
   tag: Schema.optionalKey(Tag).annotateKey({
     description: "Only posts with this tag.",
   }),
-}).annotate({ identifier: "PostPageQuery" });
+  /** Only posts with this category, as main or extra category. */
+  category: Schema.optionalKey(CategorySlug).annotateKey({
+    description:
+      "Only posts having the category with this slug, as main or extra " +
+      "category.",
+  }),
+  /** Only posts by this author. */
+  author: Schema.optionalKey(UserId).annotateKey({
+    description: "Only posts by the author with this user id.",
+  }),
+})
+  .check(
+    Schema.makeFilter<{
+      readonly sort: PostSort;
+      readonly cursor?: PostCursorPosition;
+    }>(
+      ({ sort, cursor }) =>
+        cursor === undefined ||
+        cursor.sort === sort ||
+        "a cursor created with the same sort",
+      { expected: "a `cursor` created with the same `sort`" },
+    ),
+  )
+  .annotate({ identifier: "PostPageQuery" });
 export type PostPageQuery = typeof PostPageQuery.Type;
 
 /** One page of published posts. */
@@ -417,8 +605,8 @@ export const PostPage = Schema.Struct({
 }).annotate({
   identifier: "PostPage",
   description:
-    "One page of published posts, newest first (by `publishedAt`, then " +
-    "`id`). `nextCursor` is the position after the last returned post, or " +
-    "null on the last page.",
+    "One page of published posts in the requested `sort` order (newest " +
+    "first by default). `nextCursor` is the position after the last " +
+    "returned post, or null on the last page.",
 });
 export type PostPage = typeof PostPage.Type;

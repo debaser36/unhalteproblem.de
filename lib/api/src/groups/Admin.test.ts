@@ -51,6 +51,9 @@ const stateChanging = [
   "admin.revokeRole",
   "admin.createBlog",
   "admin.updateBlog",
+  "admin.renameCategory",
+  "admin.mergeCategory",
+  "admin.deleteCategory",
 ];
 
 describe("admin endpoints in the OpenAPI document", () => {
@@ -314,7 +317,13 @@ describe("admin endpoint middleware", () => {
         [...admin, SameOrigin.key].sort(),
       );
     }
-    for (const name of ["admin.createBlog", "admin.updateBlog"]) {
+    for (const name of [
+      "admin.createBlog",
+      "admin.updateBlog",
+      "admin.renameCategory",
+      "admin.mergeCategory",
+      "admin.deleteCategory",
+    ]) {
       assert.deepStrictEqual(
         middlewares.get(name),
         [...admin, SameOrigin.key].sort(),
@@ -391,6 +400,7 @@ const base64Url = (text: string) =>
 
 const missingBlog = "no-such-blog";
 const takenBlog = "taken";
+const miscellaneous = { slug: "miscellaneous", name: "Miscellaneous" };
 const rustNotes: Blog = {
   slug: "rust-notes",
   title: "Rust notes",
@@ -398,6 +408,7 @@ const rustNotes: Blog = {
   createdAt: t0,
   postCount: 0,
   latestPostAt: null,
+  categories: { main: miscellaneous, extra: [] },
 };
 
 // The decoded role of the last `grantRole` call.
@@ -485,13 +496,20 @@ const AdminHandlers = HttpApiBuilder.group(Api, "admin", (handlers) =>
     .handle("createBlog", ({ payload }) =>
       payload.slug === takenBlog
         ? Effect.fail(new BlogSlugTaken({ blog: payload.slug }))
-        : Effect.succeed({ ...rustNotes, ...payload }),
+        : Effect.succeed({
+            ...rustNotes,
+            ...payload,
+            categories: rustNotes.categories,
+          }),
     )
     .handle("updateBlog", ({ params, payload }) =>
       params.blog === missingBlog
         ? Effect.fail(new BlogNotFound({ blog: params.blog }))
         : Effect.succeed({ ...rustNotes, slug: params.blog, ...payload }),
-    ),
+    )
+    .handle("renameCategory", () => Effect.die("not used"))
+    .handle("mergeCategory", () => Effect.die("not used"))
+    .handle("deleteCategory", () => Effect.die("not used")),
 );
 
 // Session ids are the user's roles, comma-separated; the real middleware
@@ -948,6 +966,7 @@ layer(
         slug: "type-theory",
         title: "Type theory",
         description: "Notes.",
+        categories: { main: "Programming", extra: [] },
       };
       const response = yield* client.admin.createBlog({
         payload,
@@ -955,7 +974,11 @@ layer(
       });
       assert.strictEqual(response.status, 201);
       const created = yield* client.admin.createBlog({ payload });
-      assert.deepStrictEqual(created, { ...rustNotes, ...payload });
+      assert.deepStrictEqual(created, {
+        ...rustNotes,
+        ...payload,
+        categories: rustNotes.categories,
+      });
 
       assert.deepStrictEqual(
         yield* client.admin

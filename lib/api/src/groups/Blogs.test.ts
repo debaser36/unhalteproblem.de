@@ -57,6 +57,13 @@ describe("blog endpoints in the OpenAPI document", () => {
       "404",
     ]);
     assert.deepStrictEqual(statuses("/posts", "get"), ["200"]);
+    assert.deepStrictEqual(statuses("/categories", "get"), ["200"]);
+    assert.deepStrictEqual(statuses("/blogs/{blog}/manage/categories", "put"), [
+      "200",
+      "401",
+      "403",
+      "404",
+    ]);
     assert.deepStrictEqual(statuses("/media/{mediaId}", "get"), ["200", "404"]);
     assert.deepStrictEqual(statuses(posts, "get"), ["200", "401", "403"]);
     assert.deepStrictEqual(statuses(posts, "post"), [
@@ -166,7 +173,7 @@ describe("blog endpoints in the OpenAPI document", () => {
     );
   });
 
-  it("documents limit, cursor and tag as optional query parameters", () => {
+  it("documents limit, sort, cursor and the filters as optional query parameters", () => {
     for (const path of ["/posts", "/blogs/{blog}/posts"]) {
       const query = (operation(path, "get")?.parameters ?? []).filter(
         (parameter) => parameter.in === "query",
@@ -175,8 +182,11 @@ describe("blog endpoints in the OpenAPI document", () => {
         query.map(({ name, required }) => ({ name, required })),
         [
           { name: "limit", required: false },
+          { name: "sort", required: false },
           { name: "cursor", required: false },
           { name: "tag", required: false },
+          { name: "category", required: false },
+          { name: "author", required: false },
         ],
       );
     }
@@ -215,6 +225,7 @@ describe("blog endpoint middleware", () => {
       "blogEditor.publishPost",
       "blogEditor.unpublishPost",
       "blogEditor.deletePost",
+      "blogEditor.setBlogCategories",
       "blogEditor.uploadMedia",
     ];
     for (const [name, keys] of middlewares) {
@@ -273,7 +284,7 @@ describe("blog endpoint middleware", () => {
           assert.deepStrictEqual(keys, expected([SameOrigin.key]), name);
       }
     }
-    assert.strictEqual(runtimeOrder.length, 8);
+    assert.strictEqual(runtimeOrder.length, 9);
   });
 
   it("RequireBlogEditor fails with Forbidden and needs no client middleware", () => {
@@ -293,6 +304,8 @@ const t0 = DateTime.makeUnsafe("2026-03-01T12:00:00Z");
 const site = "https://unhalteproblem.de";
 const imageBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
+const miscellaneous = { slug: "miscellaneous", name: "Miscellaneous" };
+const categories = { main: miscellaneous, extra: [] };
 const publishedPost: PublishedPost = {
   id: postId,
   blog: "rust-notes",
@@ -303,8 +316,9 @@ const publishedPost: PublishedPost = {
   coverImage: coverId,
   publishedAt: t0,
   updatedAt: t0,
-  author: { name: "Ada" },
+  author: { id: null, name: "Ada" },
   readingMinutes: 1,
+  categories,
   content: {
     type: "doc",
     content: [
@@ -325,6 +339,7 @@ const publishedPost: PublishedPost = {
 const BlogsHandlers = HttpApiBuilder.group(Api, "blogs", (handlers) =>
   handlers
     .handle("listBlogs", () => Effect.succeed([]))
+    .handle("listCategories", () => Effect.succeed([]))
     .handle("getBlog", () => Effect.die("not used"))
     .handle("listPosts", () => Effect.die("not used"))
     .handle("getPost", ({ params }) =>
@@ -335,7 +350,7 @@ const BlogsHandlers = HttpApiBuilder.group(Api, "blogs", (handlers) =>
     .handle("recentPosts", ({ query }) =>
       Effect.succeed({
         posts: query.limit > 0 ? [publishedPost] : [],
-        nextCursor: { publishedAt: t0, id: postId },
+        nextCursor: { sort: "newest" as const, publishedAt: t0, id: postId },
       }),
     ),
 );
@@ -355,6 +370,7 @@ const BlogEditorHandlers = HttpApiBuilder.group(Api, "blogEditor", (handlers) =>
     .handle("createPost", ({ params, payload }) =>
       Effect.succeed({
         ...payload,
+        categories,
         id: postId,
         blog: params.blog,
         status: "draft" as const,
@@ -362,13 +378,14 @@ const BlogEditorHandlers = HttpApiBuilder.group(Api, "blogEditor", (handlers) =>
         createdAt: t0,
         updatedAt: t0,
         version: 1,
-        author: { name: "Ada" },
+        author: { id: null, name: "Ada" },
       } satisfies ManagedPost),
     )
     .handle("updatePost", () => Effect.die("not used"))
     .handle("publishPost", () => Effect.die("not used"))
     .handle("unpublishPost", () => Effect.die("not used"))
     .handle("deletePost", () => Effect.die("not used"))
+    .handle("setBlogCategories", () => Effect.die("not used"))
     .handle("uploadMedia", () => Effect.die("not used")),
 );
 
@@ -463,9 +480,13 @@ layer(
     Effect.gen(function* () {
       const client = yield* makeClient;
       const page = yield* client.blogs.recentPosts({
-        query: { limit: PostPageLimits.defaultLimit },
+        query: { limit: PostPageLimits.defaultLimit, sort: "newest" },
       });
-      assert.deepStrictEqual(page.nextCursor, { publishedAt: t0, id: postId });
+      assert.deepStrictEqual(page.nextCursor, {
+        sort: "newest",
+        publishedAt: t0,
+        id: postId,
+      });
       // Encoded as a `PostListItem`: the content is not part of lists.
       const { content: _, ...listItem } = publishedPost;
       assert.deepStrictEqual(page.posts, [listItem]);
@@ -496,6 +517,7 @@ layer(
         summary: "",
         tags: [],
         coverImage: null,
+        categories: { main: "Programming", extra: [] },
         content: emptyDocument,
       };
       const response = yield* client.blogEditor.createPost({
@@ -525,6 +547,7 @@ layer(
             summary: "",
             tags: [],
             coverImage: null,
+            categories: { main: "Programming", extra: [] },
             content: emptyDocument,
           },
         })
