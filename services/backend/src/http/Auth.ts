@@ -1,7 +1,6 @@
 import {
   Api,
   CurrentUser,
-  Forbidden,
   LoginErrorParam,
   LoginErrorReason,
   type LoginQuery,
@@ -15,11 +14,7 @@ import {
   type PromptValue,
 } from "@unhalteproblem.de/oidc";
 import { DateTime, Effect, Option, Redacted, Schema } from "effect";
-import {
-  HttpEffect,
-  type HttpServerRequest,
-  HttpServerResponse,
-} from "effect/http";
+import { type HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { SqlClient } from "effect/sql";
 import { cookieOptions, LoginCookie, LoginTimeout } from "#auth/Cookies";
@@ -40,7 +35,9 @@ import { Sessions } from "#repositories/Sessions";
 import { LoginRateLimit } from "#services/LoginRateLimit";
 import { OidcProvider } from "#services/OidcProvider";
 import { clockToleranceSeconds, TokenVerifier } from "#services/TokenVerifier";
+import { noStore } from "./CacheControl.ts";
 import { clientKey } from "./ClientIp.ts";
+import { requireSameOrigin } from "./SameOrigin.ts";
 
 /**
  * Why a callback did not end in a session. `detail` goes to the log only;
@@ -57,8 +54,13 @@ class LoginFailed extends Schema.TaggedError<
 const fail = (reason: LoginErrorReason, detail: string) =>
   Effect.fail(new LoginFailed({ reason, detail }));
 
-// Auth responses carry cookies and one-time URLs; no cache may keep them.
-const noStore = HttpServerResponse.setHeader("cache-control", "no-store");
+/** The fields of `record` that are not `undefined`. */
+const definedOnly = <A extends object>(
+  record: A,
+): { [K in keyof A]?: Exclude<A[K], undefined> } =>
+  Object.fromEntries(
+    Object.entries(record).filter(([, value]) => value !== undefined),
+  ) as { [K in keyof A]?: Exclude<A[K], undefined> };
 
 export const AuthHandlers = HttpApiBuilder.group(
   Api,
@@ -113,10 +115,12 @@ export const AuthHandlers = HttpApiBuilder.group(
             Effect.fail(new RateLimited()),
           ),
         );
-      const loginCookie = yield* randomSecret;
-      const state = yield* randomSecret;
-      const nonce = yield* randomSecret;
-      const codeVerifier = yield* randomSecret;
+      const { loginCookie, state, nonce, codeVerifier } = yield* Effect.all({
+        loginCookie: randomSecret,
+        state: randomSecret,
+        nonce: randomSecret,
+        codeVerifier: randomSecret,
+      });
       const now = yield* DateTime.now;
       yield* loginAttempts
         .create({
@@ -135,7 +139,6 @@ export const AuthHandlers = HttpApiBuilder.group(
         ...(prompt === undefined ? {} : { prompt }),
       });
       return HttpServerResponse.redirect(url, { status: 302 }).pipe(
-        noStore,
         HttpServerResponse.setCookieUnsafe(LoginCookie, loginCookie, {
           ...cookieOptions,
           maxAge: LoginTimeout,
@@ -259,16 +262,12 @@ export const AuthHandlers = HttpApiBuilder.group(
           idHash: hashSecret(sessionCookie),
           userId: claims.sub,
           providerSessionId: Option.some(claims.sid),
-          claims: {
-            ...(claims.preferred_username === undefined
-              ? {}
-              : { preferred_username: claims.preferred_username }),
-            ...(claims.name === undefined ? {} : { name: claims.name }),
-            ...(claims.email === undefined ? {} : { email: claims.email }),
-            ...(claims.email_verified === undefined
-              ? {}
-              : { email_verified: claims.email_verified }),
-          },
+          claims: definedOnly({
+            preferred_username: claims.preferred_username,
+            name: claims.name,
+            email: claims.email,
+            email_verified: claims.email_verified,
+          }),
           expiresAt: DateTime.addDuration(now, maxAge),
         })
         .pipe(Effect.orDie);
@@ -287,46 +286,49 @@ export const AuthHandlers = HttpApiBuilder.group(
       return { sessionCookie, returnTo };
     });
 
+    /**
+     * The end of a successful callback: replaces the browser's session with
+     * the new one and sends it where the login started.
+     */
+    const finishLogin = Effect.fn("auth.finishLogin")(function* (
+      request: HttpServerRequest.HttpServerRequest,
+      { sessionCookie, returnTo }: { sessionCookie: string; returnTo: string },
+    ) {
+      // A new session id on every login (no session fixation); the
+      // browser's previous session, if any, ends here.
+      const previous = request.cookies[SessionCookie];
+      if (previous !== undefined && previous !== "") {
+        yield* sessions.delete(hashSecret(previous)).pipe(Effect.orDie);
+      }
+      return HttpServerResponse.redirect(`${origin}${returnTo}`, {
+        status: 302,
+      }).pipe(
+        HttpServerResponse.setCookieUnsafe(SessionCookie, sessionCookie, {
+          ...cookieOptions,
+          maxAge,
+        }),
+      );
+    });
+
+    // Every auth response carries personal data, cookies or one-time URLs:
+    // each handler is `noStore`, its error responses included.
     return (
       handlers
-        .handle("session", () =>
-          // Personal data that depends on the cookie: never cached.
-          HttpEffect.appendPreResponseHandler((_request, response) =>
-            Effect.succeed(noStore(response)),
-          ).pipe(Effect.andThen(Effect.service(CurrentUser))),
-        )
+        .handle("session", () => Effect.service(CurrentUser).pipe(noStore))
 
-        .handle("login", ({ query, request }) => startLogin(query, request))
+        .handle("login", ({ query, request }) =>
+          startLogin(query, request).pipe(noStore),
+        )
 
         // The same flow; Keycloak shows its registration form first and then
         // returns to the callback like after a login.
         .handle("register", ({ query, request }) =>
-          startLogin(query, request, "create"),
+          startLogin(query, request, "create").pipe(noStore),
         )
 
         .handle("callback", ({ query, request }) =>
           completeLogin(query, request.cookies[LoginCookie]).pipe(
-            Effect.flatMap(({ sessionCookie, returnTo }) =>
-              Effect.gen(function* () {
-                // A new session id on every login (no session fixation); the
-                // browser's previous session, if any, ends here.
-                const previous = request.cookies[SessionCookie];
-                if (previous !== undefined && previous !== "") {
-                  yield* sessions
-                    .delete(hashSecret(previous))
-                    .pipe(Effect.orDie);
-                }
-                return HttpServerResponse.redirect(`${origin}${returnTo}`, {
-                  status: 302,
-                }).pipe(
-                  HttpServerResponse.setCookieUnsafe(
-                    SessionCookie,
-                    sessionCookie,
-                    { ...cookieOptions, maxAge },
-                  ),
-                );
-              }),
-            ),
+            Effect.flatMap((login) => finishLogin(request, login)),
             Effect.catchTag("LoginFailed", ({ reason, detail }) =>
               Effect.logWarning("Login failed").pipe(
                 Effect.annotateLogs({ reason, detail }),
@@ -351,25 +353,18 @@ export const AuthHandlers = HttpApiBuilder.group(
                 ),
               ),
             ),
-            Effect.map((response) =>
-              response.pipe(
-                noStore,
-                HttpServerResponse.expireCookieUnsafe(
-                  LoginCookie,
-                  cookieOptions,
-                ),
-              ),
+            Effect.map(
+              HttpServerResponse.expireCookieUnsafe(LoginCookie, cookieOptions),
             ),
+            noStore,
           ),
         )
 
         .handle("logout", ({ request }) =>
           Effect.gen(function* () {
-            // CSRF: only the website itself may log the user out. Browsers
-            // send `Origin` on every POST; a missing one is refused too.
-            if (request.headers["origin"] !== origin) {
-              return yield* new Forbidden();
-            }
+            // CSRF: only the website itself may log the user out. A plain
+            // form POST, so the check is here rather than in the contract.
+            yield* requireSameOrigin(origin);
             const cookie = request.cookies[SessionCookie];
             if (cookie !== undefined && cookie !== "") {
               const ended = yield* sessions
@@ -393,21 +388,18 @@ export const AuthHandlers = HttpApiBuilder.group(
             // user to confirm before it ends its own session.
             const url = yield* oidc.endSessionUrl;
             return HttpServerResponse.redirect(url, { status: 303 }).pipe(
-              noStore,
               HttpServerResponse.expireCookieUnsafe(
                 SessionCookie,
                 cookieOptions,
               ),
             );
-          }),
+          }).pipe(noStore),
         )
 
+        // `noStore` is Back-Channel Logout 1.0 §2.8, for success and error
+        // responses.
         .handle("backchannelLogout", ({ payload }) =>
           Effect.gen(function* () {
-            // Back-Channel Logout 1.0 §2.8, for success and error responses.
-            yield* HttpEffect.appendPreResponseHandler((_request, response) =>
-              Effect.succeed(noStore(response)),
-            );
             const claims = yield* verifier
               .verifyLogoutToken(payload.logout_token)
               .pipe(
@@ -462,6 +454,7 @@ export const AuthHandlers = HttpApiBuilder.group(
               SqlError: Effect.die,
               KeysUnavailable: Effect.die,
             }),
+            noStore,
           ),
         )
     );
