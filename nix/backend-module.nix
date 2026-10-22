@@ -66,6 +66,7 @@ let
     "KEYCLOAK_ADMIN_CLIENT_SECRET"
     "POSTGRES_PASSWORD"
     "SMTP_PASSWORD"
+    "ANTHROPIC_API_KEY"
   ];
 
   # Restores a dump into a scratch database and checks it (nix/verify-backup.sh).
@@ -153,6 +154,8 @@ in
         # SMTP_HOST = "mail.example.org";
         # SMTP_FROM = "Website <noreply@unhalteproblem.de>";
         # CONTACT_MAIL_TO = "me@example.org";
+        # Food planner (meal plans need ANTHROPIC_API_KEY in environmentFiles).
+        # CLAUDE_MODEL = "claude-opus-5-5"; CLAUDE_EFFORT = "medium";
       };
       description = ''
         Extra, non-secret environment variables for the backend (see
@@ -160,7 +163,8 @@ in
         HOST, PORT and LOG_FORMAT are set by the image.
 
         These values are written to the world-readable Nix store, so secrets
-        (OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET, POSTGRES_PASSWORD, SMTP_PASSWORD) go into
+        (OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET, POSTGRES_PASSWORD, SMTP_PASSWORD,
+        ANTHROPIC_API_KEY) go into
         {option}`environmentFiles` instead.
 
         POSTGRES_HOST defaults to localhost, which inside the container is
