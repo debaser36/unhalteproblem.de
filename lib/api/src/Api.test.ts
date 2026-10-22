@@ -82,6 +82,11 @@ describe("OpenAPI document", () => {
       "/projects",
       "/projects/{project}",
       "/ready",
+      "/seo/blogs/{blog}",
+      "/seo/blogs/{blog}/posts/{post}",
+      "/seo/pages/{page}",
+      "/seo/projects/{project}",
+      "/sitemap.xml",
     ]);
     const operations = Object.fromEntries(
       Object.entries(spec.paths).map(([path, item]) => [
@@ -185,6 +190,11 @@ describe("OpenAPI document", () => {
       "/admin/blog-requests/{requestId}/reject": {
         post: "blogRequestAdmin.rejectBlogRequest",
       },
+      "/seo/pages/{page}": { get: "seo.renderPage" },
+      "/seo/blogs/{blog}": { get: "seo.renderBlog" },
+      "/seo/blogs/{blog}/posts/{post}": { get: "seo.renderPost" },
+      "/seo/projects/{project}": { get: "seo.renderProject" },
+      "/sitemap.xml": { get: "seo.getSitemap" },
     });
   });
 
@@ -203,6 +213,27 @@ describe("OpenAPI document", () => {
       "200",
       "400",
     ]);
+  });
+
+  it("documents the SEO endpoints as public text responses", () => {
+    const seo = [
+      ["/seo/pages/{page}", ["200"], "text/html"],
+      ["/seo/blogs/{blog}", ["200", "404"], "text/html"],
+      ["/seo/blogs/{blog}/posts/{post}", ["200", "404"], "text/html"],
+      ["/seo/projects/{project}", ["200", "404"], "text/html"],
+      ["/sitemap.xml", ["200"], "application/xml"],
+    ] as const;
+    for (const [path, statuses, contentType] of seo) {
+      const operation = spec.paths[path]?.get;
+      assert.deepStrictEqual(operation?.security, []);
+      assert.deepStrictEqual(Object.keys(operation?.responses ?? {}).sort(), [
+        ...statuses,
+      ]);
+      assert.deepStrictEqual(
+        Object.keys(operation?.responses["200"]?.content ?? {}),
+        [contentType],
+      );
+    }
   });
 
   it("documents the Location header of the redirects", () => {

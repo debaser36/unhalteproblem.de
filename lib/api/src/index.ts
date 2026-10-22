@@ -30,6 +30,7 @@ export { ContactGroup } from "#groups/Contact";
 export { MediaGroup } from "#groups/Media";
 export { ProjectAdminGroup } from "#groups/ProjectAdmin";
 export { ProjectsGroup } from "#groups/Projects";
+export { SeoGroup } from "#groups/Seo";
 export { SystemGroup } from "#groups/System";
 
 export {
@@ -213,6 +214,7 @@ export {
   PublishedProject,
   UpdateProjectPayload,
 } from "#domain/Project";
+export { SeoPage } from "#domain/Seo";
 
 export { AccountDeletionNotAllowed } from "#errors/AccountDeletionNotAllowed";
 export { AlreadyRestricted } from "#errors/AlreadyRestricted";
