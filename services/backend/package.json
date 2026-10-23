@@ -32,7 +32,8 @@
     "@unhalteproblem.de/seo": "workspace:*",
     "effect": "catalog:",
     "jose": "^6.2.12",
-    "nodemailer": "^10.1.2"
+    "nodemailer": "^10.1.2",
+    "stripe": "^23.0.0"
   },
   "devDependencies": {
     "@effect/sql-pglite": "catalog:",

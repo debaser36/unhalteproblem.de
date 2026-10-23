@@ -326,6 +326,9 @@ importers:
       nodemailer:
         specifier: ^10.1.2
         version: 10.1.2
+      stripe:
+        specifier: ^23.0.0
+        version: 23.0.0(@types/node@25.9.9)
     devDependencies:
       '@effect/sql-pglite':
         specifier: 'catalog:'
@@ -1797,6 +1800,15 @@ packages:
     resolution: {integrity: sha512-aqD2Q0144Z+/RqG52NeHEkZauTAUWJO8c6yTftGJKO3Tja5tUgIfmIl6kExvhtxSDP7fXB6DvzkfMpCd/F3G+Q==}
     engines: {node: '>=0.6.19'}
 
+  stripe@23.0.0:
+    resolution: {integrity: sha512-MDE2A5ZVVluYURORaZEVghSmnLJc3w6aHAlZSxDQMsOjOb3V0O6ro/CiaeFlJS4N7uIVmsg98ocRsPmUK6YfyA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@types/node': '>=20'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
 
@@ -3019,6 +3031,10 @@ snapshots:
   std-env@4.3.0: {}
 
   string-argv@0.3.2: {}
+
+  stripe@23.0.0(@types/node@25.9.9):
+    optionalDependencies:
+      '@types/node': 25.9.9
 
   tailwindcss@4.3.3: {}
 
