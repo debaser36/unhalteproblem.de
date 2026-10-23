@@ -26,6 +26,12 @@ import {
 import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
 import { FoodPlannerHandlers } from "#http/Food";
+import { PaymentAdminHandlers } from "#http/PaymentAdmin";
+import {
+  PaymentCatalogHandlers,
+  PaymentsHandlers,
+  PaymentWebhooksHandlers,
+} from "#http/Payments";
 import { LargeBodyLive } from "#http/LargeBody";
 import { MediaHandlers } from "#http/Media";
 import { ProjectAdminHandlers } from "#http/ProjectAdmin";
@@ -41,6 +47,7 @@ import { AuthCleanup } from "#auth/AuthCleanup";
 import { ContactRateLimit } from "#domains/contact/ContactRateLimit";
 import { DatabaseLive } from "#infrastructure/Database";
 import { Claude } from "#infrastructure/Claude";
+import { Stripe } from "#infrastructure/Stripe";
 import { KeycloakAdmin } from "#infrastructure/KeycloakAdmin";
 import { LoginRateLimit } from "#auth/LoginRateLimit";
 import { Mailer } from "#infrastructure/Mailer";
@@ -64,6 +71,7 @@ const Repositories = Layer.mergeAll(
       OpenFoodFacts.layer,
       StatsNz.layer,
       Claude.layer,
+      Stripe.layer,
     ]),
     Layer.provideMerge(Sessions.layer),
   ),
@@ -100,6 +108,10 @@ const Handlers = Layer.mergeAll(
   ProjectAdminHandlers,
   SeoHandlers,
   FoodPlannerHandlers,
+  PaymentCatalogHandlers,
+  PaymentsHandlers,
+  PaymentWebhooksHandlers,
+  PaymentAdminHandlers,
 ).pipe(
   Layer.provide([ContactRateLimit.layer, Readiness.layer]),
   Layer.provideMerge(AuthServices),

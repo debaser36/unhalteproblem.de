@@ -449,3 +449,120 @@ export const insertMealPlan = (
     )
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));
+
+/** Inserts a product, a disabled standard test-mode product by default. */
+export const insertPaymentProduct = (
+  sql: SqlClient.SqlClient,
+  product: {
+    readonly id: string;
+    readonly name?: string;
+    readonly description?: string | null;
+    readonly active?: boolean;
+    readonly livemode?: boolean;
+    readonly enabled?: boolean;
+    readonly kind?: string;
+  },
+) =>
+  sql`
+    INSERT INTO payment_products (
+      id, name, description, active, livemode, enabled, kind, updated_at
+    )
+    VALUES (
+      ${product.id}, ${product.name ?? "Product"},
+      ${product.description ?? null}, ${product.active ?? true},
+      ${product.livemode ?? false}, ${product.enabled ?? false},
+      ${product.kind ?? "standard"}, '2026-01-01T00:00:00Z'
+    )
+  `;
+
+/** Inserts a price, a one-time price of 500 eur by default. */
+export const insertPaymentPrice = (
+  sql: SqlClient.SqlClient,
+  price: {
+    readonly id: string;
+    readonly productId: string;
+    readonly active?: boolean;
+    readonly currency?: string;
+    readonly unitAmount?: number | null;
+    readonly recurringInterval?: string | null;
+    readonly recurringIntervalCount?: number | null;
+    readonly livemode?: boolean;
+  },
+) =>
+  sql`
+    INSERT INTO payment_prices (
+      id, product_id, active, currency, unit_amount, recurring_interval,
+      recurring_interval_count, livemode, updated_at
+    )
+    VALUES (
+      ${price.id}, ${price.productId}, ${price.active ?? true},
+      ${price.currency ?? "eur"},
+      ${price.unitAmount === undefined ? 500 : price.unitAmount}::integer,
+      ${price.recurringInterval ?? null},
+      ${price.recurringIntervalCount ?? null}::integer,
+      ${price.livemode ?? false}, '2026-01-01T00:00:00Z'
+    )
+  `;
+
+/** Inserts a subscription, an active test-mode one by default. */
+export const insertPaymentSubscription = (
+  sql: SqlClient.SqlClient,
+  subscription: {
+    readonly id: string;
+    readonly userId?: string | null;
+    readonly productId?: string | null;
+    readonly status?: string;
+  },
+) =>
+  sql`
+    INSERT INTO payment_subscriptions (
+      id, user_id, customer_id, product_id, price_id, status,
+      current_period_end, cancel_at_period_end, canceled_at, livemode,
+      created_at, updated_at
+    )
+    VALUES (
+      ${subscription.id}, ${subscription.userId ?? null}, 'cus_1',
+      ${subscription.productId ?? null}, NULL,
+      ${subscription.status ?? "active"}, '2026-02-01T00:00:00Z', false, NULL,
+      false, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
+    )
+  `;
+
+/**
+ * Inserts a payment, a paid test-mode purchase of 500 eur from a Checkout
+ * session by default, and returns its id.
+ */
+export const insertPayment = (
+  sql: SqlClient.SqlClient,
+  payment: {
+    readonly userId?: string | null;
+    readonly kind?: string;
+    readonly productId?: string | null;
+    readonly checkoutSessionId?: string | null;
+    readonly invoiceId?: string | null;
+    readonly subscriptionId?: string | null;
+    readonly paymentIntentId?: string | null;
+    readonly amount?: number;
+    readonly amountRefunded?: number;
+    readonly currency?: string;
+    readonly status?: string;
+  },
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO payments (
+      id, user_id, kind, product_id, checkout_session_id, invoice_id,
+      subscription_id, payment_intent_id, amount, amount_refunded, currency,
+      status, livemode, created_at, updated_at
+    )
+    VALUES (
+      gen_random_uuid(), ${payment.userId ?? null},
+      ${payment.kind ?? "purchase"}, ${payment.productId ?? null},
+      ${payment.checkoutSessionId === undefined ? sql`'cs_' || gen_random_uuid()` : payment.checkoutSessionId},
+      ${payment.invoiceId ?? null}, ${payment.subscriptionId ?? null},
+      ${payment.paymentIntentId ?? null}, ${payment.amount ?? 500},
+      ${payment.amountRefunded ?? 0}, ${payment.currency ?? "eur"},
+      ${payment.status ?? "paid"}, false, '2026-01-01T00:00:00Z',
+      '2026-01-01T00:00:00Z'
+    )
+    RETURNING id
+  `.pipe(Effect.map(([row]) => row.id));

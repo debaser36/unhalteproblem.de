@@ -40,10 +40,50 @@ const make = Effect.gen(function* () {
       grantedAt: Schema.DateTimeUtcFromDate,
     }),
     Result: Schema.Struct({ role: Role }),
+    // A role held only through a payment becomes a manual grant: it then
+    // stays when the payment no longer entitles the user to it.
     execute: (row) => sql`
       INSERT INTO user_roles ${sql.insert(row)}
+      ON CONFLICT (user_id, role) DO UPDATE SET
+        manual = true,
+        granted_by = EXCLUDED.granted_by,
+        granted_at = EXCLUDED.granted_at
+      WHERE NOT user_roles.manual
+      RETURNING role
+    `,
+  });
+
+  const grantPaidRole = SqlSchema.findOneOption({
+    Request: Schema.Struct({
+      userId: Schema.String,
+      role: Role,
+      grantedAt: Schema.DateTimeUtcFromDate,
+    }),
+    Result: Schema.Struct({ role: Role }),
+    execute: ({ userId, role, grantedAt }) => sql`
+      INSERT INTO user_roles (user_id, role, granted_at, manual)
+      VALUES (${userId}, ${role}, ${grantedAt}, false)
       ON CONFLICT (user_id, role) DO NOTHING
       RETURNING role
+    `,
+  });
+
+  const revokePaidRole = SqlSchema.findOneOption({
+    Request: Schema.Struct({ userId: Schema.String, role: Role }),
+    Result: Schema.Struct({ role: Role }),
+    execute: ({ userId, role }) => sql`
+      DELETE FROM user_roles
+      WHERE user_id = ${userId} AND role = ${role} AND NOT manual
+      RETURNING role
+    `,
+  });
+
+  const paidRolesOf = SqlSchema.findAll({
+    Request: Schema.String,
+    Result: Schema.Struct({ role: Role }),
+    execute: (userId) => sql`
+      SELECT role FROM user_roles WHERE user_id = ${userId} AND NOT manual
+      ORDER BY role
     `,
   });
 
@@ -217,6 +257,34 @@ const make = Effect.gen(function* () {
         Effect.withSpan("ModerationRepository.revokeRole"),
       ),
 
+    grantPaidRole: ({ userId, role, at }) =>
+      grantPaidRole({ userId, role, grantedAt: at }).pipe(
+        Effect.map(Option.isSome),
+        dieOnSchemaError,
+        Effect.withSpan("ModerationRepository.grantPaidRole"),
+      ),
+
+    revokePaidRole: (userId, role) =>
+      revokePaidRole({ userId, role }).pipe(
+        Effect.map(Option.isSome),
+        dieOnSchemaError,
+        Effect.withSpan("ModerationRepository.revokePaidRole"),
+      ),
+
+    paidRoleHolders: sql<{ readonly userId: UserId }>`
+      SELECT DISTINCT user_id FROM user_roles WHERE NOT manual
+    `.pipe(
+      Effect.map((rows) => rows.map(({ userId }) => userId)),
+      Effect.withSpan("ModerationRepository.paidRoleHolders"),
+    ),
+
+    paidRolesOf: (userId) =>
+      paidRolesOf(userId).pipe(
+        Effect.map((rows) => rows.map(({ role }) => role)),
+        dieOnSchemaError,
+        Effect.withSpan("ModerationRepository.paidRolesOf"),
+      ),
+
     recordRoleChange: ({ userId, role, change, by, at }) =>
       recordRoleChange({
         userId,
@@ -319,7 +387,10 @@ export class ModerationRepository extends Context.Service<
     >;
     /** Whether anybody holds the role. */
     readonly isHeld: (role: Role) => Effect.Effect<boolean, SqlError.SqlError>;
-    /** Grants the role; returns whether the user didn't hold it yet. */
+    /**
+     * Grants the role by hand (`manual`); returns whether the user didn't
+     * hold it yet, or held it only through a payment.
+     */
     readonly grantRole: (grant: {
       readonly userId: UserId;
       readonly role: Role;
@@ -331,6 +402,32 @@ export class ModerationRepository extends Context.Service<
       userId: UserId,
       role: Role,
     ) => Effect.Effect<boolean, SqlError.SqlError>;
+    /**
+     * Grants the role because of a payment (not `manual`); returns whether
+     * the user didn't hold it yet. A role they hold already stays as it is.
+     */
+    readonly grantPaidRole: (grant: {
+      readonly userId: UserId;
+      readonly role: Role;
+      readonly at: DateTime.Utc;
+    }) => Effect.Effect<boolean, SqlError.SqlError>;
+    /**
+     * Revokes the role if the user holds it only through a payment; returns
+     * whether it did.
+     */
+    readonly revokePaidRole: (
+      userId: UserId,
+      role: Role,
+    ) => Effect.Effect<boolean, SqlError.SqlError>;
+    /** Who holds a role only through payments. */
+    readonly paidRoleHolders: Effect.Effect<
+      ReadonlyArray<UserId>,
+      SqlError.SqlError
+    >;
+    /** The roles the user holds only through payments, sorted. */
+    readonly paidRolesOf: (
+      userId: UserId,
+    ) => Effect.Effect<ReadonlyArray<Role>, SqlError.SqlError>;
     readonly recordRoleChange: (change: {
       readonly userId: UserId;
       readonly role: Role;

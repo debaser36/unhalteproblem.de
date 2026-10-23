@@ -28,6 +28,10 @@ export const AuditAction = Schema.Literals([
   "category_renamed",
   "category_merged",
   "category_deleted",
+  "payment_refunded",
+  "payment_product_updated",
+  "payment_product_roles_changed",
+  "payment_catalog_synced",
 ]);
 export type AuditAction = typeof AuditAction.Type;
 

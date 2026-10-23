@@ -243,7 +243,9 @@ describe("blog endpoint middleware", () => {
   // The project endpoints are checked in `groups/Projects.test.ts`.
   it("raises the body limit exactly for whole posts", () => {
     const blogEndpoints = withKey(LargeBody.key).filter(
-      (name) => !name.startsWith("projectAdmin."),
+      (name) =>
+        !name.startsWith("projectAdmin.") &&
+        !name.startsWith("paymentWebhooks."),
     );
     assert.deepStrictEqual(blogEndpoints, [
       "blogEditor.createPost",

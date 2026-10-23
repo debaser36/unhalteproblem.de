@@ -8,6 +8,7 @@ import { ContactLive } from "./contact/Contacts.ts";
 import { FoodLive } from "./food/Foods.ts";
 import { MediaLive } from "./media/Medias.ts";
 import { ModerationLive } from "./moderation/Moderations.ts";
+import { PaymentsLive } from "./payments/Payments.ts";
 import { OperationsLive } from "./operations/Operations.ts";
 import { ProjectsLive } from "./projects/Projects.ts";
 import { UserDirectoryLive, UsersLive } from "./users/Users.ts";
@@ -35,6 +36,11 @@ const Operations = OperationsLive.pipe(Layer.provide(UserDirectoryLive));
 // Meal plans belong to users (by our id).
 const Food = FoodLive.pipe(Layer.provide(UserDirectoryLive));
 
+// Payments grant and revoke roles through moderation, and deleting an
+// account (users) cancels its subscriptions through payments: payments sit
+// between moderation and the rest of users.
+const Payments = PaymentsLive.pipe(Layer.provide(UserDirectoryLive));
+
 /**
  * Every domain, on one shared `Transaction`, `DomainEvents` and `Outbox`. A
  * new domain gets its own folder next to `users/` and its layer is added
@@ -46,7 +52,7 @@ const Food = FoodLive.pipe(Layer.provide(UserDirectoryLive));
  *
  * Needs a migrated `SqlClient` (`DatabaseLive` or `DatabaseTest`),
  * `Sessions` (restricting a user ends their sessions), a `Mailer`,
- * `KeycloakAdmin`, and the food planner's sources (`OpenPrices`,
+ * `KeycloakAdmin`, `Stripe`, and the food planner's sources (`OpenPrices`,
  * `OpenFoodFacts`, `StatsNz`, `Claude`).
  */
 export const DomainsLive = Layer.mergeAll(
@@ -57,6 +63,7 @@ export const DomainsLive = Layer.mergeAll(
   Operations,
   Food,
 ).pipe(
+  Layer.provideMerge(Payments),
   Layer.provideMerge(Moderation),
   Layer.provideMerge(MediaLive),
   Layer.provideMerge(AuditLive),

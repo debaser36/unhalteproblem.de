@@ -33,6 +33,14 @@ import { Effect, Schema, SchemaGetter } from "effect";
  * - `category_renamed`, `category_merged`, `category_deleted`: an admin
  *   renamed, merged or deleted a category; `detail` is its slug (for a
  *   rename the new slug, for a merge the source slug).
+ * - `payment_refunded`: an admin refunded a payment; target = the buyer,
+ *   `detail` is the payment id.
+ * - `payment_product_updated`: an admin changed whether a payment product
+ *   is offered or its kind; `detail` is the product id.
+ * - `payment_product_roles_changed`: a superAdmin set the roles a payment
+ *   product grants; `detail` is the product id.
+ * - `payment_catalog_synced`: an admin pulled the catalog from Stripe; no
+ *   target and no detail.
  */
 export const AuditAction = Schema.Literals([
   "login",
@@ -57,6 +65,10 @@ export const AuditAction = Schema.Literals([
   "category_renamed",
   "category_merged",
   "category_deleted",
+  "payment_refunded",
+  "payment_product_updated",
+  "payment_product_roles_changed",
+  "payment_catalog_synced",
 ]).annotate({
   identifier: "AuditAction",
   description: "What an audit log entry records.",

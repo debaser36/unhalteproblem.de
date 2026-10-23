@@ -9,6 +9,12 @@ import { BlogsGroup } from "#groups/Blogs";
 import { ContactGroup } from "#groups/Contact";
 import { FoodPlannerGroup } from "#groups/Food";
 import { MediaGroup } from "#groups/Media";
+import { PaymentAdminGroup } from "#groups/PaymentAdmin";
+import {
+  PaymentCatalogGroup,
+  PaymentsGroup,
+  PaymentWebhooksGroup,
+} from "#groups/Payments";
 import { ProjectAdminGroup } from "#groups/ProjectAdmin";
 import { ProjectsGroup } from "#groups/Projects";
 import { SeoGroup } from "#groups/Seo";
@@ -40,6 +46,10 @@ export class Api extends HttpApi.make("unhalteproblem")
   .add(BlogRequestAdminGroup)
   .add(SeoGroup)
   .add(FoodPlannerGroup)
+  .add(PaymentCatalogGroup)
+  .add(PaymentsGroup)
+  .add(PaymentWebhooksGroup)
+  .add(PaymentAdminGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "unhalteproblem.de API",

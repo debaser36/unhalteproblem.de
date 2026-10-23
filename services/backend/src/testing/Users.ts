@@ -13,11 +13,16 @@ import { BlogRepository } from "#domains/blogs/BlogRepository";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { ModerationRepository } from "#domains/moderation/ModerationRepository";
+import { PaymentCommands } from "#domains/payments/PaymentCommands";
+import { PaymentQueries } from "#domains/payments/PaymentQueries";
+import { PaymentRepository } from "#domains/payments/PaymentRepository";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import { UserQueries } from "#domains/users/UserQueries";
 import { UserRepository } from "#domains/users/UserRepository";
 import { Sessions } from "#auth/Sessions";
+import type { Stripe } from "#infrastructure/Stripe";
 import { DatabaseTest } from "./Database.ts";
+import { makeFakeStripe } from "./Stripe.ts";
 
 /**
  * The users domain on a fresh in-memory database, for tests of its commands
@@ -31,30 +36,40 @@ export const KernelTest = Transaction.layer.pipe(
 );
 
 /**
- * The users and moderation domains' commands and queries with their
- * repositories, `UserDirectory` and `Sessions`, all of which stay accessible
- * to the test, on `KernelTest`.
+ * The users, payments and moderation domains' commands and queries with
+ * their repositories, `UserDirectory`, `Sessions` and `stripe`, all of which
+ * stay accessible to the test, on `KernelTest`.
  */
-export const UsersTest = Layer.mergeAll(
-  UserCommands.layer,
-  UserQueries.layer,
-).pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(ModerationCommands.layer, ModerationQueries.layer),
-  ),
-  Layer.provideMerge(AuditCommands.layer),
-  Layer.provideMerge(Layer.mergeAll(UserDirectory.layer, BlogDirectory.layer)),
-  Layer.provideMerge(
-    Layer.mergeAll(
-      AuditRepository.layer,
-      BlogRepository.layer,
-      Outbox.layer,
-      UserRepository.layer,
-      ModerationRepository.layer,
-      Sessions.layer,
+export const usersTestWith = (stripe: Layer.Layer<Stripe>) =>
+  Layer.mergeAll(UserCommands.layer, UserQueries.layer).pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(PaymentCommands.layer, PaymentQueries.layer),
     ),
-  ),
-  Layer.provideMerge(KernelTest),
+    Layer.provideMerge(
+      Layer.mergeAll(ModerationCommands.layer, ModerationQueries.layer),
+    ),
+    Layer.provideMerge(AuditCommands.layer),
+    Layer.provideMerge(
+      Layer.mergeAll(UserDirectory.layer, BlogDirectory.layer),
+    ),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        AuditRepository.layer,
+        BlogRepository.layer,
+        Outbox.layer,
+        UserRepository.layer,
+        ModerationRepository.layer,
+        PaymentRepository.layer,
+        Sessions.layer,
+        stripe,
+      ),
+    ),
+    Layer.provideMerge(KernelTest),
+  );
+
+/** `usersTestWith` a Stripe that is not configured. */
+export const UsersTest = usersTestWith(
+  makeFakeStripe({ configured: false }).layer,
 );
 
 /** A login of `subject` with a full profile, parts of which can be replaced. */

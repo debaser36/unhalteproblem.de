@@ -46,6 +46,7 @@ describe("admin insights endpoints in the OpenAPI document", () => {
     ["/admin/audit", "get"],
     ["/admin/contact", "get"],
     ["/admin/contact/{messageId}", "delete"],
+    ["/admin/insights/payments", "get"],
   ];
 
   it("documents the response statuses", () => {
@@ -54,6 +55,7 @@ describe("admin insights endpoints in the OpenAPI document", () => {
     assert.deepStrictEqual(statuses("/admin/outbox", "get"), reads);
     assert.deepStrictEqual(statuses("/admin/audit", "get"), reads);
     assert.deepStrictEqual(statuses("/admin/contact", "get"), reads);
+    assert.deepStrictEqual(statuses("/admin/insights/payments", "get"), reads);
     const writes = ["204", "401", "403", "404"];
     assert.deepStrictEqual(
       statuses("/admin/outbox/{messageId}/retry", "post"),
@@ -124,6 +126,10 @@ describe("admin insights endpoints in the OpenAPI document", () => {
         "category_renamed",
         "category_merged",
         "category_deleted",
+        "payment_refunded",
+        "payment_product_updated",
+        "payment_product_roles_changed",
+        "payment_catalog_synced",
       ],
     );
     for (const name of ["AuditLogEntryId", "OutboxMessageId"]) {
@@ -156,6 +162,7 @@ describe("admin insights endpoint middleware", () => {
       "listAuditLog",
       "listContactMessages",
       "listOutbox",
+      "paymentInsights",
       "retryOutboxMessage",
     ]);
     for (const [name, keys] of middlewares) {
@@ -239,6 +246,16 @@ const AdminInsightsHandlers = HttpApiBuilder.group(
   "adminInsights",
   (handlers) =>
     handlers
+      .handle("paymentInsights", () =>
+        Effect.succeed({
+          revenueLast30Days: [{ amount: 1999, currency: "eur" }],
+          revenueTotal: [{ amount: 5000, currency: "eur" }],
+          refundedTotal: [],
+          monthlyRecurringRevenue: [{ amount: 500, currency: "eur" }],
+          activeSubscriptions: 1,
+          livemode: false,
+        }),
+      )
       .handle("databaseOverview", () => Effect.succeed(overview))
       // Echoes the decoded query in the topic, to check the defaults.
       .handle("listOutbox", ({ query }) =>

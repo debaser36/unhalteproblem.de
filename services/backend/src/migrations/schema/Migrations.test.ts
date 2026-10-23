@@ -682,3 +682,69 @@ describe("0019_create_food_planner", () => {
     { timeout: 30_000 },
   );
 });
+
+describe("0020_create_payments", () => {
+  // Runs the migrations before 0020 first, so roles and audit entries exist
+  // before user_roles.manual is added and the audit check is replaced.
+  const DatabaseBefore0020 = databaseUpTo(19);
+
+  it.effect(
+    "marks existing roles as manual and keeps the existing audit actions",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "payments-alice");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role) VALUES
+            (${alice}, 'normalUser'),
+            (${alice}, 'foodPlanner')
+        `;
+        yield* sql`
+          INSERT INTO audit_log (at, action)
+          VALUES ('2026-01-01T00:00:00Z', 'category_deleted')
+        `;
+        // Not allowed before 0020.
+        const before = yield* sql`
+          INSERT INTO audit_log (at, action)
+          VALUES ('2026-01-01T00:00:00Z', 'payment_refunded')
+        `.pipe(Effect.flip);
+        assert.strictEqual(before.reason._tag, "ConstraintError");
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(20) });
+        assert.deepStrictEqual(applied, [[20, "create_payments"]]);
+
+        // Every role granted before payments existed was granted by someone.
+        const roles = yield* sql<{
+          readonly role: string;
+          readonly manual: boolean;
+        }>`
+          SELECT role, manual FROM user_roles
+          WHERE user_id = ${alice}
+          ORDER BY role
+        `;
+        assert.deepStrictEqual(roles, [
+          { role: "foodPlanner", manual: true },
+          { role: "normalUser", manual: true },
+        ]);
+
+        // Same name, and validated (not NOT VALID).
+        const [check] = yield* sql<{ readonly convalidated: boolean }>`
+          SELECT convalidated FROM pg_constraint
+          WHERE conname = 'audit_log_action_check'
+        `;
+        assert.isTrue(check.convalidated);
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["category_deleted"],
+        );
+        yield* sql`
+          INSERT INTO audit_log (at, action)
+          VALUES ('2026-01-01T00:00:00Z', 'payment_refunded')
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0020)),
+    { timeout: 30_000 },
+  );
+});

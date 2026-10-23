@@ -7,6 +7,7 @@ import { Outbox } from "#cqrs/Outbox";
 import { Transaction } from "#cqrs/Transaction";
 import { AuditCommands } from "#domains/audit/AuditCommands";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
+import { PaymentCommands } from "#domains/payments/PaymentCommands";
 import { Sessions } from "#auth/Sessions";
 import { DeleteKeycloakUser } from "./AccountDeletion.ts";
 import * as User from "./User.ts";
@@ -21,6 +22,7 @@ export interface Login {
 const make = Effect.gen(function* () {
   const users = yield* UserRepository;
   const moderation = yield* ModerationCommands;
+  const payments = yield* PaymentCommands;
   const audit = yield* AuditCommands;
   const outbox = yield* Outbox;
   const sessions = yield* Sessions;
@@ -79,6 +81,8 @@ const make = Effect.gen(function* () {
       const user = found.value;
       if (Option.isSome(user.deletedAt)) return;
       yield* moderation.releaseUser(user.id, now);
+      // Stripe stops charging them; what they paid stays on record.
+      yield* payments.releaseCustomer(user.id);
       yield* users.update(User.anonymise(user, now));
       yield* sessions.deleteByUser(subject);
       yield* audit.record({
@@ -109,8 +113,8 @@ export class UserCommands extends Context.Service<
     /**
      * Deletes the account of the user with this OIDC `sub` (their own, from
      * their session): clears the profile, removes the roles, ends all
-     * sessions and has the identity provider delete the user (outbox, with
-     * retries). Records `AccountDeleted` and an audit entry. Does nothing for
+     * sessions, has Stripe cancel their subscriptions and the identity
+     * provider delete the user (both outbox, with retries). Records `AccountDeleted` and an audit entry. Does nothing for
      * an account already deleted. Refused for a superAdmin.
      */
     readonly deleteAccount: (
@@ -118,6 +122,6 @@ export class UserCommands extends Context.Service<
     ) => Effect.Effect<void, AccountDeletionNotAllowed>;
   }
 >()("@unhalteproblem.de/backend/domains/users/UserCommands") {
-  /** Needs `UserRepository`, `ModerationCommands`, `AuditCommands`, `Outbox`, `Sessions` and `Transaction`. */
+  /** Needs `UserRepository`, `ModerationCommands`, `PaymentCommands`, `AuditCommands`, `Outbox`, `Sessions` and `Transaction`. */
   static readonly layer = Layer.effect(UserCommands, make);
 }

@@ -39,6 +39,12 @@ import {
 import { BlogsHandlers } from "#http/Blogs";
 import { ContactHandlers } from "#http/Contact";
 import { FoodPlannerHandlers } from "#http/Food";
+import { PaymentAdminHandlers } from "#http/PaymentAdmin";
+import {
+  PaymentCatalogHandlers,
+  PaymentsHandlers,
+  PaymentWebhooksHandlers,
+} from "#http/Payments";
 import { LargeBodyLive } from "#http/LargeBody";
 import { MediaHandlers } from "#http/Media";
 import { ProjectAdminHandlers } from "#http/ProjectAdmin";
@@ -52,6 +58,7 @@ import { Sessions } from "#auth/Sessions";
 import { ContactRateLimit } from "#domains/contact/ContactRateLimit";
 import { LoginRateLimit } from "#auth/LoginRateLimit";
 import type { Claude } from "#infrastructure/Claude";
+import type { Stripe } from "#infrastructure/Stripe";
 import { KeycloakAdmin } from "#infrastructure/KeycloakAdmin";
 import { Mailer } from "#infrastructure/Mailer";
 import type { OpenFoodFacts } from "#infrastructure/OpenFoodFacts";
@@ -63,6 +70,7 @@ import { TokenVerifier } from "#auth/TokenVerifier";
 import { DatabaseTest } from "./Database.ts";
 import { fakeFoodSources, makeScriptedClaude } from "./Food.ts";
 import { makeRecordingKeycloak } from "./KeycloakAdmin.ts";
+import { makeFakeStripe } from "./Stripe.ts";
 import { createServer, request as httpRequest } from "node:http";
 
 /**
@@ -116,6 +124,8 @@ export interface AppOptions {
    */
   readonly foodSources?: Layer.Layer<OpenPrices | OpenFoodFacts | StatsNz>;
   readonly claude?: Layer.Layer<Claude>;
+  /** Stands in for Stripe; by default it is not configured (see `testing/Stripe.ts`). */
+  readonly stripe?: Layer.Layer<Stripe>;
   /** Login starts allowed per client. */
   readonly loginLimit?: number;
   /**
@@ -315,6 +325,9 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
         Layer.provide(
           options.claude ?? makeScriptedClaude([], { configured: false }).layer,
         ),
+        Layer.provide(
+          options.stripe ?? makeFakeStripe({ configured: false }).layer,
+        ),
         Layer.provideMerge(Sessions.layer),
       ),
     ).pipe(Layer.provideMerge(DatabaseTest)),
@@ -336,6 +349,10 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
     ProjectAdminHandlers,
     SeoHandlers,
     FoodPlannerHandlers,
+    PaymentCatalogHandlers,
+    PaymentsHandlers,
+    PaymentWebhooksHandlers,
+    PaymentAdminHandlers,
   ).pipe(
     Layer.provide([
       SameOriginLive,

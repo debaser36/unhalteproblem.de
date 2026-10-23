@@ -30,6 +30,11 @@ const make = Effect.gen(function* () {
       Query.boundary,
     ),
 
+    paidRoleHolders: moderation.paidRoleHolders.pipe(
+      Effect.withSpan("ModerationQueries.paidRoleHolders"),
+      Query.boundary,
+    ),
+
     standingOf: Effect.fn("ModerationQueries.standingOf")(function* (
       ids: ReadonlyArray<UserId>,
     ) {
@@ -68,6 +73,11 @@ export class ModerationQueries extends Context.Service<
      * (`#auth/SessionAccess`).
      */
     readonly accessOf: (subject: typeof Subject.Type) => Effect.Effect<Access>;
+    /**
+     * The users who hold a role only through a payment, for the payments
+     * domain to check them against the current Stripe mode at startup.
+     */
+    readonly paidRoleHolders: Effect.Effect<ReadonlyArray<UserId>>;
     /** The roles and active restriction of each of these users (admins only). */
     readonly standingOf: (
       ids: ReadonlyArray<UserId>,

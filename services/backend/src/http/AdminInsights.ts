@@ -6,12 +6,14 @@ import { ContactCommands } from "#domains/contact/ContactCommands";
 import { ContactQueries } from "#domains/contact/ContactQueries";
 import { OperationsCommands } from "#domains/operations/OperationsCommands";
 import { OperationsQueries } from "#domains/operations/OperationsQueries";
+import { PaymentQueries } from "#domains/payments/PaymentQueries";
 import { noStore } from "./CacheControl.ts";
 
 /**
- * The admin panel's insights: the database, the outbox, the audit log and
- * the stored contact messages. The group's `RequireAdmin` provides the
- * proof every query and command requires; nothing here may be cached.
+ * The admin panel's insights: the database, the outbox, the audit log,
+ * the stored contact messages and the payment figures. The group's
+ * `RequireAdmin` provides the proof every query and command requires;
+ * nothing here may be cached.
  */
 export const AdminInsightsHandlers = HttpApiBuilder.group(
   Api,
@@ -22,7 +24,9 @@ export const AdminInsightsHandlers = HttpApiBuilder.group(
     const audit = yield* AuditQueries;
     const contacts = yield* ContactQueries;
     const contactCommands = yield* ContactCommands;
+    const payments = yield* PaymentQueries;
     return handlers
+      .handle("paymentInsights", () => payments.insights.pipe(noStore))
       .handle("databaseOverview", () =>
         operations.databaseOverview.pipe(
           Effect.map(({ facts, tables, migrations }) => ({

@@ -43,6 +43,8 @@ describe("DatabaseTest", () => {
             "user_roles.granted_at timestamp with time zone not null default now()",
             // Added by 0004.
             "user_roles.granted_by uuid",
+            // Added by 0020.
+            "user_roles.manual boolean not null default true",
           ],
         );
 

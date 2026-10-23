@@ -8,6 +8,7 @@ import {
   type BlogSlug,
   Forbidden,
   NotRestricted,
+  type PurchasableRole,
   RestrictionNotAllowed,
   type Role,
   RoleChangeNotAllowed,
@@ -114,6 +115,37 @@ const make = Effect.gen(function* () {
           by: Option.none(),
           at,
         });
+      }
+    }, Command.boundary(transaction)),
+
+    syncPaidRoles: Effect.fn("ModerationCommands.syncPaidRoles")(function* (
+      userId: UserId,
+      entitled: ReadonlyArray<PurchasableRole>,
+    ) {
+      const [user] = yield* users.lockForUpdate([userId]);
+      // A deleted account keeps nothing, whatever Stripe still says.
+      const keep: ReadonlyArray<Role> =
+        user === undefined || Option.isSome(user.deletedAt) ? [] : entitled;
+      const now = yield* DateTime.now;
+      const change = { userId, by: Option.none(), at: now };
+      for (const role of keep) {
+        if (yield* moderation.grantPaidRole({ userId, role, at: now })) {
+          yield* moderation.recordRoleChange({
+            ...change,
+            role,
+            change: "granted",
+          });
+        }
+      }
+      for (const role of yield* moderation.paidRolesOf(userId)) {
+        if (keep.includes(role)) continue;
+        if (yield* moderation.revokePaidRole(userId, role)) {
+          yield* moderation.recordRoleChange({
+            ...change,
+            role,
+            change: "revoked",
+          });
+        }
       }
     }, Command.boundary(transaction)),
 
@@ -357,8 +389,23 @@ export class ModerationCommands extends Context.Service<
       at: DateTime.Utc,
     ) => Effect.Effect<void, AccountDeletionNotAllowed>;
     /**
-     * Grants a role (superAdmins only). Granting a held role changes
-     * nothing; otherwise it is logged and `RoleGranted` recorded. A
+     * Brings the roles a user holds through payments in line with what
+     * their payments entitle them to now (from the payments domain, which
+     * joins its transaction): grants the missing ones, revokes the paid
+     * ones they lost. Roles granted by hand are never touched, and a
+     * deleted account gets none. Logged in the role change log with no
+     * actor. Takes no proof: it acts for Stripe, and `entitled` can only
+     * hold purchasable roles.
+     */
+    readonly syncPaidRoles: (
+      userId: UserId,
+      entitled: ReadonlyArray<PurchasableRole>,
+    ) => Effect.Effect<void>;
+    /**
+     * Grants a role (superAdmins only). Granting a role held by hand
+     * changes nothing; otherwise (also for one held only through a
+     * payment, which it makes a manual grant) it is logged and
+     * `RoleGranted` recorded. A
      * `blogEditor:<slug>` role only for an existing subblog (`BlogNotFound`).
      */
     readonly grantRole: (

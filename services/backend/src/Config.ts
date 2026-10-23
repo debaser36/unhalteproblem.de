@@ -4,7 +4,7 @@ import {
   Duration,
   Effect,
   Option,
-  type Redacted,
+  Redacted,
   Schema,
 } from "effect";
 
@@ -304,6 +304,85 @@ export const ClaudeConfig = Config.all({
     "CLAUDE_EFFORT",
   ).pipe(Config.withDefault("medium" as const)),
 });
+
+// Checked on the redacted value, so a malformed secret is never quoted in
+// the startup error.
+const redactedMatching = (pattern: RegExp, expected: string) =>
+  Schema.Redacted(Schema.String).check(
+    Schema.makeFilter(
+      (value: Redacted.Redacted<string>) =>
+        pattern.test(Redacted.value(value)) || `must be ${expected}`,
+    ),
+  );
+// Stripe's secret keys: `sk_` (secret) or `rk_` (restricted), then the mode.
+const StripeSecretKey = redactedMatching(
+  /^(?:sk|rk)_(?:test|live)_\S+$/u,
+  "a Stripe secret key (sk_test_…, sk_live_…, rk_…)",
+);
+const StripeWebhookSecret = redactedMatching(
+  /^whsec_\S+$/u,
+  "a Stripe webhook signing secret (whsec_…)",
+);
+const Currency = Schema.String.check(
+  Schema.isPattern(/^[a-z]{3}$/u, {
+    expected: "a lowercase ISO 4217 code such as eur",
+  }),
+);
+
+/**
+ * Payments through Stripe. Optional: without `STRIPE_SECRET_KEY` and
+ * `STRIPE_WEBHOOK_SECRET` the rest of the site works, the catalog is empty
+ * and starting a checkout answers 503. A test key (`sk_test_…`) and a live
+ * key never mix: rows are stored with the mode they were made in, and only
+ * the current mode's are read.
+ *
+ * - `STRIPE_AUTOMATIC_TAX`: let Stripe Tax compute VAT in Checkout. Off
+ *   while the site is a Kleinunternehmer (§19 UStG); turning it on also
+ *   needs Stripe Tax set up in the dashboard.
+ * - `STRIPE_CHECKOUT_INVOICES`: have Checkout create an invoice for one-off
+ *   payments (Stripe charges for these), with `STRIPE_INVOICE_FOOTER` as
+ *   its footer, e.g. the §19 UStG note. Subscription invoices take the
+ *   footer from the dashboard's invoice settings.
+ * - `TIP_CURRENCY`, `TIP_MINIMUM`, `TIP_MAXIMUM`: custom tip amounts, in
+ *   the currency's minor unit (cents).
+ */
+export const PaymentsConfig = Config.all({
+  secretKey: Config.option(Config.schema(StripeSecretKey, "STRIPE_SECRET_KEY")),
+  webhookSecret: Config.option(
+    Config.schema(StripeWebhookSecret, "STRIPE_WEBHOOK_SECRET"),
+  ),
+  automaticTax: Config.Boolean("STRIPE_AUTOMATIC_TAX").pipe(
+    Config.withDefault(false),
+  ),
+  checkoutInvoices: Config.Boolean("STRIPE_CHECKOUT_INVOICES").pipe(
+    Config.withDefault(false),
+  ),
+  invoiceFooter: Config.option(Config.NonEmptyString("STRIPE_INVOICE_FOOTER")),
+  tipCurrency: Config.schema(Currency, "TIP_CURRENCY").pipe(
+    Config.withDefault("eur"),
+  ),
+  tipMinimum: Config.schema(PositiveInt, "TIP_MINIMUM").pipe(
+    Config.withDefault(100),
+  ),
+  tipMaximum: Config.schema(PositiveInt, "TIP_MAXIMUM").pipe(
+    Config.withDefault(50_000),
+  ),
+}).pipe(
+  Config.mapEffect((config) =>
+    config.tipMinimum <= config.tipMaximum
+      ? Effect.succeed(config)
+      : Effect.fail(
+          new Config.ConfigError(
+            new ConfigProvider.SourceError({
+              message: "TIP_MINIMUM must not exceed TIP_MAXIMUM",
+            }),
+          ),
+        ),
+  ),
+);
+
+/** What `PaymentsConfig` holds. */
+export type PaymentsSettings = Config.Success<typeof PaymentsConfig>;
 
 /** How long audit log entries are kept before they are deleted. */
 export const AuditRetentionConfig = Config.schema(

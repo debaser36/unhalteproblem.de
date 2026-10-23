@@ -11,6 +11,7 @@ import { AuditCommands } from "#domains/audit/AuditCommands";
 import { AuditRepository } from "#domains/audit/AuditRepository";
 import { BlogDirectoryLive } from "#domains/blogs/Blogs";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
+import { PaymentCommands } from "#domains/payments/PaymentCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { ModerationRepository } from "#domains/moderation/ModerationRepository";
 import { UserDirectory } from "./UserDirectory.ts";
@@ -40,6 +41,8 @@ const ConcurrentFirstLoginTest = Layer.mergeAll(
       AuditCommands.layer.pipe(Layer.provide(AuditRepository.layer)),
       Outbox.layer,
       Sessions.layer,
+      // Only logins here; account deletion is tested elsewhere.
+      Layer.mock(PaymentCommands, {}),
     ),
   ),
   Layer.provide(

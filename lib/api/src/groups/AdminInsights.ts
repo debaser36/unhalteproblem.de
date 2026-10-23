@@ -7,6 +7,7 @@ import {
 } from "#domain/ContactMessage";
 import { DatabaseOverview } from "#domain/Database";
 import { OutboxMessage, OutboxMessageId, OutboxQuery } from "#domain/Outbox";
+import { PaymentInsights } from "#domain/Payment";
 import { ContactMessageNotFound } from "#errors/ContactMessageNotFound";
 import { OutboxMessageNotFound } from "#errors/OutboxMessageNotFound";
 import { RequireAdmin } from "#groups/Admin";
@@ -172,6 +173,22 @@ export class AdminInsightsGroup extends HttpApiGroup.make("adminInsights")
             "which includes a message already deleted or purged.",
         }),
       ),
+    HttpApiEndpoint.get("paymentInsights", "/admin/insights/payments", {
+      success: PaymentInsights,
+      error: [],
+    }).annotateMerge(
+      OpenApi.annotations({
+        summary: "Show the payment insights",
+        description:
+          adminRule +
+          " Returns the revenue of the last 30 days and in total, the " +
+          "refunded total and the monthly recurring revenue, each as one " +
+          "amount per currency, the number of active subscriptions and " +
+          "whether Stripe runs in live mode. Revenue is the amount minus " +
+          "the amount refunded of the payments that are paid, partially " +
+          "refunded or disputed.",
+      }),
+    ),
   )
   // Both protect every endpoint above. Added after them, so they run before
   // the endpoints' own middlewares; `Authentication` last, so it runs first

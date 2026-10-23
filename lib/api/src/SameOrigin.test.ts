@@ -16,6 +16,9 @@ const exempt = [
   // Called server-to-server by Keycloak, which sends no `Origin`; the
   // signed logout token is the proof.
   "auth.backchannelLogout",
+  // Called server-to-server by Stripe, which sends no `Origin`; the
+  // signature of the raw body is the proof.
+  "paymentWebhooks.stripeWebhook",
 ];
 
 describe("SameOrigin across the API", () => {
