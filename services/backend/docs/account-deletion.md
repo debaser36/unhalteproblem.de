@@ -13,10 +13,13 @@ does it in one transaction:
   no actor), all their sessions are deleted, and the response clears the
   session cookie;
 - an `account_deleted` audit entry is written and an outbox message
-  `account.delete-keycloak-user` is enqueued. The consumer then calls
+  `account.delete-keycloak-user` is enqueued. Its consumer then calls
   Keycloak's admin API (`DELETE /admin/realms/<realm>/users/<sub>`) with the
   backend client's service account; a user that is gone already counts as
   deleted, and a failure is retried with backoff (see "Outbox" in [domains.md](domains.md)).
+- for a user with a Stripe customer, `payments.cancel-subscriptions` is
+  enqueued too: it cancels their subscriptions at once, without a refund;
+  their payments stay on record (see [payments.md](payments.md)).
 
 A deleted account is treated like a restricted one: no session works and a
 login ends in `login_error=restricted`, until Keycloak has deleted the user

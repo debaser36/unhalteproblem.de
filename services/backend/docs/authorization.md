@@ -9,7 +9,9 @@ revoke it through the admin API like any other role; an admin or superAdmin
 approving a user's blog request also grants it to them for the new subblog
 (see [blogs.md](blogs.md)). Roles are flat, so no
 role includes another, and a user can hold several. Every user gets
-`normalUser` at registration. Roles are stored in `user_roles` and read on every authenticated request, in the same
+`normalUser` at registration. Payments grant purchasable roles (today `foodPlanner`)
+while a subscription or purchase entitles the user to them; `user_roles.manual`
+keeps those apart from roles granted by hand (see [payments.md](payments.md)). Roles are stored in `user_roles` and read on every authenticated request, in the same
 query as the session (`#auth/SessionAccess`; into
 `CurrentUser` and `GET /auth/session`), so a granted or revoked role counts
 from the user's next request.

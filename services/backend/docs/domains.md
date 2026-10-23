@@ -2,8 +2,8 @@
 
 Business logic lives in domains under `src/domains/<domain>/`, built on a
 small kernel in `src/cqrs/`. The domains are `users`, `moderation`,
-`audit`, `contact`, `blogs`, `projects`, `media` and `food` (see
-[food.md](food.md)).
+`audit`, `contact`, `blogs`, `projects`, `media`, `food` (see
+[food.md](food.md)) and `payments` (see [payments.md](payments.md)).
 
 | Kernel (`#cqrs/*`) | Purpose                                                                                                                                                                                                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
