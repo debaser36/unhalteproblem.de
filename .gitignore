@@ -146,3 +146,6 @@ result
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Local stack (`stack up`): database, logs, cookies
+.dev/

@@ -75,6 +75,21 @@
             install -Dm444 services/backend/dist/main.js $out/lib/main.js
           '';
         };
+
+        # The local stack for trying a feature in the real app. node and pnpm
+        # come from the dev shell.
+        stack = pkgs.writeShellApplication {
+          name = "stack";
+          runtimeInputs = [
+            pkgs.postgresql
+            pkgs.curl
+            pkgs.git
+            pkgs.coreutils
+            pkgs.util-linux
+          ];
+          runtimeEnv.STACK_SHOT_SCRIPT = ./nix/stack-shot.mjs;
+          text = builtins.readFile ./nix/stack.sh;
+        };
       in
       {
         # -----------------
@@ -84,7 +99,18 @@
           packages = [
             nodejs
             pnpm
+            # `stack up` and friends: a local backend + website on a
+            # throwaway Postgres (see nix/stack.sh and `stack help`).
+            stack
+            pkgs.postgresql
+            pkgs.curl
+            pkgs.jq
           ];
+
+          # `stack shot` drives this Chromium through playwright-core.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+          PLAYWRIGHT_CORE = "${pkgs.playwright-driver}";
+          CHROMIUM_EXECUTABLE = lib.optionalString pkgs.stdenv.hostPlatform.isLinux "${pkgs.chromium}/bin/chromium";
 
           shellHook = ''
             if [ -z "$FISH_VERSION" ] && ps -p $PPID -o comm= | grep -q fish; then
