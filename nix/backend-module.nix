@@ -67,6 +67,8 @@ let
     "POSTGRES_PASSWORD"
     "SMTP_PASSWORD"
     "ANTHROPIC_API_KEY"
+    "STRIPE_SECRET_KEY"
+    "STRIPE_WEBHOOK_SECRET"
   ];
 
   # Restores a dump into a scratch database and checks it (nix/verify-backup.sh).
@@ -156,6 +158,8 @@ in
         # CONTACT_MAIL_TO = "me@example.org";
         # Food planner (meal plans need ANTHROPIC_API_KEY in environmentFiles).
         # CLAUDE_MODEL = "claude-opus-5-5"; CLAUDE_EFFORT = "medium";
+        # Payments (STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in environmentFiles).
+        # STRIPE_AUTOMATIC_TAX = "false"; TIP_CURRENCY = "eur";
       };
       description = ''
         Extra, non-secret environment variables for the backend (see
@@ -164,7 +168,7 @@ in
 
         These values are written to the world-readable Nix store, so secrets
         (OIDC_CLIENT_SECRET, KEYCLOAK_ADMIN_CLIENT_SECRET, POSTGRES_PASSWORD, SMTP_PASSWORD,
-        ANTHROPIC_API_KEY) go into
+        ANTHROPIC_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) go into
         {option}`environmentFiles` instead.
 
         POSTGRES_HOST defaults to localhost, which inside the container is
@@ -301,6 +305,7 @@ in
         limit_req_zone $binary_remote_addr zone=unhalteproblem_contact:1m rate=6r/m;
         limit_req_zone $binary_remote_addr zone=unhalteproblem_auth:1m rate=30r/m;
         limit_req_zone $binary_remote_addr zone=unhalteproblem_seo:1m rate=10r/s;
+        limit_req_zone $binary_remote_addr zone=unhalteproblem_webhook:1m rate=20r/s;
 
         # Crawlers and link-preview bots get server-rendered pages instead of
         # the SPA's empty shell (see services/backend/docs/seo.md). Only tokens
@@ -380,6 +385,18 @@ in
             proxyPass = backendUrl "/sitemap.xml";
             extraConfig = proxyConfig + ''
               limit_req zone=unhalteproblem_seo burst=5 nodelay;
+              limit_req_status 429;
+            '';
+          };
+          # Stripe's webhook: events (an invoice with many lines) can exceed
+          # 32k; the backend allows 512 KiB (`LargeBody`) and checks the
+          # signature. The rate limit is far above what Stripe sends and only
+          # bounds a flood of forged deliveries (Stripe retries a 429).
+          "= /api/payments/stripe/webhook" = {
+            proxyPass = backendUrl "/payments/stripe/webhook";
+            extraConfig = proxyHeaders + ''
+              client_max_body_size 512k;
+              limit_req zone=unhalteproblem_webhook burst=100 nodelay;
               limit_req_status 429;
             '';
           };
