@@ -49,6 +49,26 @@ Either a fully working Node JS Setup including pnpm, or a nix developing system 
 Filters are planned to be added, once there are more packages.
 If you want to use the nix shell, run `nix develop`
 
+#### Try a feature in the real app (`nix develop`)
+
+Inside `nix develop`, `stack up` starts a throwaway Postgres, the backend and
+the website, and seeds a logged-in superadmin (Keycloak is not involved):
+
+| Command                             | What it does                                                        |
+| ----------------------------------- | ------------------------------------------------------------------- |
+| `stack up` / `stack down`           | Start / stop everything. The data stays in the git-ignored `.dev/`. |
+| `stack status`, `stack logs [name]` | What runs; follow the `postgres`, `backend` or `web` log.           |
+| `stack login [user] [roles]`        | Seed a user and print its `__Host-session` cookie.                  |
+| `stack shot <path> [file] [--user]` | Headless Chromium screenshot of a page, e.g. `stack shot /admin`.   |
+| `stack psql`                        | `psql` on the database.                                             |
+| `stack reset`                       | Stop and delete `.dev/`, so the next `up` starts from an empty DB.  |
+
+Website <http://localhost:5173>, backend <http://127.0.0.1:3100>, Postgres
+`127.0.0.1:54329` (override with `STACK_WEB_PORT`, `STACK_BACKEND_PORT`,
+`STACK_PG_PORT`). Secrets like `STRIPE_SECRET_KEY` are read from `.env`. To
+use the seeded login in your own browser, set the cookie `__Host-session` to
+the value `stack login` prints.
+
 ---
 
 ## Building
