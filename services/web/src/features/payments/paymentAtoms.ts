@@ -90,3 +90,7 @@ export const setPaymentProductRoles = ApiClient.mutation(
   "paymentAdmin",
   "setPaymentProductRoles",
 );
+export const setPaymentProductCredits = ApiClient.mutation(
+  "paymentAdmin",
+  "setPaymentProductCredits",
+);

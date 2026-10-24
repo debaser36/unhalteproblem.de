@@ -1,6 +1,9 @@
 import { useAtomValue } from "@effect/atom-react";
 import {
   type AdminProduct,
+  CreditFeature,
+  type ProductCredit,
+  ProductCreditMaxQuantity,
   type ProductKind,
   PurchasableRole,
 } from "@unhalteproblem.de/api";
@@ -16,13 +19,19 @@ import { Badge } from "#ui/Badge.tsx";
 import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
-import { Select } from "#ui/Field.tsx";
+import { Input, Select } from "#ui/Field.tsx";
 import { formatPrice } from "./money.ts";
-import { dashboardUrl, roleLabels } from "./labels.ts";
+import {
+  creditLabel,
+  dashboardUrl,
+  featureLabels,
+  roleLabels,
+} from "./labels.ts";
 import {
   adminProductsAtom,
   adminProductsKey,
   catalogKey,
+  setPaymentProductCredits,
   setPaymentProductRoles,
   syncPaymentProducts,
   updatePaymentProduct,
@@ -31,7 +40,7 @@ import {
 const productErrors = {
   PaymentProductNotFound: "The product is gone. Sync the catalog.",
   ProductKindConflict:
-    "There is one tip product, and it grants no roles: change the other one first.",
+    "Not possible: there is one tip product, which grants nothing, and a product grants roles or credits, never both.",
   PaymentsUnavailable: "Stripe is not configured.",
   PaymentProviderFailed: "Stripe could not be reached. Try again.",
 };
@@ -39,7 +48,8 @@ const productErrors = {
 /**
  * The catalog for admins: products and prices are made in the Stripe
  * dashboard and mirrored here; this decides which are offered, which one
- * is the tip product, and (superAdmins) which roles each grants.
+ * is the tip product, and (superAdmins) which roles and credits each
+ * grants.
  */
 export function PaymentProductsAdminPage() {
   const sync = useAction(syncPaymentProducts, {
@@ -241,8 +251,111 @@ function ProductCard({ product }: { readonly product: AdminProduct }) {
               </span>
             </div>
           )}
+          <ProductCredits product={product} keys={keys} />
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * The credits one purchase of the product grants (single uses of a
+ * feature, e.g. one meal plan each): editable by superAdmins, for
+ * purchases made from then on.
+ */
+function ProductCredits({
+  product,
+  keys,
+}: {
+  readonly product: AdminProduct;
+  readonly keys: ReadonlyArray<string>;
+}) {
+  const me = useAtomValue(userAtom);
+  const setCredits = useAction(setPaymentProductCredits, {
+    success: "Credits updated.",
+    errors: productErrors,
+  });
+  const quantityOf = (credits: ReadonlyArray<ProductCredit>) =>
+    Object.fromEntries(
+      credits.map(({ feature, quantity }) => [feature, quantity]),
+    ) as Partial<Record<CreditFeature, number>>;
+  const [pending, setPending] = useState(quantityOf(product.credits));
+  const offered: ReadonlyArray<ProductCredit> = CreditFeature.literals.flatMap(
+    (feature) => {
+      const quantity = pending[feature] ?? 0;
+      return quantity > 0 ? [{ feature, quantity }] : [];
+    },
+  );
+  const valid = offered.every(
+    ({ quantity }) =>
+      Number.isInteger(quantity) && quantity <= ProductCreditMaxQuantity,
+  );
+  const changed =
+    JSON.stringify(offered) !==
+    JSON.stringify(
+      CreditFeature.literals.flatMap((feature) =>
+        product.credits.filter((credit) => credit.feature === feature),
+      ),
+    );
+
+  return (
+    <>
+      <p className="mt-4 font-mono text-xs text-muted uppercase">
+        credits per purchase
+      </p>
+      {hasRole(me, "superAdmin") ? (
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+          {CreditFeature.literals.map((feature) => (
+            <label key={feature} className="inline-flex items-center gap-2">
+              <Input
+                type="number"
+                className="h-8 w-20"
+                min={0}
+                max={ProductCreditMaxQuantity}
+                step={1}
+                value={pending[feature] ?? 0}
+                onChange={(event) =>
+                  setPending((current) => ({
+                    ...current,
+                    [feature]: event.target.valueAsNumber || 0,
+                  }))
+                }
+              />
+              {featureLabels[feature].many}
+            </label>
+          ))}
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!changed || !valid}
+            loading={setCredits.pending}
+            onClick={() =>
+              setCredits.run({
+                params: { productId: product.id },
+                payload: { credits: offered },
+                reactivityKeys: keys,
+              })
+            }
+          >
+            Save credits
+          </Button>
+          <span className="text-xs text-muted">
+            0 for none; applies to purchases from now on
+          </span>
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {product.credits.length === 0 && (
+            <span className="text-sm text-muted">nothing</span>
+          )}
+          {product.credits.map(({ feature, quantity }) => (
+            <Badge key={feature} tone="accent">
+              {creditLabel(feature, quantity)}
+            </Badge>
+          ))}
+          <span className="text-xs text-muted">(superAdmins change these)</span>
+        </div>
+      )}
+    </>
   );
 }

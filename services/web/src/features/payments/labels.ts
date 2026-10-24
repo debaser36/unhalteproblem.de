@@ -1,10 +1,27 @@
-import type { PaymentStatus, SubscriptionStatus } from "@unhalteproblem.de/api";
+import type {
+  CreditFeature,
+  PaymentStatus,
+  SubscriptionStatus,
+} from "@unhalteproblem.de/api";
 import type { BadgeTone } from "#ui/Badge.tsx";
 
 /** What a role unlocks, for buyers. */
 export const roleLabels: Record<string, string> = {
   foodPlanner: "Food planner",
+  mealPlanBuyer: "Meal plans (with credits)",
 };
+
+/** A feature that credits are bought for: one use, and several. */
+export const featureLabels: Record<
+  CreditFeature,
+  { readonly one: string; readonly many: string }
+> = {
+  mealPlan: { one: "meal plan", many: "meal plans" },
+};
+
+/** `3 meal plans`, `1 meal plan` */
+export const creditLabel = (feature: CreditFeature, quantity: number) =>
+  `${quantity} ${quantity === 1 ? featureLabels[feature].one : featureLabels[feature].many}`;
 
 export const subscriptionTone: Record<SubscriptionStatus, BadgeTone> = {
   active: "accent",

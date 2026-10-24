@@ -10,7 +10,7 @@ import { Badge } from "#ui/Badge.tsx";
 import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { EmptyState } from "#ui/EmptyState.tsx";
-import { roleLabels } from "./labels.ts";
+import { creditLabel, roleLabels } from "./labels.ts";
 import { formatPrice } from "./money.ts";
 import { catalogAtom, startCheckout } from "./paymentAtoms.ts";
 import { useStripeRedirect } from "./useStripeRedirect.ts";
@@ -47,11 +47,16 @@ function ProductCard({ product }: { readonly product: CatalogProduct }) {
       {Option.isSome(product.description) && (
         <p className="mt-2 text-sm text-fg-soft">{product.description.value}</p>
       )}
-      {product.roles.length > 0 && (
+      {(product.roles.length > 0 || product.credits.length > 0) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {product.roles.map((role) => (
             <Badge key={role} tone="accent">
               {roleLabels[role] ?? role}
+            </Badge>
+          ))}
+          {product.credits.map(({ feature, quantity }) => (
+            <Badge key={feature} tone="info">
+              {creditLabel(feature, quantity)}
             </Badge>
           ))}
         </div>

@@ -7,7 +7,12 @@ import { AsyncView } from "#api/AsyncView.tsx";
 import { formatDate } from "#lib/format.ts";
 import { Alert } from "#ui/Alert.tsx";
 import { Badge } from "#ui/Badge.tsx";
-import { paymentTone, statusLabel, subscriptionTone } from "./labels.ts";
+import {
+  creditLabel,
+  paymentTone,
+  statusLabel,
+  subscriptionTone,
+} from "./labels.ts";
 import { Button } from "#ui/Button.tsx";
 import { Card } from "#ui/Card.tsx";
 import { Table, Td, Th } from "#ui/Table.tsx";
@@ -16,7 +21,7 @@ import { myPaymentsAtom, openBillingPortal } from "./paymentAtoms.ts";
 import { useStripeRedirect } from "./useStripeRedirect.ts";
 
 /**
- * The logged-in user's subscriptions and payments, with a button to
+ * The logged-in user's credits, subscriptions and payments, with a button to
  * Stripe's customer portal (cancel, change card, invoices). Also says how
  * a Checkout ended when Stripe sent the browser back with `?checkout=…`.
  */
@@ -30,6 +35,24 @@ export function MyPayments() {
             <p className="text-sm text-muted">No payments yet.</p>
           ) : (
             <>
+              {mine.credits.length > 0 && (
+                <Card className="flex flex-wrap gap-x-6 gap-y-2 p-4 text-sm">
+                  {mine.credits.map((balance) => (
+                    <p key={balance.feature} className="text-fg">
+                      <span className="font-medium">
+                        {creditLabel(balance.feature, balance.available)}
+                      </span>{" "}
+                      left
+                      {balance.used > 0 && (
+                        <span className="text-muted">
+                          {" "}
+                          · {balance.used} used
+                        </span>
+                      )}
+                    </p>
+                  ))}
+                </Card>
+              )}
               {mine.subscriptions.length > 0 && (
                 <div className="space-y-3">
                   {mine.subscriptions.map((subscription) => (
