@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { Container } from "#ui/Container.tsx";
 import { GithubIcon } from "#ui/GithubIcon.tsx";
 import { site } from "./site.ts";
-import { sections } from "./navigation.ts";
+import { legalPages, sections } from "./navigation.ts";
 
 // The year the page was loaded in; the footer needs no live clock.
 const year = new Date().getFullYear();
@@ -35,6 +35,11 @@ export function Footer() {
           >
             <GithubIcon size={14} /> github
           </a>
+          {legalPages.map((page) => (
+            <Link key={page.to} to={page.to} className="hover:text-fg">
+              {page.label}
+            </Link>
+          ))}
         </nav>
       </Container>
     </footer>

@@ -2,6 +2,7 @@ import { ContactMessageLimits } from "@unhalteproblem.de/api";
 import { staticPages } from "@unhalteproblem.de/seo";
 import { Mail, Send } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router";
 import { ApiClient } from "#api/ApiClient.ts";
 import { useAction } from "#api/useAction.ts";
 import { Seo } from "#app/Seo.tsx";
@@ -114,7 +115,14 @@ export function ContactPage() {
             <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted">
                 Your message is stored for a limited time and mailed to me. It
-                is not shared with anyone.
+                is not shared with anyone. See the{" "}
+                <Link
+                  to="/datenschutz?lang=en"
+                  className="underline hover:text-fg"
+                >
+                  privacy policy
+                </Link>
+                .
               </p>
               <Button
                 type="submit"
