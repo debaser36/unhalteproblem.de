@@ -19,6 +19,7 @@ import * as DomainEvent from "#cqrs/DomainEvent";
 import { Transaction } from "#cqrs/Transaction";
 import { AuditCommands } from "#domains/audit/AuditCommands";
 import { BlogDirectory } from "#domains/blogs/BlogDirectory";
+import type { CreditRole } from "#domains/credits/Credit";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import { initialRoles, type UserId, UserNotFound } from "#domains/users/User";
 import { Sessions } from "#auth/Sessions";
@@ -120,7 +121,7 @@ const make = Effect.gen(function* () {
 
     syncPaidRoles: Effect.fn("ModerationCommands.syncPaidRoles")(function* (
       userId: UserId,
-      entitled: ReadonlyArray<PurchasableRole>,
+      entitled: ReadonlyArray<PurchasableRole | CreditRole>,
     ) {
       const [user] = yield* users.lockForUpdate([userId]);
       // A deleted account keeps nothing, whatever Stripe still says.
@@ -395,11 +396,11 @@ export class ModerationCommands extends Context.Service<
      * ones they lost. Roles granted by hand are never touched, and a
      * deleted account gets none. Logged in the role change log with no
      * actor. Takes no proof: it acts for Stripe, and `entitled` can only
-     * hold purchasable roles.
+     * hold purchasable roles and the roles that come with credits.
      */
     readonly syncPaidRoles: (
       userId: UserId,
-      entitled: ReadonlyArray<PurchasableRole>,
+      entitled: ReadonlyArray<PurchasableRole | CreditRole>,
     ) => Effect.Effect<void>;
     /**
      * Grants a role (superAdmins only). Granting a role held by hand
