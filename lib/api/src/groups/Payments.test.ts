@@ -36,6 +36,10 @@ describe("payment endpoints in the OpenAPI document", () => {
       "503",
     ]);
     assert.deepStrictEqual(statuses("/payments/me", "get"), ["200", "401"]);
+    assert.deepStrictEqual(
+      statuses("/admin/payments/products/{productId}/credits", "put"),
+      ["200", "401", "403", "404", "409"],
+    );
     assert.deepStrictEqual(statuses("/payments/stripe/webhook", "post"), [
       "200",
       "400",
@@ -91,6 +95,7 @@ describe("payment endpoint middleware", () => {
       "paymentAdmin.listPayments",
       "paymentAdmin.listSubscriptions",
       "paymentAdmin.refundPayment",
+      "paymentAdmin.setPaymentProductCredits",
       "paymentAdmin.setPaymentProductRoles",
       "paymentAdmin.syncPaymentProducts",
       "paymentAdmin.updatePaymentProduct",
@@ -120,6 +125,7 @@ describe("payment endpoint middleware", () => {
       "paymentAdmin.syncPaymentProducts",
       "paymentAdmin.updatePaymentProduct",
       "paymentAdmin.setPaymentProductRoles",
+      "paymentAdmin.setPaymentProductCredits",
     ];
     for (const name of middlewares.keys()) {
       assert.strictEqual(
@@ -128,7 +134,9 @@ describe("payment endpoint middleware", () => {
         name,
       );
       if (name.startsWith("paymentAdmin.")) {
-        const superAdmin = name === "paymentAdmin.setPaymentProductRoles";
+        const superAdmin =
+          name === "paymentAdmin.setPaymentProductRoles" ||
+          name === "paymentAdmin.setPaymentProductCredits";
         assert.strictEqual(has(name, RequireAdmin.key), !superAdmin, name);
         assert.strictEqual(has(name, RequireSuperAdmin.key), superAdmin, name);
       }

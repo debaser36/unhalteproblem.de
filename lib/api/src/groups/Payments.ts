@@ -41,7 +41,7 @@ export class PaymentCatalogGroup extends HttpApiGroup.make("paymentCatalog")
         summary: "Get the payment catalog",
         description:
           "Public. Returns the enabled products that are active in Stripe " +
-          "with the roles they grant and their active prices that have a " +
+          "with the roles and credits they grant and their active prices that have a " +
           "fixed amount, and the tip offer (null if no tip product is " +
           "enabled). Answers with `Cache-Control: public, max-age=60`.",
       }),
@@ -94,8 +94,9 @@ export class PaymentsGroup extends HttpApiGroup.make("payments")
             "tip`) and answers with the URL to send the browser to. " +
             "Answers 404 `PaymentPriceNotFound` for an unknown, inactive " +
             "or not offered price, 409 `AlreadyEntitled` if the caller " +
-            "already has a live subscription or a paid or pending " +
-            "purchase of the product, 400 `TipAmountOutOfRange`, 404 " +
+            "already has a live subscription or, unless the product " +
+            "grants credits (those can be bought repeatedly), a paid or " +
+            "pending purchase of the product, 400 `TipAmountOutOfRange`, 404 " +
             "`TipsUnavailable` if there is no tip product, 503 " +
             "`PaymentsUnavailable` if Stripe is not configured and 502 " +
             "`PaymentProviderFailed` if Stripe fails.",
@@ -130,7 +131,9 @@ export class PaymentsGroup extends HttpApiGroup.make("payments")
         summary: "List the caller's payments",
         description:
           paymentsRule +
-          " Returns the caller's subscriptions and payments, newest first.",
+          " Returns the caller's subscriptions and payments, newest first, " +
+          "and their credit balances (one per feature they ever got " +
+          "credits for; revoked credits are not counted).",
       }),
     ),
   )

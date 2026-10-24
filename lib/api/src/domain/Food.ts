@@ -295,11 +295,16 @@ export const FoodItemQuery = Schema.Struct({
       "`true`: only items with a price. `false`: only items without one. " +
       "Leave out for both.",
   }),
-  /** Also look `q` up on Open Food Facts and cache what it finds. */
+  /**
+   * Also look `q` up on Open Food Facts and cache what it finds. Only for
+   * `foodPlanner`; ignored for a `mealPlanBuyer` without it.
+   */
   lookup: Schema.optionalKey(Schema.Boolean).annotateKey({
     description:
       "`true`: also look the term `q` up on Open Food Facts and cache what " +
-      "it finds, so later searches find it too.",
+      "it finds, so later searches find it too. Only for `foodPlanner`: " +
+      "for a `mealPlanBuyer` without it the parameter is ignored (the " +
+      "search covers the stored data) and not refused.",
   }),
   /** Page size, 1 to 100; the backend applies 50 if absent. */
   limit: Schema.optionalKey(
@@ -587,6 +592,14 @@ export type MealPlanStatus = typeof MealPlanStatus.Type;
  *   (unknown foods, wrong amounts, missing meals).
  * - `plannerFailed`: the AI planner could not be reached or answered with an
  *   error.
+ *
+ * Credits: a plan that failed with `noCandidates`, or with `plannerFailed`
+ * because the first request to Claude failed before Claude worked (no
+ * connection, a 429 or a 5xx status), cost nothing and give their credit
+ * back; `overBudget`, `invalidPlan` and the other `plannerFailed` cases (a
+ * refusal, a cut-off answer, a request error, a timeout, an error
+ * mid-answer, or any failure after Claude answered once, such as in a
+ * retry) keep the credit used. See `createMealPlan`.
  */
 export const MealPlanFailureReason = Schema.Literals([
   "noCandidates",

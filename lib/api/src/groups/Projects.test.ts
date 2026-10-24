@@ -29,7 +29,7 @@ import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
-import { RequireFoodPlanner } from "./Food.ts";
+import { RequireFoodPlanner, RequireMealPlanning } from "./Food.ts";
 
 describe("project endpoints in the OpenAPI document", () => {
   const spec = OpenApi.fromApi(Api);
@@ -338,6 +338,9 @@ layer(
           AuthenticationStub,
           requireRolesStub(RequireAdmin),
           requireRolesStub(RequireSuperAdmin),
+          Layer.succeed(RequireMealPlanning, () =>
+            Effect.die("not used by this group"),
+          ),
           Layer.succeed(RequireFoodPlanner, () =>
             Effect.die("not used by this group"),
           ),

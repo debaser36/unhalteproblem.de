@@ -81,6 +81,61 @@ export const PurchasableRole = Schema.Literals(["foodPlanner"]).annotate({
 export type PurchasableRole = typeof PurchasableRole.Type;
 
 /**
+ * A feature whose single uses can be bought as credits: `mealPlan`, one meal
+ * plan per credit. Holders of the role that unlocks the feature without
+ * limit (`foodPlanner` for `mealPlan`) need no credits. Adding a feature is
+ * a contract change and needs a database migration in the backend.
+ */
+export const CreditFeature = Schema.Literals(["mealPlan"]).annotate({
+  identifier: "CreditFeature",
+  description:
+    "A feature that single uses (credits) can be bought for: `mealPlan`, " +
+    "one meal plan per credit.",
+});
+export type CreditFeature = typeof CreditFeature.Type;
+
+/** Most credits of one feature that one purchase of a product may grant. */
+export const ProductCreditMaxQuantity = 100;
+
+/**
+ * What one purchase of a product grants for one feature: `quantity` credits
+ * of `feature`, 1 to 100.
+ */
+export const ProductCredit = Schema.Struct({
+  feature: CreditFeature,
+  quantity: Schema.Int.check(
+    Schema.isBetween({ minimum: 1, maximum: ProductCreditMaxQuantity }),
+  ).annotateKey({
+    description:
+      "How many credits one purchase grants, an integer from 1 to 100.",
+  }),
+}).annotate({
+  identifier: "ProductCredit",
+  description: "The credits one purchase of a product grants for one feature.",
+});
+export type ProductCredit = typeof ProductCredit.Type;
+
+/**
+ * The credits of one feature that a user has.
+ */
+export const CreditBalance = Schema.Struct({
+  feature: CreditFeature,
+  available: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).annotateKey({
+    description: "Credits that can still be used, 0 or more.",
+  }),
+  used: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).annotateKey({
+    description: "Credits that are used up, 0 or more.",
+  }),
+}).annotate({
+  identifier: "CreditBalance",
+  description:
+    "The credits of one feature: how many are available and how many are " +
+    "used up. Revoked credits (e.g. of a refunded purchase) count in " +
+    "neither.",
+});
+export type CreditBalance = typeof CreditBalance.Type;
+
+/**
  * What a product is: `standard` (a subscription or a one-off purchase) or
  * `tip` (the one product that takes tips; at most one).
  */
@@ -123,16 +178,24 @@ export const Price = Schema.Struct({
 });
 export type Price = typeof Price.Type;
 
-/** A product on offer, with the roles it grants and its prices. */
+/** A product on offer, with the roles and credits it grants and its prices. */
 export const CatalogProduct = Schema.Struct({
   id: StripeProductId,
   name: Schema.String,
   description: Schema.OptionFromNullOr(Schema.String),
   roles: Schema.Array(PurchasableRole),
+  /** What one one-off purchase grants; empty if no credits. */
+  credits: Schema.Array(ProductCredit).annotateKey({
+    description:
+      "The credits one one-off purchase of the product grants; empty if " +
+      "none. A subscription never grants credits.",
+  }),
   prices: Schema.Array(Price),
 }).annotate({
   identifier: "CatalogProduct",
-  description: "A product on offer, with the roles it grants and its prices.",
+  description:
+    "A product on offer, with the roles and credits it grants and its " +
+    "prices.",
 });
 export type CatalogProduct = typeof CatalogProduct.Type;
 
@@ -297,9 +360,20 @@ export type Payment = typeof Payment.Type;
 export const MyPayments = Schema.Struct({
   subscriptions: Schema.Array(Subscription),
   payments: Schema.Array(Payment),
+  /**
+   * One entry per feature the caller ever got credits for (so possibly with
+   * `available: 0`); revoked credits are not counted.
+   */
+  credits: Schema.Array(CreditBalance).annotateKey({
+    description:
+      "The caller's credits, one entry per feature they ever got credits " +
+      "for; empty if never. Revoked credits are not counted.",
+  }),
 }).annotate({
   identifier: "MyPayments",
-  description: "The caller's subscriptions and payments, newest first.",
+  description:
+    "The caller's subscriptions and payments, newest first, and their " +
+    "credit balances.",
 });
 export type MyPayments = typeof MyPayments.Type;
 
@@ -517,6 +591,12 @@ export const AdminProduct = Schema.Struct({
   enabled: Schema.Boolean,
   kind: ProductKind,
   roles: Schema.Array(PurchasableRole),
+  /** What one one-off purchase grants; empty if no credits. */
+  credits: Schema.Array(ProductCredit).annotateKey({
+    description:
+      "The credits one one-off purchase of the product grants; empty if " +
+      "none. A subscription never grants credits.",
+  }),
   prices: Schema.Array(AdminPrice),
   livemode: Schema.Boolean,
   updatedAt: IsoDateTimeUtc,
@@ -548,6 +628,31 @@ export const SetPaymentProductRolesPayload = Schema.Struct({
 });
 export type SetPaymentProductRolesPayload =
   typeof SetPaymentProductRolesPayload.Type;
+
+/** Body of `PUT /admin/payments/products/:productId/credits`. */
+export const SetPaymentProductCreditsPayload = Schema.Struct({
+  credits: Schema.Array(ProductCredit)
+    .check(
+      Schema.makeFilter(
+        (credits: ReadonlyArray<ProductCredit>) =>
+          new Set(credits.map(({ feature }) => feature)).size ===
+            credits.length || "at most one entry per feature",
+        { expected: "at most one entry per feature" },
+      ),
+    )
+    .annotateKey({
+      description:
+        "The credits one purchase grants, at most one entry per feature; " +
+        "empty to grant none.",
+    }),
+}).annotate({
+  identifier: "SetPaymentProductCreditsPayload",
+  description:
+    "The credits one purchase of the product grants, with at most one " +
+    "entry per feature.",
+});
+export type SetPaymentProductCreditsPayload =
+  typeof SetPaymentProductCreditsPayload.Type;
 
 /** Body of `POST /admin/payments/:paymentId/refund`. */
 export const RefundPayload = Schema.Struct({

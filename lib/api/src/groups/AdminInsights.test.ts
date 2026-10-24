@@ -30,7 +30,7 @@ import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
-import { RequireFoodPlanner } from "./Food.ts";
+import { RequireFoodPlanner, RequireMealPlanning } from "./Food.ts";
 
 describe("admin insights endpoints in the OpenAPI document", () => {
   const spec = OpenApi.fromApi(Api);
@@ -129,6 +129,7 @@ describe("admin insights endpoints in the OpenAPI document", () => {
         "payment_refunded",
         "payment_product_updated",
         "payment_product_roles_changed",
+        "payment_product_credits_changed",
         "payment_catalog_synced",
       ],
     );
@@ -369,6 +370,9 @@ layer(
           // Not used by this group, but the test server builds every
           // middleware of the API.
           requireRolesStub(RequireSuperAdmin),
+          Layer.succeed(RequireMealPlanning, () =>
+            Effect.die("not used by this group"),
+          ),
           Layer.succeed(RequireFoodPlanner, () =>
             Effect.die("not used by this group"),
           ),

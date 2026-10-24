@@ -141,6 +141,8 @@ describe("Role", () => {
     assert.isTrue(is("normalUser"));
     assert.isTrue(is("admin"));
     assert.isTrue(is("superAdmin"));
+    assert.isTrue(is("foodPlanner"));
+    assert.isTrue(is("mealPlanBuyer"));
     assert.isFalse(is("root"));
     assert.isFalse(is("Admin"));
   });

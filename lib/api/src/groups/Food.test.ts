@@ -4,7 +4,7 @@ import { HttpApi, OpenApi } from "effect/http-api";
 import { Api } from "#Api";
 import { Authentication } from "#Authentication";
 import { SameOrigin } from "#SameOrigin";
-import { RequireFoodPlanner } from "./Food.ts";
+import { RequireFoodPlanner, RequireMealPlanning } from "./Food.ts";
 
 describe("food planner endpoints in the OpenAPI document", () => {
   const spec = OpenApi.fromApi(Api);
@@ -48,6 +48,7 @@ describe("food planner endpoints in the OpenAPI document", () => {
     assert.deepStrictEqual(statuses(plans, "post"), [
       "202",
       "401",
+      "402",
       "403",
       "429",
       "503",
@@ -129,10 +130,30 @@ describe("food planner endpoint middleware", () => {
     assert.deepStrictEqual(RequireFoodPlanner.roles, ["foodPlanner"]);
   });
 
+  it("lets food planners and meal plan buyers into the group", () => {
+    assert.strictEqual(
+      RequireMealPlanning.key,
+      "@unhalteproblem.de/api/RequireRoles(foodPlanner,mealPlanBuyer)",
+    );
+    assert.deepStrictEqual(RequireMealPlanning.roles, [
+      "foodPlanner",
+      "mealPlanBuyer",
+    ]);
+  });
+
+  // The sources and the imports stay foodPlanner only.
+  const plannerOnly = [
+    "foodPlanner.listFoodSources",
+    "foodPlanner.listFoodImports",
+    "foodPlanner.startFoodImport",
+    "foodPlanner.getFoodImport",
+  ];
+
   it("protects every endpoint and adds SameOrigin to the state-changing ones", () => {
     assert.strictEqual(middlewares.size, 10);
     for (const [name, keys] of middlewares) {
-      const expected = [Authentication.key, RequireFoodPlanner.key];
+      const expected = [Authentication.key, RequireMealPlanning.key];
+      if (plannerOnly.includes(name)) expected.push(RequireFoodPlanner.key);
       if (methods.get(name) !== "GET") expected.push(SameOrigin.key);
       assert.deepStrictEqual(keys, expected.sort(), name);
     }

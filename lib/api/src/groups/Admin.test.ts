@@ -43,7 +43,7 @@ import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
-import { RequireFoodPlanner } from "./Food.ts";
+import { RequireFoodPlanner, RequireMealPlanning } from "./Food.ts";
 
 const stateChanging = [
   "admin.restrictUser",
@@ -218,7 +218,7 @@ describe("admin endpoints in the OpenAPI document", () => {
     assert.deepStrictEqual(
       (spec.components.schemas["GlobalRole"] as { readonly enum?: unknown })
         .enum,
-      ["normalUser", "admin", "superAdmin", "foodPlanner"],
+      ["normalUser", "admin", "superAdmin", "foodPlanner", "mealPlanBuyer"],
     );
   });
 
@@ -590,6 +590,9 @@ layer(
           AuthenticationStub,
           requireRolesStub(RequireAdmin),
           requireRolesStub(RequireSuperAdmin),
+          Layer.succeed(RequireMealPlanning, () =>
+            Effect.die("not used by this group"),
+          ),
           Layer.succeed(RequireFoodPlanner, () =>
             Effect.die("not used by this group"),
           ),

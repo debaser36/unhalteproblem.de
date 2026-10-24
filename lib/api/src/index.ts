@@ -27,7 +27,11 @@ export {
 export { BlogRequestsGroup } from "#groups/BlogRequests";
 export { BlogsGroup } from "#groups/Blogs";
 export { ContactGroup } from "#groups/Contact";
-export { FoodPlannerGroup, RequireFoodPlanner } from "#groups/Food";
+export {
+  FoodPlannerGroup,
+  RequireFoodPlanner,
+  RequireMealPlanning,
+} from "#groups/Food";
 export { MediaGroup } from "#groups/Media";
 export { PaymentAdminGroup } from "#groups/PaymentAdmin";
 export {
@@ -253,6 +257,8 @@ export {
   Catalog,
   CatalogProduct,
   CheckoutRequest,
+  CreditBalance,
+  CreditFeature,
   Currency,
   MyPayments,
   Payment,
@@ -266,12 +272,15 @@ export {
   PaymentPageLimits,
   PaymentStatus,
   Price,
+  ProductCredit,
+  ProductCreditMaxQuantity,
   ProductKind,
   ProductRef,
   PurchasableRole,
   RecurringInterval,
   RedirectUrl,
   RefundPayload,
+  SetPaymentProductCreditsPayload,
   SetPaymentProductRolesPayload,
   StripePriceId,
   StripeProductId,
@@ -326,6 +335,7 @@ export { MealPlanNotFound } from "#errors/MealPlanNotFound";
 export { MealPlannerUnavailable } from "#errors/MealPlannerUnavailable";
 export { MediaNotFound } from "#errors/MediaNotFound";
 export { MediaTooLarge } from "#errors/MediaTooLarge";
+export { NoCreditsLeft } from "#errors/NoCreditsLeft";
 export { NotRestricted } from "#errors/NotRestricted";
 export { OutboxMessageNotFound } from "#errors/OutboxMessageNotFound";
 export { PaymentCustomerNotFound } from "#errors/PaymentCustomerNotFound";

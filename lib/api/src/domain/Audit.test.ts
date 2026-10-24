@@ -55,6 +55,7 @@ describe("AuditAction", () => {
       "payment_refunded",
       "payment_product_updated",
       "payment_product_roles_changed",
+      "payment_product_credits_changed",
       "payment_catalog_synced",
     ]);
   });

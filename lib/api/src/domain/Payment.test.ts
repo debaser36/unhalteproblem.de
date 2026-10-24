@@ -5,13 +5,18 @@ import {
   AdminPaymentQuery,
   Catalog,
   CheckoutRequest,
+  CreditBalance,
+  CreditFeature,
   Currency,
+  MyPayments,
   Payment,
   PaymentCursor,
   PaymentId,
   PaymentMoney,
+  ProductCredit,
   PurchasableRole,
   RefundPayload,
+  SetPaymentProductCreditsPayload,
   SetPaymentProductRolesPayload,
   StripePriceId,
   StripeProductId,
@@ -42,12 +47,16 @@ describe("PurchasableRole", () => {
     assert.isTrue(succeeds(PurchasableRole, role));
   });
 
-  it.each(["admin", "superAdmin", "normalUser", "blogEditor:x", ""])(
-    "rejects %j",
-    (role) => {
-      assert.isFalse(succeeds(PurchasableRole, role));
-    },
-  );
+  it.each([
+    "admin",
+    "superAdmin",
+    "normalUser",
+    "mealPlanBuyer",
+    "blogEditor:x",
+    "",
+  ])("rejects %j", (role) => {
+    assert.isFalse(succeeds(PurchasableRole, role));
+  });
 });
 
 describe("Stripe ids and PaymentId", () => {
@@ -129,6 +138,7 @@ describe("optional fields travel as null", () => {
         name: "Food planner",
         description: null,
         roles: ["foodPlanner"],
+        credits: [],
         prices: [
           {
             id: "price_a",
@@ -259,6 +269,76 @@ describe("admin payloads", () => {
     );
     assert.isFalse(
       succeeds(SetPaymentProductRolesPayload, { roles: ["admin"] }),
+    );
+  });
+});
+
+describe("credits", () => {
+  it("knows the mealPlan feature only", () => {
+    assert.deepStrictEqual(CreditFeature.literals, ["mealPlan"]);
+    assert.isFalse(succeeds(CreditFeature, "recipes"));
+  });
+
+  it("grants 1 to 100 whole credits per purchase", () => {
+    const credit = (quantity: number) => ({ feature: "mealPlan", quantity });
+    assert.isTrue(succeeds(ProductCredit, credit(1)));
+    assert.isTrue(succeeds(ProductCredit, credit(100)));
+    assert.isFalse(succeeds(ProductCredit, credit(0)));
+    assert.isFalse(succeeds(ProductCredit, credit(101)));
+    assert.isFalse(succeeds(ProductCredit, credit(1.5)));
+    assert.isFalse(succeeds(ProductCredit, { feature: "other", quantity: 1 }));
+  });
+
+  it("takes at most one credit entry per feature", () => {
+    const entry = (quantity: number) => ({ feature: "mealPlan", quantity });
+    assert.isTrue(succeeds(SetPaymentProductCreditsPayload, { credits: [] }));
+    assert.isTrue(
+      succeeds(SetPaymentProductCreditsPayload, { credits: [entry(5)] }),
+    );
+    assert.isFalse(
+      succeeds(SetPaymentProductCreditsPayload, {
+        credits: [entry(5), entry(10)],
+      }),
+    );
+    assert.isFalse(succeeds(SetPaymentProductCreditsPayload, {}));
+  });
+
+  it("counts available and used credits from 0", () => {
+    const balance = (available: number, used: number) => ({
+      feature: "mealPlan",
+      available,
+      used,
+    });
+    assert.isTrue(succeeds(CreditBalance, balance(0, 0)));
+    assert.isTrue(succeeds(CreditBalance, balance(3, 7)));
+    assert.isFalse(succeeds(CreditBalance, balance(-1, 0)));
+    assert.isFalse(succeeds(CreditBalance, balance(0, -1)));
+    assert.isFalse(succeeds(CreditBalance, balance(0.5, 0)));
+  });
+
+  it("carries the balances in MyPayments and the credits on products", () => {
+    assert.isTrue(
+      succeeds(MyPayments, {
+        subscriptions: [],
+        payments: [],
+        credits: [{ feature: "mealPlan", available: 2, used: 1 }],
+      }),
+    );
+    assert.isFalse(succeeds(MyPayments, { subscriptions: [], payments: [] }));
+    assert.isTrue(
+      succeeds(Catalog, {
+        products: [
+          {
+            id: "prod_1",
+            name: "Plans",
+            description: null,
+            roles: [],
+            credits: [{ feature: "mealPlan", quantity: 5 }],
+            prices: [],
+          },
+        ],
+        tip: null,
+      }),
     );
   });
 });

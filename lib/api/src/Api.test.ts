@@ -22,6 +22,7 @@ import {
   RequireBlogEditor,
   RequireBlogRequestModerator,
   RequireFoodPlanner,
+  RequireMealPlanning,
   RequireSuperAdmin,
   SameOrigin,
   ServiceUnavailable,
@@ -54,6 +55,7 @@ describe("OpenAPI document", () => {
       "/admin/payments/products",
       "/admin/payments/products/sync",
       "/admin/payments/products/{productId}",
+      "/admin/payments/products/{productId}/credits",
       "/admin/payments/products/{productId}/roles",
       "/admin/payments/subscriptions",
       "/admin/payments/{paymentId}/refund",
@@ -248,6 +250,9 @@ describe("OpenAPI document", () => {
       },
       "/admin/payments/products/{productId}/roles": {
         put: "paymentAdmin.setPaymentProductRoles",
+      },
+      "/admin/payments/products/{productId}/credits": {
+        put: "paymentAdmin.setPaymentProductCredits",
       },
       "/admin/insights/payments": { get: "adminInsights.paymentInsights" },
       "/seo/pages/{page}": { get: "seo.renderPage" },
@@ -511,6 +516,9 @@ const unusedMiddleware = Effect.die("not used by these groups");
 const AdminMiddlewareStubs = Layer.mergeAll(
   Layer.succeed(RequireAdmin, () => unusedMiddleware),
   Layer.succeed(RequireSuperAdmin, () => unusedMiddleware),
+  Layer.succeed(RequireMealPlanning, () =>
+    Effect.die("not used by this group"),
+  ),
   Layer.succeed(RequireFoodPlanner, () => Effect.die("not used by this group")),
   Layer.succeed(RequireBlogRequestModerator, () => unusedMiddleware),
   Layer.succeed(SameOrigin, () => unusedMiddleware),

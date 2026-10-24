@@ -56,13 +56,14 @@ export type LoginQuery = typeof LoginQuery.Type;
 
 /**
  * The roles that are not scoped to anything: `normalUser`, `admin`,
- * `superAdmin` and `foodPlanner` (see `Role`).
+ * `superAdmin`, `foodPlanner` and `mealPlanBuyer` (see `Role`).
  */
 export const GlobalRole = Schema.Literals([
   "normalUser",
   "admin",
   "superAdmin",
   "foodPlanner",
+  "mealPlanBuyer",
 ]).annotate({
   identifier: "GlobalRole",
   description: "A role that is not scoped to a subblog.",
@@ -124,7 +125,16 @@ export const blogOfEditorRole = (role: Role): Option.Option<BlogSlug> =>
  * - `normalUser`: every registered user; granted at registration.
  * - `admin`: administers the website.
  * - `superAdmin`: the highest level of administration.
- * - `foodPlanner`: uses the food planner (food data, imports, meal plans).
+ * - `foodPlanner`: uses the food planner (food data, imports, meal plans)
+ *   without limit.
+ * - `mealPlanBuyer`: holds a bought meal-plan credit that is not revoked,
+ *   used or unused (see `CreditFeature`). Granted and revoked
+ *   automatically by the payments, like the other paid roles, but not
+ *   purchasable itself (not a `PurchasableRole`, so on no product). It
+ *   allows searching and reading food items and requesting, listing,
+ *   reading and deleting one's own meal plans; each request consumes one
+ *   credit unless the user also holds `foodPlanner`. Food imports and the
+ *   data sources stay `foodPlanner` only.
  * - `blogEditor:<slug>` (`BlogEditorRole`): edits the posts of the subblog
  *   `<slug>`, and only that one; one such role per subblog.
  *
@@ -142,8 +152,11 @@ export const Role = Schema.Union([GlobalRole, BlogEditorRole]).annotate({
   identifier: "Role",
   description:
     "An authorization role: `normalUser`, `admin`, `superAdmin`, " +
-    "`foodPlanner` (uses the food planner: food data, imports, meal plans) " +
-    "or `blogEditor:<slug>` (edits the posts of the subblog `<slug>` only). " +
+    "`foodPlanner` (uses the food planner without limit: food data, " +
+    "imports, meal plans), `mealPlanBuyer` (holds a bought meal-plan " +
+    "credit, granted automatically: searches food items and makes its own " +
+    "meal plans, one credit each) or `blogEditor:<slug>` (edits the posts " +
+    "of the subblog `<slug>` only). " +
     "Roles are flat (none implies another) and a user can hold several.",
 });
 export type Role = typeof Role.Type;

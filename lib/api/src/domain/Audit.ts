@@ -39,6 +39,8 @@ import { Effect, Schema, SchemaGetter } from "effect";
  *   is offered or its kind; `detail` is the product id.
  * - `payment_product_roles_changed`: a superAdmin set the roles a payment
  *   product grants; `detail` is the product id.
+ * - `payment_product_credits_changed`: a superAdmin set the credits a
+ *   payment product grants; `detail` is the product id.
  * - `payment_catalog_synced`: an admin pulled the catalog from Stripe; no
  *   target and no detail.
  */
@@ -68,6 +70,7 @@ export const AuditAction = Schema.Literals([
   "payment_refunded",
   "payment_product_updated",
   "payment_product_roles_changed",
+  "payment_product_credits_changed",
   "payment_catalog_synced",
 ]).annotate({
   identifier: "AuditAction",

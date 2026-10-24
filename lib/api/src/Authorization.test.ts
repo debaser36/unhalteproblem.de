@@ -343,6 +343,7 @@ describe("requirement types", () => {
       | "admin"
       | "superAdmin"
       | "foodPlanner"
+      | "mealPlanBuyer"
       | `blogEditor:${string}`
     >();
   });

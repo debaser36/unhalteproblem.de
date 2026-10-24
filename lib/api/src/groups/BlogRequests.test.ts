@@ -29,7 +29,7 @@ import { LargeBody } from "#LargeBody";
 import { SameOrigin } from "#SameOrigin";
 import { RequireAdmin, RequireSuperAdmin } from "./Admin.ts";
 import { RequireBlogRequestModerator } from "./BlogRequestAdmin.ts";
-import { RequireFoodPlanner } from "./Food.ts";
+import { RequireFoodPlanner, RequireMealPlanning } from "./Food.ts";
 
 const requestId = "5c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f" as BlogRequestId;
 const decidedId = "6d2e3f40-5b6c-4d7e-8f80-1b2c3d4e5f60" as BlogRequestId;
@@ -429,6 +429,9 @@ layer(
           // Not used by these groups, but the test server builds every
           // middleware of the API.
           Layer.succeed(RequireAdmin, () => Effect.die("not used")),
+          Layer.succeed(RequireMealPlanning, () =>
+            Effect.die("not used by this group"),
+          ),
           Layer.succeed(RequireFoodPlanner, () => Effect.die("not used")),
           Layer.succeed(RequireSuperAdmin, () => Effect.die("not used")),
           Layer.succeed(LargeBody, () => Effect.die("not used")),

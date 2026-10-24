@@ -8,6 +8,7 @@ import {
   AdminSubscriptionQuery,
   PaymentId,
   RefundPayload,
+  SetPaymentProductCreditsPayload,
   SetPaymentProductRolesPayload,
   StripeProductId,
   UpdatePaymentProductPayload,
@@ -35,10 +36,10 @@ const adminRule = "Requires `admin`. Answers with `Cache-Control: no-store`.";
 /**
  * Payment administration: admins see every payment and subscription, refund
  * payments and decide which of the products mirrored from Stripe are
- * offered; superAdmins set the roles a product grants. Every endpoint
- * requires a session (`Authentication`, 401, on the group) and a role
- * (`RequireAdmin`, or `RequireSuperAdmin` for the roles of a product, 403
- * `Forbidden`). The state-changing endpoints also require `SameOrigin`
+ * offered; superAdmins set the roles and the credits a product grants.
+ * Every endpoint requires a session (`Authentication`, 401, on the group)
+ * and a role (`RequireAdmin`, or `RequireSuperAdmin` for the roles and
+ * credits of a product, 403 `Forbidden`). The state-changing endpoints also require `SameOrigin`
  * (403 `Forbidden`) and write an audit log entry in the same transaction as
  * their change. The backend answers every endpoint with
  * `Cache-Control: no-store`.
@@ -126,7 +127,7 @@ export class PaymentAdminGroup extends HttpApiGroup.make("paymentAdmin")
           description:
             adminRule +
             " Returns every product mirrored from Stripe with its prices, " +
-            "whether it is enabled and the roles it grants.",
+            "whether it is enabled and the roles and credits it grants.",
         }),
       ),
     HttpApiEndpoint.post(
@@ -175,7 +176,7 @@ export class PaymentAdminGroup extends HttpApiGroup.make("paymentAdmin")
             "`payment_product_updated` (detail: the product id) in the " +
             "audit log. Answers 404 `PaymentProductNotFound` and 409 " +
             "`ProductKindConflict` if another product is the tip product " +
-            "already or a tip product would get roles.",
+            "already or a tip product would get roles or credits.",
         }),
       ),
     HttpApiEndpoint.put(
@@ -199,8 +200,46 @@ export class PaymentAdminGroup extends HttpApiGroup.make("paymentAdmin")
             "same-origin request. Replaces the roles the product grants " +
             "(only `foodPlanner` is purchasable). Records " +
             "`payment_product_roles_changed` (detail: the product id) in " +
-            "the audit log. Answers 404 `PaymentProductNotFound` and 409 " +
-            "`ProductKindConflict` if the product is the tip product.",
+            "the audit log. A product grants roles or credits, never both. " +
+            "Answers 404 `PaymentProductNotFound` and 409 " +
+            "`ProductKindConflict` if the product is the tip product or " +
+            "already grants credits.",
+        }),
+      ),
+    HttpApiEndpoint.put(
+      "setPaymentProductCredits",
+      "/admin/payments/products/:productId/credits",
+      {
+        params: ProductParams,
+        payload: SetPaymentProductCreditsPayload,
+        success: AdminProduct,
+        error: [PaymentProductNotFound, ProductKindConflict],
+      },
+    )
+      .middleware(RequireSuperAdmin)
+      .middleware(SameOrigin)
+      .annotateMerge(
+        OpenApi.annotations({
+          summary: "Set the credits of a payment product",
+          description:
+            "Requires `superAdmin` (it decides what money buys). Answers " +
+            "with `Cache-Control: no-store`. Requires a same-origin " +
+            "request. Replaces the credits one purchase of the product " +
+            "grants: at most one entry per feature, `quantity` 1 to 100 " +
+            "(an empty list grants none). The change is not retroactive: " +
+            "it applies to purchases started after it, and credits that " +
+            "were granted before stay as they are: a purchase gets the " +
+            "credits that were in force when its Checkout session was " +
+            "created (changes are versioned, so a later change or removal " +
+            "does not affect purchases already started). Only one-off purchases " +
+            "grant credits, subscriptions never; a product that grants " +
+            "credits can be bought repeatedly (no `AlreadyEntitled` " +
+            "`purchased`). Records `payment_product_credits_changed` " +
+            "(detail: the product id) in the audit log. Answers with " +
+            "the updated product, 404 `PaymentProductNotFound` and 409 " +
+            "`ProductKindConflict` if the product is the tip product " +
+            "(tips grant nothing) or already grants roles: a product " +
+            "grants roles or credits, never both.",
         }),
       ),
   )
