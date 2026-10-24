@@ -1,9 +1,10 @@
 # Payments
 
 Logged-in users pay through **Stripe**: subscriptions and one-off purchases
-that grant roles, and tips that grant nothing. Stripe hosts every page that
-touches money (Checkout, the Customer Portal), so no card data reaches this
-server. Stripe is the source of truth; the `payments` domain
+that grant roles, one-off purchases that grant credits (single uses of a
+feature, see [Credits](#credits)), and tips that grant nothing. Stripe
+hosts every page that touches money (Checkout, the Customer Portal), so no
+card data reaches this server. Stripe is the source of truth; the `payments` domain
 (`src/domains/payments/`) mirrors what it needs after every webhook.
 
 ## How it fits together
@@ -12,8 +13,9 @@ server. Stripe is the source of truth; the `payments` domain
   webhooks (or `POST /admin/payments/products/sync`) mirror them into
   `payment_products` and `payment_prices`. Ours are only the settings on top:
   whether a product is offered (`enabled`, off for new products), which one is
-  the **tip product** (`kind = 'tip'`, at most one, never with roles) and which
-  roles a product grants (`payment_product_roles`, superAdmins only).
+  the **tip product** (`kind = 'tip'`, at most one, never with roles or
+  credits) and which roles or credits a product grants
+  (`payment_product_roles`, `payment_product_credits`, superAdmins only).
   `GET /payments/catalog` (public) lists what is offered: enabled products
   active in Stripe, with their active prices that have a fixed amount.
 - **Checkout.** `POST /payments/checkout` with `{ kind: "price", priceId }`
@@ -23,10 +25,11 @@ server. Stripe is the source of truth; the `payments` domain
   user's Stripe customer is made on first use (`stripe_customers`, one per
   user and mode). A second subscription to a product they subscribe to (any
   status but canceled), or a second purchase of one they bought (paid or
-  pending), is refused with 409 `AlreadyEntitled`. Stripe sends the browser
-  back to `/account?checkout=success` or `?checkout=cancelled`. Two
-  checkouts started at the same moment can both succeed; the second
-  subscription would then have to be cancelled by hand.
+  pending), is refused with 409 `AlreadyEntitled`, unless the product
+  grants credits. Stripe sends the browser back to
+  `/account?checkout=success` or `?checkout=cancelled`. Two checkouts
+  started at the same moment can both succeed; the second subscription
+  would then have to be cancelled by hand.
 - **Customer Portal.** `POST /payments/portal` answers the URL of Stripe's
   portal for the user's customer (cancel, change the payment method,
   invoices); 404 `PaymentCustomerNotFound` before their first checkout.
@@ -79,6 +82,45 @@ next payment event grants it again. Paid grants and revocations are in the
 role change log with no actor. Changing a product's roles applies to
 everyone who already pays for it.
 
+## Credits
+
+A one-off purchase can also grant **credits**: single uses of a feature,
+today `mealPlan` (one meal plan each, see [food.md](food.md)). Code: the
+`credits` domain (`src/domains/credits/`), table `feature_credits` (one row
+per credit, migration 0021).
+
+- **Products.** `payment_product_credits` says how many credits of which
+  feature one purchase of a product grants (1 to 100), set by superAdmins
+  (`PUT /admin/payments/products/:id/credits`, audited as
+  `payment_product_credits_changed`). It is a history: each change adds a
+  version per feature from `since` on (quantity 0 when a feature is
+  removed), and a purchase gets what was in force when its Checkout
+  session was made (`offerAt`), even if it is paid days later. Purchases
+  keep the credits they got. A product grants roles or credits, never both
+  (409 `ProductKindConflict`), so role products stay one-time purchases;
+  subscriptions and tips never grant credits.
+- **Granting.** With the roles, after every change: a purchase that grants
+  access (as in the table above) gets its credits the first time, and gets
+  back the ones that were revoked. Every other credit of the user is
+  revoked: a full refund or a lost dispute, a purchase of the other mode,
+  a deleted account. Revoking takes used credits too, so they no longer
+  count, but they stay used. A webhook arriving twice grants nothing twice
+  (`feature_credits_payment_id_feature_seq_key`).
+- **The role.** While a user holds a credit of a feature that was not
+  revoked, used or not, they hold the role that comes with it
+  (`featureRoles`: `mealPlan` → `mealPlanBuyer`, `manual = false`), which
+  lets them use what surrounds the feature (searching the food data,
+  reading their plans). The credits limit the feature itself.
+- **Using.** The feature's domain takes the user's oldest available credit
+  in its own transaction (`CreditCommands.consume`, 402 `NoCreditsLeft`
+  without one) and gives it back if what it paid for failed at no cost
+  (`release`; for meal plans see [food.md](food.md)). Credits never
+  expire.
+- **Buying again.** A product that grants credits can be bought again and
+  again: no 409 `AlreadyEntitled` for it.
+- **Users** see their credits per feature (available and used) in
+  `GET /payments/me`; the catalog shows what each product grants.
+
 ## Admins
 
 - `GET /admin/payments`, `GET /admin/payments/subscriptions`: newest first,
@@ -90,15 +132,17 @@ everyone who already pays for it.
   (idempotency key), though the audit log may then show it twice.
 - `GET /admin/payments/products`, `POST …/products/sync`,
   `PATCH …/products/:id` (offered, tip product), `PUT …/products/:id/roles`
-  (superAdmins). Audited as `payment_catalog_synced`,
-  `payment_product_updated` and `payment_product_roles_changed`.
+  and `PUT …/products/:id/credits` (superAdmins). Audited as
+  `payment_catalog_synced`, `payment_product_updated`,
+  `payment_product_roles_changed` and `payment_product_credits_changed`.
 - `GET /admin/insights/payments`: revenue in the last 30 days and in total
   (paid minus refunded, per currency), refunds, monthly recurring revenue of
   the subscriptions that grant access, and their number.
 
 ## Account deletion
 
-Deleting an account (see [account-deletion.md](account-deletion.md)) queues
+Deleting an account (see [account-deletion.md](account-deletion.md)) revokes
+the user's credits and queues
 `payments.cancel-subscriptions` for the user's Stripe customer: its live
 subscriptions are cancelled at once, without proration or refund. Payments
 and subscriptions stay, tied to the anonymised account, as records of the
@@ -130,7 +174,7 @@ localhost:3000/payments/stripe/webhook` prints a `whsec_…` for
    a few days; it grants its roles once paid.
 5. **Catalog.** Create products and prices in the dashboard, then in the
    admin panel (Payments → Products) enable them, mark the tip product, and
-   (as a superAdmin) choose the roles.
+   (as a superAdmin) choose the roles or the credits per purchase.
 6. **Invoices and VAT.** As a Kleinunternehmer (§19 UStG) leave
    `STRIPE_AUTOMATIC_TAX` off and put the §19 note into the invoice footer
    (Settings → Billing → Invoices, for subscriptions; `STRIPE_INVOICE_FOOTER`
@@ -147,7 +191,7 @@ needs the business details to activate the account.
 
 The components are in `services/web/src/features/payments/` and are not
 mounted yet: `PricingList` (products with buy and subscribe buttons),
-`TipForm`, `MyPayments` (the user's subscriptions and payments, the
+`TipForm`, `MyPayments` (the user's credits, subscriptions and payments, the
 Checkout result notice and `ManageBillingButton`), and the admin pages
 `PaymentsAdminPage` and `PaymentProductsAdminPage`. To ship them, add the
 first three to a page (the account page for `MyPayments`, since Checkout

@@ -87,6 +87,6 @@ Each topic lives in its own file under `docs/`; read only the one you need.
 | [docs/seo.md](docs/seo.md)                           | Crawler pages, sitemap, nginx routing                                         |
 | [docs/contact.md](docs/contact.md)                   | Contact form and mail                                                         |
 | [docs/food.md](docs/food.md)                         | Food planner: open food data, prices, imports, AI meal plans                  |
-| [docs/payments.md](docs/payments.md)                 | Stripe payments: checkout, webhooks, paid roles, setup                        |
+| [docs/payments.md](docs/payments.md)                 | Stripe payments: checkout, webhooks, paid roles, credits, setup               |
 | [docs/rate-limiting.md](docs/rate-limiting.md)       | Client IP and rate limiting                                                   |
 | [docs/logging.md](docs/logging.md)                   | Request ids and request logging                                               |

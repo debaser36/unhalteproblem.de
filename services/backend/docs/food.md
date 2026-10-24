@@ -6,10 +6,16 @@ foods. Code: `src/domains/food/`, the sources in `src/infrastructure/`
 (`OpenPrices`, `OpenFoodFacts`, `StatsNz`, `Claude`), the API in the
 `foodPlanner` group of `@unhalteproblem.de/api` (`/food/*`).
 
-**Every endpoint requires the `foodPlanner` role** (`RequireFoodPlanner` on
-the group; 401 without a session, 403 without the role), the writes also
-the website's `Origin`. Grant it like any role (see
-[authorization.md](authorization.md)). All answers are `no-store`.
+**Who may use it** (401 without a session, 403 without the role; the writes
+also need the website's `Origin`; all answers are `no-store`):
+
+| Role            | How they get it                                                                               | What they may do                                                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `foodPlanner`   | granted like any role (see [authorization.md](authorization.md)), or a product that grants it | everything, meal plans without limit (within the rate limits)                                                                    |
+| `mealPlanBuyer` | held while they have meal-plan credits (see [payments.md](payments.md#credits)), used or not  | search and read the stored food items (no `lookup`), and request, read and delete their own meal plans: each plan costs a credit |
+
+The group requires either role (`RequireMealPlanning`); the imports and
+`GET /food/sources` also require `foodPlanner` (`RequireFoodPlanner`).
 
 ## Sources
 
@@ -56,7 +62,8 @@ Imports only upsert, so running one again is safe and refreshes the data.
 brand; `diet`, `priced`, `limit`, `offset`); with `lookup=true` it first
 asks Open Food Facts for the term and stores what it finds (without prices:
 run `priceEstimates` to price them). A failed lookup is logged and the search
-answers from what is stored.
+answers from what is stored. Lookups are for `foodPlanner` only: for a
+`mealPlanBuyer` without it, `lookup` is ignored.
 
 Whether a food is vegetarian or vegan comes from Open Food Facts' labels
 and ingredient analysis for products (contradicting tags: the stricter
@@ -108,8 +115,26 @@ Poll `GET /food/meal-plans/:id` until `status` is `ready` or `failed`.
 Failures are part of the plan (`failure.reason`): `noCandidates` (fewer than
 15 foods: import first), `overBudget` (with the cheapest total seen),
 `invalidPlan`, `plannerFailed` (Claude not reachable or refused; a pending
-plan older than an hour also reads as this). Without `ANTHROPIC_API_KEY`
-the request answers 503 `MealPlannerUnavailable`.
+plan older than an hour also reads as this, and `MealPlanCleanup` stores it
+as failed within the next hour). Without `ANTHROPIC_API_KEY` the request
+answers 503 `MealPlannerUnavailable`.
+
+**Credits.** A user without `foodPlanner` pays a plan with a meal-plan
+credit: the request uses their oldest available one in the same
+transaction that stores the plan (402 `NoCreditsLeft` without one; a
+request refused for the rate limits uses none). The credit comes back only
+if the plan failed before Claude cost anything, in the transaction that
+records the failure: `noCandidates` (found before Claude is asked), the
+owner lost access before the job ran, the plan was abandoned before its
+job started, or the first request to Claude failed before Claude worked
+(`plannerFailed` after no connection, a 429 or a 5xx status). `overBudget`,
+`invalidPlan` and the other `plannerFailed` cases (a timeout, an error
+mid-answer, a refusal, a cut-off or unusable answer, a rejected request,
+or any failure after Claude answered once) keep it used: they may have
+cost something, and a user could cause them on purpose, for example with
+a budget nobody can meet. The job marks the plan as started
+(`started_at`) right before it asks Claude; deleting a plan gives its
+credit back only before that. `foodPlanner` holders use no credits.
 
 The user's preferences go into the prompt as a quoted string after the
 rules; whatever they say, the backend still checks every plan.
@@ -117,7 +142,7 @@ rules; whatever they say, the backend still checks every plan.
 Plans belong to their user: others get 404. Each user may request 20 plans
 per day and have 2 pending at once (429). Account deletion keeps the user
 row, so `MealPlanCleanup` deletes the plans of deleted accounts once an
-hour.
+hour (and fails the plans whose job was lost, see above).
 
 Cost: one plan is one to three Claude requests with a prompt of roughly
 10,000 tokens; at the default `claude-opus-5-5` with `CLAUDE_EFFORT=medium`
