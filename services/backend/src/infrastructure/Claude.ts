@@ -56,12 +56,17 @@ export interface ClaudeSettings {
 // request from timing out, so the ceiling can be generous.
 const maxTokens = 64_000;
 
+// `transport`: no connection, so nothing reached Claude. A timeout or an
+// error mid-stream (`api:unknown`, `unknown`) may come after Claude worked.
+// The timeout class extends the connection error, so it is checked first.
 const reasonOf = (error: unknown): string =>
-  error instanceof Anthropic.APIConnectionError
-    ? "transport"
-    : error instanceof Anthropic.APIError
-      ? `api:${error.status ?? "unknown"}`
-      : "transport";
+  error instanceof Anthropic.APIConnectionTimeoutError
+    ? "timeout"
+    : error instanceof Anthropic.APIConnectionError
+      ? "transport"
+      : error instanceof Anthropic.APIError
+        ? `api:${error.status ?? "unknown"}`
+        : "unknown";
 
 const make = (settings: ClaudeSettings) => {
   const client = Option.map(

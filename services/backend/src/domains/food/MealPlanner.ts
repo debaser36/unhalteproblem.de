@@ -364,8 +364,9 @@ const usesOf = (days: ReadonlyArray<PlannedDay>): ReadonlyArray<Use> =>
 
 /**
  * A week of meals for `request` from `candidates` (already filtered for
- * diet and exclusions), or why there is none. `ClaudeFailed` when Claude
- * can't be asked at all or keeps failing.
+ * diet and exclusions), or why there is none. `ClaudeFailed` only when the
+ * first request fails (nothing came back yet); a later request failing is
+ * a `plannerFailed` plan.
  */
 export const plan = Effect.fn("MealPlanner.plan")(function* (
   request: PlanRequest,
@@ -391,12 +392,35 @@ export const plan = Effect.fn("MealPlanner.plan")(function* (
 
   let cheapest: number | null = null;
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    const { value: answer, model } = yield* claude.json({
+    const ask = claude.json({
       system,
       turns,
       jsonSchema: answerJsonSchema,
       schema: Answer,
     });
+    // Only the first request can fail as `ClaudeFailed`: once Claude has
+    // answered, a later failure is a failed plan that cost something.
+    const reply =
+      attempt === 1
+        ? yield* ask
+        : yield* ask.pipe(
+            Effect.catchTag("ClaudeFailed", (error) =>
+              Effect.logWarning(
+                "Meal plan failed: Claude, on a retry",
+                error,
+              ).pipe(Effect.as(undefined)),
+            ),
+          );
+    if (reply === undefined) {
+      return {
+        _tag: "Failed" as const,
+        failure: {
+          reason: "plannerFailed",
+          cheapestTotal: null,
+        } satisfies PlanFailure,
+      };
+    }
+    const { value: answer, model } = reply;
     const checked = check(answer, request, byRef);
     let feedback: string;
     if (checked._tag === "Invalid") {

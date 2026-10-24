@@ -12,6 +12,7 @@ import {
   FoodImportNotFound,
   FoodItemNotFound,
   MealPlanNotFound,
+  planning,
 } from "./Food.ts";
 import {
   FoodImportRepository,
@@ -44,7 +45,7 @@ const make = Effect.gen(function* () {
   const plans = yield* MealPlanRepository;
   const users = yield* UserDirectory;
 
-  const actor = Effect.flatMap(Authorized("foodPlanner"), (proof) =>
+  const actor = Effect.flatMap(Authorized(...planning), (proof) =>
     actorIdOf(proof).pipe(Effect.provideService(UserDirectory, users)),
   );
   const today = Effect.map(DateTime.now, DateTime.formatIsoDateUtc);
@@ -53,7 +54,7 @@ const make = Effect.gen(function* () {
     sources: Authorized("foodPlanner").pipe(Effect.as(dataSources)),
 
     search: Effect.fn("FoodQueries.search")(function* (query: FoodItemQuery) {
-      yield* Authorized("foodPlanner");
+      yield* Authorized(...planning);
       const items = yield* foods.search({
         country: query.country,
         words: wordsOf(query.q),
@@ -72,7 +73,7 @@ const make = Effect.gen(function* () {
     }, Query.boundary),
 
     item: Effect.fn("FoodQueries.item")(function* (id: string) {
-      yield* Authorized("foodPlanner");
+      yield* Authorized(...planning);
       const item = yield* foods.find(id);
       if (Option.isNone(item)) return yield* new FoodItemNotFound({ item: id });
       const prices = yield* foods.pricesOf([id]);
@@ -112,11 +113,14 @@ const make = Effect.gen(function* () {
   });
 });
 
+type Planning = Authorized<(typeof planning)[number]>;
+
 /**
- * The reads of the food planner, all requiring `foodPlanner`. Meal plans
- * are only ever the caller's own.
+ * The reads of the food planner: the sources and imports require
+ * `foodPlanner`, the food items and meal plans `foodPlanner` or
+ * `mealPlanBuyer` (`planning`). Meal plans are only ever the caller's own.
  *
- * @effect-expect-leaking Authorized<"foodPlanner">
+ * @effect-expect-leaking Authorized<"foodPlanner"> | Authorized<"foodPlanner" | "mealPlanBuyer">
  */
 export class FoodQueries extends Context.Service<
   FoodQueries,
@@ -128,18 +132,10 @@ export class FoodQueries extends Context.Service<
     >;
     readonly search: (
       query: FoodItemQuery,
-    ) => Effect.Effect<
-      ReadonlyArray<ItemWithPrices>,
-      never,
-      Authorized<"foodPlanner">
-    >;
+    ) => Effect.Effect<ReadonlyArray<ItemWithPrices>, never, Planning>;
     readonly item: (
       id: string,
-    ) => Effect.Effect<
-      ItemWithPrices,
-      FoodItemNotFound,
-      Authorized<"foodPlanner">
-    >;
+    ) => Effect.Effect<ItemWithPrices, FoodItemNotFound, Planning>;
     /** The newest imports first. */
     readonly imports: Effect.Effect<
       ReadonlyArray<ImportRow>,
@@ -154,15 +150,11 @@ export class FoodQueries extends Context.Service<
       Authorized<"foodPlanner">
     >;
     /** The caller's plans, newest first. */
-    readonly mealPlans: Effect.Effect<
-      ReadonlyArray<PlanRow>,
-      never,
-      Authorized<"foodPlanner">
-    >;
+    readonly mealPlans: Effect.Effect<ReadonlyArray<PlanRow>, never, Planning>;
     /** One of the caller's plans. */
     readonly mealPlan: (
       id: string,
-    ) => Effect.Effect<PlanRow, MealPlanNotFound, Authorized<"foodPlanner">>;
+    ) => Effect.Effect<PlanRow, MealPlanNotFound, Planning>;
   }
 >()("@unhalteproblem.de/backend/domains/food/FoodQueries") {
   /** Needs the food repositories and `UserDirectory`. */

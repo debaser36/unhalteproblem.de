@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
-import type { JsonRequest } from "#infrastructure/Claude";
+import { ClaudeFailed, type JsonRequest } from "#infrastructure/Claude";
 import { makeScriptedClaude } from "#testing/Food";
 import {
   type Candidate,
@@ -229,6 +229,54 @@ describe("plan", () => {
         Effect.flip,
       );
       assert.strictEqual(error.reason, "unconfigured");
+    }).pipe(Effect.runPromise));
+
+  it("fails with Claude when the first request fails", () =>
+    Effect.gen(function* () {
+      const claude = makeScriptedClaude([
+        new ClaudeFailed({ reason: "transport" }),
+      ]);
+      const error = yield* plan(request, foods).pipe(
+        Effect.provide(claude.layer),
+        Effect.flip,
+      );
+      assert.strictEqual(error.reason, "transport");
+    }).pipe(Effect.runPromise));
+
+  it.for(["transport", "api:429", "api:503", "timeout", "output"])(
+    "fails the plan, not the call, when a retry fails with %s",
+    (reason) =>
+      Effect.gen(function* () {
+        // Claude answered once, so the failure after it cost something.
+        const claude = makeScriptedClaude([
+          { days: [], notes: "" },
+          new ClaudeFailed({ reason }),
+        ]);
+        const outcome = yield* plan(request, foods).pipe(
+          Effect.provide(claude.layer),
+        );
+        assert.deepStrictEqual(outcome, {
+          _tag: "Failed",
+          failure: { reason: "plannerFailed", cheapestTotal: null },
+        });
+        assert.strictEqual(claude.requests.length, 2);
+      }).pipe(Effect.runPromise),
+  );
+
+  it("fails the plan when a retry after an over-budget plan fails", () =>
+    Effect.gen(function* () {
+      const claude = makeScriptedClaude([
+        (r: JsonRequest<unknown>) => answerWith(firstRef(r), 500),
+        (r: JsonRequest<unknown>) => answerWith(firstRef(r), 500),
+        new ClaudeFailed({ reason: "api:500" }),
+      ]);
+      const outcome = yield* plan({ ...request, budget: 5 }, foods).pipe(
+        Effect.provide(claude.layer),
+      );
+      assert.deepStrictEqual(outcome, {
+        _tag: "Failed",
+        failure: { reason: "plannerFailed", cheapestTotal: null },
+      });
     }).pipe(Effect.runPromise));
 
   it("quotes the user's preferences instead of passing them as instructions", () =>

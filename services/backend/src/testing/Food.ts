@@ -56,7 +56,8 @@ export const fakeFoodSources = (data: FoodSourceData = {}) =>
 
 /**
  * A Claude that answers each request with the next of `answers` (a
- * function gets the request), and records the requests. Without answers
+ * function gets the request, a `ClaudeFailed` makes the call fail with it), and
+ * records the requests. Without answers
  * left it fails with `ClaudeFailed("output")`. `configured: false` makes
  * it act as if no API key were set.
  */
@@ -80,6 +81,7 @@ export const makeScriptedClaude = (
             return yield* new ClaudeFailed({ reason: "unconfigured" });
           requests.push(request as JsonRequest<unknown>);
           const next = queue.shift();
+          if (next instanceof ClaudeFailed) return yield* next;
           if (next === undefined)
             return yield* new ClaudeFailed({ reason: "output" });
           const answer =

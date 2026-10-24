@@ -1,6 +1,8 @@
-import { Api } from "@unhalteproblem.de/api";
+import { Api, Authorized } from "@unhalteproblem.de/api";
 import { DateTime, Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
+import * as Authorization from "#auth/Authorization";
+import { planning } from "#domains/food/Food";
 import { FoodCommands } from "#domains/food/FoodCommands";
 import { FoodQueries } from "#domains/food/FoodQueries";
 import { noStore } from "./CacheControl.ts";
@@ -13,8 +15,9 @@ import {
 } from "./FoodViews.ts";
 
 /**
- * The food planner. The group's `RequireFoodPlanner` provides the proof the
- * commands and queries require.
+ * The food planner. The group's `RequireMealPlanning` (and the import
+ * endpoints' `RequireFoodPlanner`) provide the proofs the commands and
+ * queries require.
  */
 export const FoodPlannerHandlers = HttpApiBuilder.group(
   Api,
@@ -26,8 +29,17 @@ export const FoodPlannerHandlers = HttpApiBuilder.group(
       .handle("listFoodSources", () => queries.sources.pipe(noStore))
       .handle("searchFoodItems", ({ query }) =>
         Effect.gen(function* () {
-          if (query.lookup === true && query.q !== undefined) {
-            yield* commands.lookup(query.q, query.country);
+          // Lookups write to the shared food data: `foodPlanner` only. For a
+          // `mealPlanBuyer` the parameter is ignored; they search what is stored.
+          const { roles } = yield* Authorized(...planning);
+          if (
+            query.lookup === true &&
+            query.q !== undefined &&
+            roles.includes("foodPlanner")
+          ) {
+            yield* commands
+              .lookup(query.q, query.country)
+              .pipe(Authorization.provide("foodPlanner"));
           }
           const items = yield* queries.search(query);
           return { items: items.map(toFoodItem) };

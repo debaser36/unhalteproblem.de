@@ -11,6 +11,7 @@ import * as Command from "#cqrs/Command";
 import { Outbox } from "#cqrs/Outbox";
 import * as Query from "#cqrs/Query";
 import { Transaction } from "#cqrs/Transaction";
+import { CreditCommands } from "#domains/credits/CreditCommands";
 import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
 import { Claude } from "#infrastructure/Claude";
 import { isUniqueViolation } from "#infrastructure/Columns";
@@ -20,6 +21,8 @@ import {
   MealPlannerUnavailable,
   MealPlanNotFound,
   mealPlanLimits,
+  type NoCreditsLeft,
+  planning,
   RateLimited,
   RunFoodImport,
   WriteMealPlan,
@@ -54,11 +57,12 @@ const make = Effect.gen(function* () {
   const users = yield* UserDirectory;
   const outbox = yield* Outbox;
   const claude = yield* Claude;
+  const credits = yield* CreditCommands;
   const transaction = yield* Transaction;
 
-  const actor = Effect.flatMap(Authorized("foodPlanner"), (proof) =>
-    actorIdOf(proof).pipe(Effect.provideService(UserDirectory, users)),
-  );
+  const actorOf = (proof: { readonly user: { readonly id: string } }) =>
+    actorIdOf(proof).pipe(Effect.provideService(UserDirectory, users));
+  const actor = Effect.flatMap(Authorized("foodPlanner"), actorOf);
 
   return FoodCommands.of({
     startImport: Effect.fn("FoodCommands.startImport")(function* (
@@ -132,7 +136,8 @@ const make = Effect.gen(function* () {
     createMealPlan: Effect.fn("FoodCommands.createMealPlan")(function* (
       request: MealPlanRequest,
     ) {
-      const by = yield* actor;
+      const proof = yield* Authorized(...planning);
+      const by = yield* actorOf(proof);
       if (!claude.configured) return yield* new MealPlannerUnavailable();
       // Requests of the same user wait for each other here, so that the
       // limits below can't be passed by sending several at once.
@@ -150,6 +155,11 @@ const make = Effect.gen(function* () {
         return yield* new RateLimited();
       }
       const id = crypto.randomUUID();
+      // Without `foodPlanner`, a plan costs a credit; it comes back only if the
+      // plan fails at no cost (FoodJobs, failAbandonedPlans, deleteMealPlan).
+      if (!proof.roles.includes("foodPlanner")) {
+        yield* credits.consume(by, "mealPlan", id);
+      }
       const currency = currencyOfCountry[request.country];
       yield* plans.insert({
         id,
@@ -182,11 +192,33 @@ const make = Effect.gen(function* () {
     deleteMealPlan: Effect.fn("FoodCommands.deleteMealPlan")(function* (
       id: string,
     ) {
-      const by = yield* actor;
+      const by = yield* actorOf(yield* Authorized(...planning));
       const removed = yield* plans.remove(id, by);
       if (Option.isNone(removed))
         return yield* new MealPlanNotFound({ plan: id });
+      // A plan deleted before its job started cost nothing. Once Claude was
+      // asked the credit stays used, also for a failed or written plan (a
+      // failure that cost nothing gave it back already).
+      if (removed.value.status === "pending" && !removed.value.started) {
+        yield* credits.release("mealPlan", id);
+      }
     }, Command.boundary(transaction)),
+
+    failAbandonedPlans: Effect.gen(function* () {
+      const now = yield* DateTime.now;
+      const failed = yield* plans.failAbandoned(
+        DateTime.subtractDuration(now, abandonedPlan),
+        now,
+      );
+      // Only a plan whose job never started cost nothing.
+      for (const plan of failed) {
+        if (!plan.started) yield* credits.release("mealPlan", plan.id);
+      }
+      return failed.length;
+    }).pipe(
+      Command.boundary(transaction),
+      Effect.withSpan("FoodCommands.failAbandonedPlans"),
+    ),
 
     forgetDeletedUsers: plans.removeOfDeletedUsers.pipe(
       Command.boundary(transaction),
@@ -195,11 +227,14 @@ const make = Effect.gen(function* () {
   });
 });
 
+type Planning = Authorized<(typeof planning)[number]>;
+
 /**
- * The changes of the food planner. Everything but `forgetDeletedUsers`
- * requires `foodPlanner`.
+ * The changes of the food planner. Imports and lookups require
+ * `foodPlanner`; meal plans `foodPlanner` or `mealPlanBuyer` (`planning`). The
+ * cleanups (`failAbandonedPlans`, `forgetDeletedUsers`) require nothing.
  *
- * @effect-expect-leaking Authorized<"foodPlanner">
+ * @effect-expect-leaking Authorized<"foodPlanner"> | Authorized<"foodPlanner" | "mealPlanBuyer">
  */
 export class FoodCommands extends Context.Service<
   FoodCommands,
@@ -220,18 +255,33 @@ export class FoodCommands extends Context.Service<
       term: string,
       country: FoodCountry,
     ) => Effect.Effect<void, never, Authorized<"foodPlanner">>;
-    /** Stores a pending plan for the user; a background job writes it. */
+    /**
+     * Stores a pending plan for the user; a background job writes it.
+     * Without `foodPlanner` it uses one of the user's meal-plan credits
+     * (`NoCreditsLeft` without one), which comes back only if the plan fails
+     * before Claude cost anything (see `FoodJobs`).
+     */
     readonly createMealPlan: (
       request: MealPlanRequest,
     ) => Effect.Effect<
       PlanRow,
-      MealPlannerUnavailable | RateLimited,
-      Authorized<"foodPlanner">
+      MealPlannerUnavailable | RateLimited | NoCreditsLeft,
+      Planning
     >;
-    /** Deletes one of the user's own plans. */
+    /**
+     * Deletes one of the user's own plans. A plan deleted before its job
+     * started gives its credit back.
+     */
     readonly deleteMealPlan: (
       id: string,
-    ) => Effect.Effect<void, MealPlanNotFound, Authorized<"foodPlanner">>;
+    ) => Effect.Effect<void, MealPlanNotFound, Planning>;
+    /**
+     * Marks plans pending for longer than `abandonedPlan` as failed (their
+     * job is lost) and gives back the credits of those whose job never
+     * started; how many. No role check:
+     * run by `MealPlanCleanup`.
+     */
+    readonly failAbandonedPlans: Effect.Effect<number>;
     /**
      * Deletes the meal plans of deleted accounts; how many. No role check:
      * run by `MealPlanCleanup`.
@@ -241,7 +291,7 @@ export class FoodCommands extends Context.Service<
 >()("@unhalteproblem.de/backend/domains/food/FoodCommands") {
   /**
    * Needs the food repositories, `FoodImporter`, `UserDirectory`,
-   * `Outbox`, `Claude` and `Transaction`.
+   * `CreditCommands`, `Outbox`, `Claude` and `Transaction`.
    */
   static readonly layer = Layer.effect(FoodCommands, make);
 }

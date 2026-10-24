@@ -4,6 +4,7 @@ import {
   RequireAdmin,
   RequireBlogRequestModerator,
   RequireFoodPlanner,
+  RequireMealPlanning,
   RequireSuperAdmin,
 } from "@unhalteproblem.de/api";
 import { ByteSize, Effect, Layer, Logger, References } from "effect";
@@ -86,6 +87,7 @@ const AuthServices = Layer.mergeAll(
   Authorization.middleware(RequireSuperAdmin),
   Authorization.middleware(RequireBlogRequestModerator),
   Authorization.middleware(RequireFoodPlanner),
+  Authorization.middleware(RequireMealPlanning),
   OidcProvider.layer,
   TokenVerifier.layer,
   AuthCleanup,

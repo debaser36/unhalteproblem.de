@@ -4,14 +4,7 @@ import {
   MealPlanRequest,
   ShoppingListEntry,
 } from "@unhalteproblem.de/api";
-import {
-  Context,
-  type DateTime,
-  Effect,
-  Layer,
-  type Option,
-  Schema,
-} from "effect";
+import { Context, type DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
 import { dieOnSchemaError } from "#infrastructure/Sql";
 
@@ -81,7 +74,8 @@ const make = Effect.gen(function* () {
       SELECT EXISTS (
         SELECT 1 FROM meal_plans p
         JOIN users u ON u.id = p.user_id
-        JOIN user_roles r ON r.user_id = u.id AND r.role = 'foodPlanner'
+        JOIN user_roles r ON r.user_id = u.id
+          AND r.role IN ('foodPlanner', 'mealPlanBuyer')
         WHERE p.id = ${id}
           AND u.deleted_at IS NULL
           AND NOT EXISTS (
@@ -162,9 +156,42 @@ const make = Effect.gen(function* () {
 
   const remove = SqlSchema.findOneOption({
     Request: Schema.Struct({ id: Schema.String, userId: Schema.String }),
+    Result: Schema.Struct({
+      id: Schema.String,
+      status: PlanRow.fields.status,
+      started: Schema.Boolean,
+    }),
+    execute: ({ id, userId }) => sql`
+      DELETE FROM meal_plans WHERE id = ${id} AND user_id = ${userId}
+      RETURNING id, status, started_at IS NOT NULL AS started
+    `,
+  });
+
+  const failAbandoned = SqlSchema.findAll({
+    Request: Schema.Struct({
+      before: Schema.DateTimeUtcFromDate,
+      now: Schema.DateTimeUtcFromDate,
+    }),
+    Result: Schema.Struct({ id: Schema.String, started: Schema.Boolean }),
+    execute: ({ before, now }) => sql`
+      UPDATE meal_plans SET status = 'failed', failure_reason = 'plannerFailed',
+        finished_at = ${now}
+      WHERE status = 'pending' AND created_at < ${before}
+      RETURNING id, started_at IS NOT NULL AS started
+    `,
+  });
+
+  const start = SqlSchema.findOneOption({
+    Request: Schema.Struct({
+      id: Schema.String,
+      now: Schema.DateTimeUtcFromDate,
+    }),
     Result: Schema.Struct({ id: Schema.String }),
-    execute: ({ id, userId }) =>
-      sql`DELETE FROM meal_plans WHERE id = ${id} AND user_id = ${userId} RETURNING id`,
+    execute: ({ id, now }) => sql`
+      UPDATE meal_plans SET started_at = COALESCE(started_at, ${now})
+      WHERE id = ${id} AND status = 'pending'
+      RETURNING id
+    `,
   });
 
   const removeOfDeletedUsers = SqlSchema.findOne({
@@ -208,6 +235,10 @@ const make = Effect.gen(function* () {
     complete: (result) => complete(result).pipe(span("complete")),
     fail: (result) => fail(result).pipe(span("fail")),
     remove: (id, userId) => remove({ id, userId }).pipe(span("remove")),
+    failAbandoned: (before, now) =>
+      failAbandoned({ before, now }).pipe(span("failAbandoned")),
+    start: (id, now) =>
+      start({ id, now }).pipe(Effect.map(Option.isSome), span("start")),
     removeOfDeletedUsers: removeOfDeletedUsers(undefined).pipe(
       Effect.map(({ deleted }) => deleted),
       Effect.catchTag("NoSuchElementError", Effect.die),
@@ -233,7 +264,8 @@ export class MealPlanRepository extends Context.Service<
     ) => Effect.Effect<Option.Option<PlanRow>, SqlError.SqlError>;
     /**
      * Whether the plan's owner may still have it written: the account is
-     * not deleted or restricted and still holds `foodPlanner`.
+     * not deleted or restricted and still holds `foodPlanner` or
+     * `mealPlanBuyer` (a refund that took the credits takes the latter).
      */
     readonly ownerMayPlan: (
       id: string,
@@ -284,14 +316,41 @@ export class MealPlanRepository extends Context.Service<
       Option.Option<{ readonly id: string }>,
       SqlError.SqlError
     >;
-    /** Deletes the plan if it belongs to the user; `None` if it doesn't. */
+    /**
+     * Deletes the plan if it belongs to the user, answering the status it
+     * had and whether its job had started; `None` if it doesn't.
+     */
     readonly remove: (
       id: string,
       userId: string,
     ) => Effect.Effect<
-      Option.Option<{ readonly id: string }>,
+      Option.Option<{
+        readonly id: string;
+        readonly status: PlanRow["status"];
+        readonly started: boolean;
+      }>,
       SqlError.SqlError
     >;
+    /**
+     * Marks the plans still pending that were asked for before `before` as
+     * failed (`plannerFailed`): their job is lost. Returns them, with
+     * whether their job had started.
+     */
+    readonly failAbandoned: (
+      before: DateTime.Utc,
+      now: DateTime.Utc,
+    ) => Effect.Effect<
+      ReadonlyArray<{ readonly id: string; readonly started: boolean }>,
+      SqlError.SqlError
+    >;
+    /**
+     * Marks a pending plan as started (its job is about to ask Claude);
+     * false if it is not pending any more (deleted, or finished).
+     */
+    readonly start: (
+      id: string,
+      now: DateTime.Utc,
+    ) => Effect.Effect<boolean, SqlError.SqlError>;
     /** Deletes the plans of deleted accounts; how many. */
     readonly removeOfDeletedUsers: Effect.Effect<number, SqlError.SqlError>;
   }

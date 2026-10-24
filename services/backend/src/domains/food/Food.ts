@@ -5,9 +5,17 @@ import * as Outbox from "#cqrs/Outbox";
 /**
  * The food planner: food data and prices for Germany and New Zealand from
  * open sources, imported on request, and weekly meal plans that Claude
- * writes from the priced foods. Everything in it requires the
- * `foodPlanner` role. See docs/food.md.
+ * writes from the priced foods. The imports require the `foodPlanner`
+ * role; the food data and meal plans `foodPlanner` or `mealPlanBuyer` (who
+ * pays a credit per plan). See docs/food.md.
  */
+
+/**
+ * The roles that may search the food data and request and read their own
+ * meal plans: `foodPlanner` (unlimited) or `mealPlanBuyer` (one credit per
+ * plan), as `Authorized(...planning)`.
+ */
+export const planning = ["foodPlanner", "mealPlanBuyer"] as const;
 
 // Errors: the contract's, so they map to their status codes as they are.
 export {
@@ -17,6 +25,7 @@ export {
   FoodItemNotFound,
   MealPlannerUnavailable,
   MealPlanNotFound,
+  NoCreditsLeft,
   RateLimited,
 } from "@unhalteproblem.de/api";
 

@@ -4,6 +4,7 @@ import {
   RequireAdmin,
   RequireBlogRequestModerator,
   RequireFoodPlanner,
+  RequireMealPlanning,
   RequireSuperAdmin,
 } from "@unhalteproblem.de/api";
 import {
@@ -362,6 +363,7 @@ export const makeAppWithServices = Effect.fnUntraced(function* (
       Authorization.middleware(RequireSuperAdmin),
       Authorization.middleware(RequireBlogRequestModerator),
       Authorization.middleware(RequireFoodPlanner),
+      Authorization.middleware(RequireMealPlanning),
       Layer.succeed(OidcProvider, makeProvider(options)),
       TokenVerifier.layerWith({
         issuer,

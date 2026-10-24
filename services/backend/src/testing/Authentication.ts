@@ -6,6 +6,7 @@ import {
   RequireBlogEditor,
   RequireBlogRequestModerator,
   RequireFoodPlanner,
+  RequireMealPlanning,
   RequireSuperAdmin,
   SameOrigin,
   Unauthorized,
@@ -34,6 +35,7 @@ export const MiddlewaresRejectAll = Layer.mergeAll(
     Effect.fail(new Forbidden()),
   ),
   Layer.succeed(RequireFoodPlanner, () => Effect.fail(new Forbidden())),
+  Layer.succeed(RequireMealPlanning, () => Effect.fail(new Forbidden())),
   Layer.succeed(SameOrigin, () => Effect.fail(new Forbidden())),
   // Raises a limit, checks nothing: passing the request on is all it does.
   Layer.succeed(LargeBody, (httpEffect) => httpEffect),

@@ -1,7 +1,10 @@
 import type { FoodItemId, MealPlanRequest } from "@unhalteproblem.de/api";
 import { Cause, DateTime, Duration, Effect, Layer, Option } from "effect";
+import * as Command from "#cqrs/Command";
 import * as Outbox from "#cqrs/Outbox";
 import * as Query from "#cqrs/Query";
+import { Transaction } from "#cqrs/Transaction";
+import { CreditCommands } from "#domains/credits/CreditCommands";
 import { exclusionMatcher, isGrocery } from "./Classification.ts";
 import { RunFoodImport, WriteMealPlan } from "./Food.ts";
 import { FoodImporter } from "./FoodImporter.ts";
@@ -113,6 +116,47 @@ const candidatesFor = Effect.fnUntraced(function* (request: MealPlanRequest) {
   });
 });
 
+/**
+ * Claude errors of the first request that mean Claude never worked on the
+ * plan: no connection, no key, or an error status before the answer began
+ * (rate limited, overloaded or down). A timeout, an error mid-answer, a
+ * refusal, a cut-off or unusable answer, or a rejected request (4xx) may
+ * have cost something or could be caused on purpose, so they don't count;
+ * neither does any failure after Claude answered once (`MealPlanner.plan`
+ * reports those as a failed plan).
+ */
+const unreachable = (reason: string) =>
+  reason === "transport" ||
+  reason === "unconfigured" ||
+  reason === "api:429" ||
+  /^api:5\d\d$/u.test(reason);
+
+/**
+ * Records a plan as failed and, in the same transaction, gives back the
+ * credit it used if the failure cost nothing (`refund`) and the plan was
+ * still pending. A failure after Claude worked keeps the credit used:
+ * otherwise a plan made to fail (a budget nobody can meet) would be free.
+ */
+const failPlan = Effect.fnUntraced(function* (
+  failure: {
+    readonly id: string;
+    readonly reason: MealPlanner.PlanFailure["reason"];
+    readonly cheapestTotal: number | null;
+    readonly now: DateTime.Utc;
+  },
+  refund: boolean,
+) {
+  const plans = yield* MealPlanRepository;
+  const credits = yield* CreditCommands;
+  const transaction = yield* Transaction;
+  yield* Effect.gen(function* () {
+    const failed = yield* plans.fail(failure);
+    if (refund && Option.isSome(failed)) {
+      yield* credits.release("mealPlan", failure.id);
+    }
+  }).pipe(Command.boundary(transaction));
+});
+
 /** The plan in the contract's shapes, as `meal_plans.plan` stores it. */
 const stored = (plan: MealPlanner.Plan): StoredPlan => ({
   days: plan.days.map((day) => ({
@@ -156,14 +200,21 @@ const writeMealPlan = Effect.fn("FoodJobs.writeMealPlan")(function* ({
     yield* Effect.logInfo("Meal plan dropped: its owner may not plan").pipe(
       Effect.annotateLogs({ planId }),
     );
-    yield* plans.fail({
-      id: planId,
-      reason: "plannerFailed",
-      cheapestTotal: null,
-      now: yield* DateTime.now,
-    });
+    // Nothing was asked: the credit comes back.
+    yield* failPlan(
+      {
+        id: planId,
+        reason: "plannerFailed",
+        cheapestTotal: null,
+        now: yield* DateTime.now,
+      },
+      true,
+    );
     return;
   }
+  // From here on Claude may be asked, so deleting the plan no longer gives
+  // its credit back. Deleted in the meantime: nothing to write.
+  if (!(yield* plans.start(planId, yield* DateTime.now))) return;
   const { request } = row.value;
   const candidates = yield* candidatesFor(request);
   const outcome = yield* MealPlanner.plan(
@@ -183,13 +234,19 @@ const writeMealPlan = Effect.fn("FoodJobs.writeMealPlan")(function* ({
         Effect.as({
           _tag: "Failed" as const,
           failure: { reason: "plannerFailed", cheapestTotal: null } as const,
+          refund: unreachable(error.reason),
         }),
       ),
     ),
   );
   const now = yield* DateTime.now;
   if (outcome._tag === "Failed") {
-    yield* plans.fail({ id: planId, ...outcome.failure, now });
+    // `noCandidates` is found before Claude is asked.
+    const refund =
+      "refund" in outcome
+        ? outcome.refund
+        : outcome.failure.reason === "noCandidates";
+    yield* failPlan({ id: planId, ...outcome.failure, now }, refund);
     return;
   }
   yield* plans.complete({
@@ -205,8 +262,8 @@ const writeMealPlan = Effect.fn("FoodJobs.writeMealPlan")(function* ({
 
 /**
  * The consumers, one message at a time each, with leases longer than the
- * slowest run. Needs `Outbox`, the food repositories, `FoodImporter` and
- * `Claude`.
+ * slowest run. Needs `Outbox`, `Transaction`, the food repositories,
+ * `CreditCommands`, `FoodImporter` and `Claude`.
  */
 export const FoodJobs = Layer.mergeAll(
   Outbox.consumer(RunFoodImport, runImport, {

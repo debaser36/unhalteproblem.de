@@ -16,9 +16,10 @@ const Repositories = Layer.mergeAll(
 
 /**
  * The food domain: provides `FoodCommands` and `FoodQueries` and runs the
- * background jobs and the cleanup of deleted accounts' plans. Needs a migrated `SqlClient`, `Transaction`, `Outbox`,
- * `UserDirectory`, and the sources: `OpenPrices`, `OpenFoodFacts`,
- * `StatsNz` and `Claude`.
+ * background jobs and the cleanup of abandoned plans and deleted accounts'
+ * plans. Needs a migrated `SqlClient`, `Transaction`, `Outbox`,
+ * `UserDirectory`, `CreditCommands`, and the sources: `OpenPrices`,
+ * `OpenFoodFacts`, `StatsNz` and `Claude`.
  */
 export const FoodLive = Layer.mergeAll(FoodJobs, MealPlanCleanup).pipe(
   Layer.provideMerge(Layer.mergeAll(FoodCommands.layer, FoodQueries.layer)),
