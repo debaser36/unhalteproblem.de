@@ -26,6 +26,7 @@ import createBlogRequests from "#migrations/0017_create_blog_requests";
 import createCategories from "#migrations/0018_create_categories";
 import createFoodPlanner from "#migrations/0019_create_food_planner";
 import createPayments from "#migrations/0020_create_payments";
+import createFeatureCredits from "#migrations/0021_create_feature_credits";
 
 /**
  * Every migration, keyed `<id>_<name>` like its file in `src/migrations/`.
@@ -55,6 +56,7 @@ export const migrations = {
   "0018_create_categories": createCategories,
   "0019_create_food_planner": createFoodPlanner,
   "0020_create_payments": createPayments,
+  "0021_create_feature_credits": createFeatureCredits,
 };
 
 /** Loads {@link migrations} in id order. */

@@ -30,6 +30,7 @@ const migrationNames = [
   "create_categories",
   "create_food_planner",
   "create_payments",
+  "create_feature_credits",
 ];
 
 interface OutboxFields {

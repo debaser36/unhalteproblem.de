@@ -62,7 +62,7 @@ describe("DatabaseTest", () => {
           [
             // Added by 0004.
             "user_roles_granted_by_fkey: FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL",
-            // Replaced by 0012 and 0019.
+            // Replaced by 0012, 0019 and 0021.
             `user_roles_role_check: ${roleCheck}`,
             "user_roles_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
             "user_roles_user_id_role_pkey: PRIMARY KEY (user_id, role)",
@@ -110,6 +110,43 @@ describe("DatabaseTest", () => {
             );
           }
         }),
+    );
+
+    it.effect("holds mealPlanBuyer because of a payment and logs it", () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const userId = yield* insertUser(sql, "roles-meal-plan-buyer");
+        // As the credit grant inserts it (0021): held because of a payment.
+        yield* sql`
+          INSERT INTO user_roles (user_id, role, manual)
+          VALUES (${userId}, 'mealPlanBuyer', false)
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${userId}, 'mealPlanBuyer', 'granted', now())
+        `;
+        const roles = yield* sql<{
+          readonly role: string;
+          readonly manual: boolean;
+        }>`
+          SELECT role, manual FROM user_roles WHERE user_id = ${userId}
+        `;
+        assert.deepStrictEqual(roles, [
+          { role: "mealPlanBuyer", manual: false },
+        ]);
+        // The spelling is exact.
+        for (const role of ["mealplanBuyer", "MealPlanBuyer", "mealPlan"]) {
+          const error = yield* sql`
+            INSERT INTO user_roles (user_id, role) VALUES (${userId}, ${role})
+          `.pipe(Effect.flip);
+          assert.strictEqual(error.reason._tag, "ConstraintError");
+          assert.propertyVal(
+            error.reason.cause,
+            "constraint",
+            "user_roles_role_check",
+          );
+        }
+      }),
     );
 
     it.effect("rejects granting the same role twice", () =>
@@ -214,7 +251,7 @@ describe("DatabaseTest", () => {
               "user_role_changes_change_check: CHECK ((change = ANY (ARRAY['granted'::text, 'revoked'::text])))",
               "user_role_changes_changed_by_fkey: FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL",
               "user_role_changes_id_pkey: PRIMARY KEY (id)",
-              // Replaced by 0012 and 0019, like user_roles_role_check.
+              // Replaced by 0012, 0019 and 0021, like user_roles_role_check.
               `user_role_changes_role_check: ${roleCheck}`,
               "user_role_changes_user_id_fkey: FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
             ],

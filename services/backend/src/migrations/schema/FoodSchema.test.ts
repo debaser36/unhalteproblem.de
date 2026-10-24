@@ -110,6 +110,8 @@ describe("DatabaseTest", () => {
           "meal_plans.failure_reason text",
           "meal_plans.created_at timestamp with time zone not null",
           "meal_plans.finished_at timestamp with time zone",
+          // Added by 0021.
+          "meal_plans.started_at timestamp with time zone",
         ]);
 
         // Money is numeric(12, 2); package sizes are unconstrained numeric.

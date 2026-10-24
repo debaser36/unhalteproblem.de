@@ -8,7 +8,9 @@ import {
   loaderUpTo,
   databaseUpTo,
   describeColumns,
+  insertMealPlan,
   insertUser,
+  readyMealPlan,
 } from "./Helpers.ts";
 
 const migrationsDirectory = new URL("../", import.meta.url);
@@ -745,6 +747,122 @@ describe("0020_create_payments", () => {
           VALUES ('2026-01-01T00:00:00Z', 'payment_refunded')
         `;
       }).pipe(Effect.provide(DatabaseBefore0020)),
+    { timeout: 30_000 },
+  );
+});
+
+describe("0021_create_feature_credits", () => {
+  // Runs the migrations before 0021 first, so roles, their log and audit
+  // entries exist before the checks are replaced.
+  const DatabaseBefore0021 = databaseUpTo(20);
+
+  it.effect(
+    "keeps the existing roles and audit actions and adds the new ones",
+    () =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        const alice = yield* insertUser(sql, "credits-alice");
+        yield* sql`
+          INSERT INTO user_roles (user_id, role, manual) VALUES
+            (${alice}, 'normalUser', true),
+            (${alice}, 'foodPlanner', false),
+            (${alice}, 'blogEditor:rust-notes', true)
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${alice}, 'foodPlanner', 'granted', now())
+        `;
+        yield* sql`
+          INSERT INTO audit_log (at, action)
+          VALUES ('2026-01-01T00:00:00Z', 'payment_product_roles_changed')
+        `;
+        // Not allowed before 0021.
+        const role = yield* sql`
+          INSERT INTO user_roles (user_id, role)
+          VALUES (${alice}, 'mealPlanBuyer')
+        `.pipe(Effect.flip);
+        assert.strictEqual(role.reason._tag, "ConstraintError");
+        const action = yield* sql`
+          INSERT INTO audit_log (at, action)
+          VALUES ('2026-01-01T00:00:00Z', 'payment_product_credits_changed')
+        `.pipe(Effect.flip);
+        assert.strictEqual(action.reason._tag, "ConstraintError");
+        const pending = yield* insertMealPlan(sql, { userId: alice });
+        const ready = yield* insertMealPlan(sql, {
+          userId: alice,
+          ...readyMealPlan,
+        });
+
+        const applied = yield* PgliteMigrator.run({ loader: loaderUpTo(21) });
+        assert.deepStrictEqual(applied, [[21, "create_feature_credits"]]);
+
+        // Plans from before 0021 never started as far as credits go.
+        const plans = yield* sql<{
+          readonly id: string;
+          readonly startedAt: Date | null;
+        }>`
+          SELECT id, started_at FROM meal_plans
+          WHERE id IN (${pending}, ${ready})
+          ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          plans,
+          [pending, ready].sort().map((id) => ({ id, startedAt: null })),
+        );
+
+        const roles = yield* sql<{
+          readonly role: string;
+          readonly manual: boolean;
+        }>`
+          SELECT role, manual FROM user_roles
+          WHERE user_id = ${alice}
+          ORDER BY role
+        `;
+        assert.deepStrictEqual(roles, [
+          { role: "blogEditor:rust-notes", manual: true },
+          { role: "foodPlanner", manual: false },
+          { role: "normalUser", manual: true },
+        ]);
+        const actions = yield* sql<{ readonly action: string }>`
+          SELECT action FROM audit_log ORDER BY id
+        `;
+        assert.deepStrictEqual(
+          actions.map((row) => row.action),
+          ["payment_product_roles_changed"],
+        );
+
+        // Same names, and validated (not NOT VALID) on all three tables.
+        const checks = yield* sql<{
+          readonly conname: string;
+          readonly convalidated: boolean;
+        }>`
+          SELECT conname, convalidated FROM pg_constraint
+          WHERE conname IN (
+            'user_roles_role_check',
+            'user_role_changes_role_check',
+            'audit_log_action_check'
+          )
+          ORDER BY conname
+        `;
+        assert.deepStrictEqual(checks, [
+          { conname: "audit_log_action_check", convalidated: true },
+          { conname: "user_role_changes_role_check", convalidated: true },
+          { conname: "user_roles_role_check", convalidated: true },
+        ]);
+
+        yield* sql`
+          INSERT INTO user_roles (user_id, role, manual)
+          VALUES (${alice}, 'mealPlanBuyer', false)
+        `;
+        yield* sql`
+          INSERT INTO user_role_changes (user_id, role, change, changed_at)
+          VALUES (${alice}, 'mealPlanBuyer', 'granted', now())
+        `;
+        yield* sql`
+          INSERT INTO audit_log (at, action)
+          VALUES ('2026-01-01T00:00:00Z', 'payment_product_credits_changed')
+        `;
+      }).pipe(Effect.provide(DatabaseBefore0021)),
     { timeout: 30_000 },
   );
 });

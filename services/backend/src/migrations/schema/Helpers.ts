@@ -74,12 +74,13 @@ export const fixedRoles = [
   "admin",
   "superAdmin",
   "foodPlanner",
+  "mealPlanBuyer",
 ] as const;
 
 /**
- * user_roles_role_check and user_role_changes_role_check since 0019 (0012
- * plus `foodPlanner`): a fixed role or `blogEditor:<slug>`, as Postgres
- * prints the definition.
+ * user_roles_role_check and user_role_changes_role_check since 0021 (0012
+ * plus `foodPlanner` from 0019 and `mealPlanBuyer` from 0021): a fixed role
+ * or `blogEditor:<slug>`, as Postgres prints the definition.
  */
 export const roleCheck =
   `CHECK (((role = ANY (ARRAY[${fixedRoles.map((role) => `'${role}'::text`).join(", ")}]))` +
@@ -563,6 +564,38 @@ export const insertPayment = (
       ${payment.amountRefunded ?? 0}, ${payment.currency ?? "eur"},
       ${payment.status ?? "paid"}, false, '2026-01-01T00:00:00Z',
       '2026-01-01T00:00:00Z'
+    )
+    RETURNING id
+  `.pipe(Effect.map(([row]) => row.id));
+
+/**
+ * Inserts a credit, an available mealPlan credit with seq 1 by default, and
+ * returns its id.
+ */
+export const insertFeatureCredit = (
+  sql: SqlClient.SqlClient,
+  credit: {
+    readonly userId: string;
+    readonly paymentId: string;
+    readonly feature?: string;
+    readonly seq?: number;
+    readonly grantedAt?: string;
+    readonly consumedAt?: string | null;
+    readonly usedFor?: string | null;
+    readonly revokedAt?: string | null;
+  },
+) =>
+  sql<{ readonly id: string }>`
+    INSERT INTO feature_credits (
+      id, user_id, payment_id, feature, seq, granted_at, consumed_at,
+      used_for, revoked_at
+    )
+    VALUES (
+      gen_random_uuid(), ${credit.userId}, ${credit.paymentId},
+      ${credit.feature ?? "mealPlan"}, ${credit.seq ?? 1}::integer,
+      ${credit.grantedAt ?? "2026-01-01T00:00:00Z"},
+      ${credit.consumedAt ?? null}::timestamptz,
+      ${credit.usedFor ?? null}::uuid, ${credit.revokedAt ?? null}::timestamptz
     )
     RETURNING id
   `.pipe(Effect.map(([row]) => row.id));
