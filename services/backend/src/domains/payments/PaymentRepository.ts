@@ -1,4 +1,5 @@
 import {
+  CreditFeature,
   PaymentId,
   PaymentKind,
   PaymentStatus,
@@ -9,6 +10,10 @@ import {
 } from "@unhalteproblem.de/api";
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, type SqlError, SqlSchema } from "effect/sql";
+import type {
+  CreditQuantity,
+  ProductCreditOffer,
+} from "#domains/credits/Credit";
 import { UserId } from "#domains/users/User";
 import { countDeleted, dieOnSchemaError } from "#infrastructure/Sql";
 
@@ -210,6 +215,21 @@ const make = Effect.gen(function* () {
       SELECT product_id, role FROM payment_product_roles
       WHERE ${sql.in("product_id", productIds)}
       ORDER BY role
+    `,
+  });
+
+  const creditsOf = SqlSchema.findAll({
+    Request: Schema.Struct({ productIds: Schema.Array(Schema.String) }),
+    Result: Schema.Struct({
+      productId: Schema.String,
+      feature: CreditFeature,
+      quantity: Schema.Int,
+      since: Schema.DateTimeUtcFromDate,
+    }),
+    execute: ({ productIds }) => sql`
+      SELECT product_id, feature, quantity, since FROM payment_product_credits
+      WHERE ${sql.in("product_id", productIds)}
+      ORDER BY feature, since
     `,
   });
 
@@ -576,6 +596,38 @@ const make = Effect.gen(function* () {
             }),
             span("rolesOf"),
           ),
+    creditsOf: (productIds) =>
+      productIds.length === 0
+        ? Effect.succeed(new Map())
+        : creditsOf({ productIds }).pipe(
+            Effect.map((rows) => {
+              const map = new Map<string, Array<ProductCreditOffer>>();
+              for (const { productId, ...offer } of rows) {
+                map.set(productId, [...(map.get(productId) ?? []), offer]);
+              }
+              return map as ReadonlyMap<
+                string,
+                ReadonlyArray<ProductCreditOffer>
+              >;
+            }),
+            span("creditsOf"),
+          ),
+    addCreditVersions: (productId, versions, at) =>
+      versions.length === 0
+        ? Effect.void
+        : sql`
+            INSERT INTO payment_product_credits
+            ${sql.insert(
+              versions.map(({ feature, quantity }) => ({
+                productId,
+                feature,
+                quantity,
+                since: DateTime.toDateUtc(at),
+              })),
+            )}
+            ON CONFLICT (product_id, feature, since) DO UPDATE
+            SET quantity = EXCLUDED.quantity
+          `.pipe(Effect.asVoid, span("addCreditVersions")),
     findPrice: (id) => findPrice(id).pipe(span("findPrice")),
     findTipProduct: (livemode) =>
       findTipProduct(livemode).pipe(span("findTipProduct")),
@@ -746,6 +798,19 @@ export class PaymentRepository extends Context.Service<
     readonly setProductRoles: (
       productId: string,
       roles: ReadonlyArray<PurchasableRole>,
+    ) => Sql<void>;
+    /**
+     * Every version of what each of these products grants per purchase
+     * (see `offerAt`); products that never granted credits are absent.
+     */
+    readonly creditsOf: (
+      productIds: ReadonlyArray<string>,
+    ) => Sql<ReadonlyMap<string, ReadonlyArray<ProductCreditOffer>>>;
+    /** Adds versions of what a product grants per purchase, from `at` on. */
+    readonly addCreditVersions: (
+      productId: string,
+      versions: ReadonlyArray<CreditQuantity>,
+      at: DateTime.Utc,
     ) => Sql<void>;
     /** Users with a subscription or a purchase of the product. */
     readonly usersOfProduct: (productId: string) => Sql<ReadonlyArray<UserId>>;

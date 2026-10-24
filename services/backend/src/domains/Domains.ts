@@ -5,6 +5,7 @@ import { Transaction } from "#cqrs/Transaction";
 import { AuditLive } from "./audit/Audits.ts";
 import { BlogDirectoryLive, BlogsLive } from "./blogs/Blogs.ts";
 import { ContactLive } from "./contact/Contacts.ts";
+import { CreditsLive } from "./credits/Credits.ts";
 import { FoodLive } from "./food/Foods.ts";
 import { MediaLive } from "./media/Medias.ts";
 import { ModerationLive } from "./moderation/Moderations.ts";
@@ -33,13 +34,17 @@ const Projects = ProjectsLive.pipe(Layer.provide(UserDirectoryLive));
 const Contact = ContactLive.pipe(Layer.provide(UserDirectoryLive));
 const Operations = OperationsLive.pipe(Layer.provide(UserDirectoryLive));
 
-// Meal plans belong to users (by our id).
-const Food = FoodLive.pipe(Layer.provide(UserDirectoryLive));
+// Credits belong to users (by our id).
+const Credits = CreditsLive.pipe(Layer.provide(UserDirectoryLive));
 
-// Payments grant and revoke roles through moderation, and deleting an
-// account (users) cancels its subscriptions through payments: payments sit
-// between moderation and the rest of users.
-const Payments = PaymentsLive.pipe(Layer.provide(UserDirectoryLive));
+// Meal plans belong to users (by our id), and those of users without
+// `foodPlanner` use credits.
+const Food = FoodLive.pipe(Layer.provide([UserDirectoryLive, Credits]));
+
+// Payments grant and revoke roles through moderation and credits, and
+// deleting an account (users) cancels its subscriptions through payments:
+// payments sit between moderation and the rest of users.
+const Payments = PaymentsLive.pipe(Layer.provide([UserDirectoryLive, Credits]));
 
 /**
  * Every domain, on one shared `Transaction`, `DomainEvents` and `Outbox`. A

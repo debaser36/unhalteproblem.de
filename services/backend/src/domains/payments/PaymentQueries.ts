@@ -13,6 +13,7 @@ import {
   type PaymentInsights,
   type PaymentStatus,
   type Price,
+  type ProductCredit,
   type ProductRef,
   type Subscription,
   type SubscriptionCursorPosition,
@@ -30,6 +31,8 @@ import {
 } from "effect";
 import { PaymentsConfig } from "#Config";
 import * as Query from "#cqrs/Query";
+import { offerAt, type ProductCreditOffer } from "#domains/credits/Credit";
+import { CreditQueries } from "#domains/credits/CreditQueries";
 import { UserDirectory } from "#domains/users/UserDirectory";
 import type { UserId } from "#domains/users/User";
 import { Stripe } from "#infrastructure/Stripe";
@@ -48,6 +51,12 @@ const sellable = (price: PriceRow, livemode: boolean) =>
   price.livemode === livemode &&
   Option.isSome(price.unitAmount);
 
+/** What one purchase of a product grants now, from its versions. */
+const creditsView = (
+  versions: ReadonlyArray<ProductCreditOffer> | undefined,
+  now: DateTime.Utc,
+): ReadonlyArray<ProductCredit> => offerAt(versions ?? [], now);
+
 const priceView = (price: PriceRow): Price => ({
   id: price.id,
   amount: {
@@ -65,6 +74,7 @@ const make = Effect.gen(function* () {
   const repository = yield* PaymentRepository;
   const stripe = yield* Stripe;
   const users = yield* UserDirectory;
+  const credits = yield* CreditQueries;
   const settings = yield* PaymentsConfig;
   const livemode = stripe.livemode;
 
@@ -153,6 +163,8 @@ const make = Effect.gen(function* () {
     const ids = rows.map((row) => row.id);
     const prices = yield* repository.pricesOf(ids);
     const roles = yield* repository.rolesOf(ids);
+    const offers = yield* repository.creditsOf(ids);
+    const now = yield* DateTime.now;
     return rows.map((row): AdminProduct => ({
       id: row.id,
       name: row.name,
@@ -161,6 +173,7 @@ const make = Effect.gen(function* () {
       enabled: row.enabled,
       kind: row.kind,
       roles: roles.get(row.id) ?? [],
+      credits: creditsView(offers.get(row.id), now),
       prices: prices
         .filter(
           (price) =>
@@ -202,6 +215,8 @@ const make = Effect.gen(function* () {
         sellable(price, livemode),
       );
       const roles = yield* repository.rolesOf(ids);
+      const offers = yield* repository.creditsOf(ids);
+      const now = yield* DateTime.now;
       const pricesOf = (productId: string) =>
         prices.filter((price) => price.productId === productId).map(priceView);
       const tip = Option.fromNullishOr(
@@ -215,6 +230,7 @@ const make = Effect.gen(function* () {
             name: product.name,
             description: product.description,
             roles: roles.get(product.id) ?? [],
+            credits: creditsView(offers.get(product.id), now),
             prices: pricesOf(product.id),
           }))
           // A product without a price to sell is not on offer.
@@ -242,7 +258,11 @@ const make = Effect.gen(function* () {
     ) {
       const user = yield* users.findBySubject(subject);
       if (Option.isNone(user)) {
-        return { subscriptions: [], payments: [] } satisfies MyPayments;
+        return {
+          subscriptions: [],
+          payments: [],
+          credits: [],
+        } satisfies MyPayments;
       }
       const subscriptions = yield* subscriptionsView(
         yield* repository.subscriptionsOfUser(user.value.id, livemode),
@@ -253,6 +273,7 @@ const make = Effect.gen(function* () {
       return {
         subscriptions: subscriptions.map(ownSubscription),
         payments: payments.map(ownPayment),
+        credits: yield* credits.balancesOf(user.value.id),
       } satisfies MyPayments;
     }, Query.boundary),
 
@@ -361,7 +382,7 @@ export class PaymentQueries extends Context.Service<
   {
     /** What is on offer; empty while Stripe is not configured. */
     readonly catalog: Effect.Effect<Catalog>;
-    /** The subscriptions and payments of the user with this `sub`. */
+    /** The subscriptions, payments and credits of the user with this `sub`. */
     readonly mine: (subject: typeof Subject.Type) => Effect.Effect<MyPayments>;
     readonly payments: (query: {
       readonly limit: number;
@@ -397,6 +418,6 @@ export class PaymentQueries extends Context.Service<
     >;
   }
 >()("@unhalteproblem.de/backend/domains/payments/PaymentQueries") {
-  /** Needs `PaymentRepository`, `Stripe` and `UserDirectory`. */
+  /** Needs `PaymentRepository`, `Stripe`, `UserDirectory` and `CreditQueries`. */
   static readonly layer = Layer.effect(PaymentQueries, make);
 }

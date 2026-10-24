@@ -2,6 +2,7 @@ import { assert, describe, layer } from "@effect/vitest";
 import {
   AlreadyEntitled,
   InvalidWebhookSignature,
+  NoCreditsLeft,
   type PaymentId,
   PaymentPriceNotFound,
   PaymentProductNotFound,
@@ -12,9 +13,12 @@ import {
   TipAmountOutOfRange,
   TipsUnavailable,
 } from "@unhalteproblem.de/api";
-import { Effect, Option } from "effect";
+import { Clock, Effect, Option } from "effect";
+import { TestClock } from "effect/testing";
 import { SqlClient } from "effect/sql";
 import { Outbox } from "#cqrs/Outbox";
+import { CreditCommands } from "#domains/credits/CreditCommands";
+import { CreditQueries } from "#domains/credits/CreditQueries";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { UserCommands } from "#domains/users/UserCommands";
@@ -950,6 +954,914 @@ describe("PaymentCommands", () => {
       );
     });
 
+    describe("credits", () => {
+      const mealPlan = (quantity: number) => [
+        { feature: "mealPlan" as const, quantity },
+      ];
+
+      /**
+       * Moves the test clock to 2027 (after the Stripe time of the tests'
+       * purchases) until the test ends; the clock is shared by the tests of
+       * this suite.
+       */
+      const laterClock = Effect.gen(function* () {
+        const before = yield* Clock.currentTimeMillis;
+        yield* TestClock.setTime(1_800_000_000_000);
+        yield* Effect.addFinalizer(() => TestClock.setTime(before));
+      });
+
+      const balancesOf = (user: Member) =>
+        Effect.flatMap(CreditQueries, (queries) =>
+          queries.balancesOf(user.user.id),
+        );
+
+      const available = (user: Member) =>
+        Effect.map(
+          balancesOf(user),
+          (rows) =>
+            rows.find((row) => row.feature === "mealPlan")?.available ?? 0,
+        );
+
+      /** Whether the user holds `mealPlanBuyer`: None, or whether by hand. */
+      const buyerRole = (user: Member) =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const rows = yield* sql<{ readonly manual: boolean }>`
+            SELECT manual FROM user_roles
+            WHERE user_id = ${user.user.id} AND role = 'mealPlanBuyer'
+          `;
+          return Option.fromNullishOr(rows[0]?.manual);
+        });
+
+      const holdsBuyerRole = (user: Member) =>
+        Effect.map(buyerRole(user), Option.isSome);
+
+      const mapCredits = (
+        productId: string,
+        credits: ReadonlyArray<{
+          readonly feature: "mealPlan";
+          readonly quantity: number;
+        }>,
+      ) =>
+        Effect.gen(function* () {
+          const commands = yield* PaymentCommands;
+          const root = yield* member("superAdmin");
+          yield* commands
+            .setProductCredits(productId, credits)
+            .pipe(asSuperAdmin(root));
+          return root;
+        });
+
+      /** An offered one-off product that grants `quantity` credits. */
+      const creditProduct = Effect.fnUntraced(function* (quantity: number) {
+        const offered = yield* t.offer([{ amount: 1000 }]);
+        yield* mapCredits(offered.productId, mealPlan(quantity));
+        return offered;
+      });
+
+      /**
+       * A user with a customer who bought a credit product once; `buy`
+       * buys it again (a purchase `created` at that Stripe time).
+       */
+      const creditBuyer = Effect.fnUntraced(function* (quantity = 3) {
+        const product = yield* creditProduct(quantity);
+        const user = yield* member();
+        const customerId = yield* t.giveCustomer(user);
+        const buy = Effect.fnUntraced(function* (created?: number) {
+          const sessionId = fresh("cs");
+          const intentId = fresh("pi");
+          t.putPurchase({
+            sessionId,
+            intentId,
+            customerId,
+            productId: product.productId,
+          });
+          if (created !== undefined) {
+            fake.state.checkoutSessions.set(sessionId, {
+              ...fake.state.checkoutSessions.get(sessionId)!,
+              created,
+            });
+          }
+          yield* t.handle({ checkoutSessionId: sessionId });
+          return { sessionId, intentId };
+        });
+        const first = yield* buy();
+        return { ...product, user, customerId, buy, ...first };
+      });
+
+      const useOne = (user: Member) =>
+        Effect.flatMap(CreditCommands, (credits) =>
+          credits.consume(user.user.id, "mealPlan", crypto.randomUUID()),
+        );
+
+      describe("a purchase of a product with credits", () => {
+        it.effect("grants the credits and the role of a paid purchase", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            assert.deepStrictEqual(yield* balancesOf(bought.user), [
+              { feature: "mealPlan", available: 3, used: 0 },
+            ]);
+            // Held because of a payment, not by hand.
+            assert.deepStrictEqual(
+              yield* buyerRole(bought.user),
+              Option.some(false),
+            );
+          }),
+        );
+
+        it.effect("grants them once, however often it is synced", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* t.handle({ checkoutSessionId: bought.sessionId });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            yield* t.handle({ checkoutSessionId: bought.sessionId });
+            assert.deepStrictEqual(yield* balancesOf(bought.user), [
+              { feature: "mealPlan", available: 3, used: 0 },
+            ]);
+          }),
+        );
+
+        it.effect("grants every purchase its own credits", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* bought.buy();
+            assert.deepStrictEqual(yield* balancesOf(bought.user), [
+              { feature: "mealPlan", available: 6, used: 0 },
+            ]);
+            assert.lengthOf(yield* t.paymentsOf(bought.user), 2);
+          }),
+        );
+
+        it.effect("grants the role of the credits, none of a product", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(1);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+            assert.isFalse(yield* t.holdsFoodPlanner(bought.user));
+            t.putIntent(bought.intentId, { amountRefunded: 1000 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("grants every purchase once if events arrive at once", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* Effect.all(
+              Array.from({ length: 4 }, () =>
+                t.handle({ checkoutSessionId: bought.sessionId }),
+              ),
+              { concurrency: "unbounded" },
+            );
+            assert.strictEqual(yield* available(bought.user), 3);
+          }),
+        );
+
+        it.effect("grants a product without credits none", () =>
+          Effect.gen(function* () {
+            const bought = yield* t.buyer;
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("grants nothing before the payment is paid", () =>
+          Effect.gen(function* () {
+            const product = yield* creditProduct(3);
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const sessionId = fresh("cs");
+            const intentId = fresh("pi");
+            t.putPurchase({
+              sessionId,
+              intentId,
+              customerId,
+              productId: product.productId,
+            });
+            t.putIntent(intentId, { status: "processing", amountReceived: 0 });
+            fake.state.checkoutSessions.set(sessionId, {
+              ...fake.state.checkoutSessions.get(sessionId)!,
+              paymentStatus: "unpaid",
+            });
+            yield* t.handle({ checkoutSessionId: sessionId });
+            assert.strictEqual(
+              (yield* t.paymentsOf(user))[0]?.status,
+              "pending",
+            );
+            assert.deepStrictEqual(yield* balancesOf(user), []);
+            assert.isFalse(yield* holdsBuyerRole(user));
+
+            // The direct debit goes through.
+            t.putIntent(intentId, { status: "succeeded" });
+            fake.state.checkoutSessions.set(sessionId, {
+              ...fake.state.checkoutSessions.get(sessionId)!,
+              paymentStatus: "paid",
+            });
+            yield* t.handle({ paymentIntentId: intentId });
+            assert.deepStrictEqual(yield* balancesOf(user), [
+              { feature: "mealPlan", available: 3, used: 0 },
+            ]);
+          }),
+        );
+
+        it.effect("keeps the role once every credit is used", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(1);
+            yield* useOne(bought.user);
+            yield* t.handle({ checkoutSessionId: bought.sessionId });
+            assert.deepStrictEqual(yield* balancesOf(bought.user), [
+              { feature: "mealPlan", available: 0, used: 1 },
+            ]);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("grants no credits to a subscription", () =>
+          Effect.gen(function* () {
+            const { productId, priceIds } = yield* t.offer([
+              { amount: 500, interval: "month" },
+            ]);
+            yield* mapCredits(productId, mealPlan(3));
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const id = fresh("sub");
+            t.putSubscription({
+              id,
+              customerId,
+              status: "active",
+              productId,
+              priceId: priceIds[0]!,
+            });
+            yield* t.handle({ subscriptionId: id });
+            assert.deepStrictEqual(yield* balancesOf(user), []);
+            assert.isFalse(yield* holdsBuyerRole(user));
+          }),
+        );
+      });
+
+      describe("a refund or dispute", () => {
+        it.effect("revokes the credits and the role after a full refund", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            t.putIntent(bought.intentId, { amountRefunded: 1000 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+            const failure = yield* useOne(bought.user).pipe(Effect.flip);
+            assert.instanceOf(failure, NoCreditsLeft);
+          }),
+        );
+
+        it.effect("keeps them after a partial refund", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            t.putIntent(bought.intentId, { amountRefunded: 400 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.deepStrictEqual(yield* balancesOf(bought.user), [
+              { feature: "mealPlan", available: 3, used: 0 },
+            ]);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("keeps them during a dispute, revokes them when lost", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            t.putIntent(bought.intentId, {
+              disputeStatus: Option.some("needs_response"),
+            });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.strictEqual(yield* available(bought.user), 3);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+
+            t.putIntent(bought.intentId, {
+              disputeStatus: Option.some("lost"),
+            });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("revokes only the refunded purchase's credits", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* bought.buy();
+            t.putIntent(bought.intentId, { amountRefunded: 1000 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.strictEqual(yield* available(bought.user), 3);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("leaves a credit that was used used", () =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const bought = yield* creditBuyer(3);
+            yield* useOne(bought.user);
+            t.putIntent(bought.intentId, { amountRefunded: 1000 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            // Nothing counts while the purchase is refunded ...
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+            // ... and the used credit is still marked as used.
+            const rows = yield* sql<{
+              readonly consumed: boolean;
+              readonly revoked: boolean;
+            }>`
+              SELECT consumed_at IS NOT NULL AS consumed,
+                revoked_at IS NOT NULL AS revoked
+              FROM feature_credits WHERE user_id = ${bought.user.user.id}
+              ORDER BY consumed_at NULLS LAST
+            `;
+            assert.deepStrictEqual(rows, [
+              { consumed: true, revoked: true },
+              { consumed: false, revoked: true },
+              { consumed: false, revoked: true },
+            ]);
+          }),
+        );
+
+        it.effect("restores them when the refund turns out undone", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* useOne(bought.user);
+            t.putIntent(bought.intentId, { amountRefunded: 1000 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+
+            t.putIntent(bought.intentId, { amountRefunded: 0 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.strictEqual(
+              (yield* t.paymentsOf(bought.user))[0]?.status,
+              "paid",
+            );
+            // The same three credits, one still used; none made anew.
+            assert.deepStrictEqual(yield* balancesOf(bought.user), [
+              { feature: "mealPlan", available: 2, used: 1 },
+            ]);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("is done by an admin's refund too", () =>
+          Effect.gen(function* () {
+            const commands = yield* PaymentCommands;
+            const admin = yield* member("admin");
+            const bought = yield* creditBuyer(3);
+            const [payment] = yield* t.paymentsOf(bought.user);
+            yield* commands
+              .refund(payment!.id, Option.none())
+              .pipe(asAdmin(admin));
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+      });
+
+      describe("the mapping's since", () => {
+        it.effect(
+          "keeps the old quantity for a checkout open at a removal",
+          () =>
+            Effect.gen(function* () {
+              // Checkout started (2023) while the product granted 3 ...
+              const offered = yield* creditProduct(3);
+              const user = yield* member();
+              const customerId = yield* t.giveCustomer(user);
+              const sessionId = fresh("cs");
+              t.putPurchase({
+                sessionId,
+                intentId: fresh("pi"),
+                customerId,
+                productId: offered.productId,
+              });
+              // ... credits removed meanwhile, paid only afterwards.
+              yield* laterClock;
+              yield* mapCredits(offered.productId, []);
+              yield* t.handle({ checkoutSessionId: sessionId });
+              assert.deepStrictEqual(yield* balancesOf(user), [
+                { feature: "mealPlan", available: 3, used: 0 },
+              ]);
+              assert.isTrue(yield* holdsBuyerRole(user));
+            }),
+        );
+
+        it.effect(
+          "keeps the old quantity for a checkout open at a change",
+          () =>
+            Effect.gen(function* () {
+              const offered = yield* creditProduct(3);
+              const user = yield* member();
+              const customerId = yield* t.giveCustomer(user);
+              const sessionId = fresh("cs");
+              t.putPurchase({
+                sessionId,
+                intentId: fresh("pi"),
+                customerId,
+                productId: offered.productId,
+              });
+              yield* laterClock;
+              yield* mapCredits(offered.productId, mealPlan(7));
+              yield* t.handle({ checkoutSessionId: sessionId });
+              assert.strictEqual(yield* available(user), 3);
+            }),
+        );
+
+        it.effect("gives a checkout started after a removal nothing", () =>
+          Effect.gen(function* () {
+            const offered = yield* creditProduct(3);
+            yield* laterClock;
+            yield* mapCredits(offered.productId, []);
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const sessionId = fresh("cs");
+            t.putPurchase({
+              sessionId,
+              intentId: fresh("pi"),
+              customerId,
+              productId: offered.productId,
+            });
+            fake.state.checkoutSessions.set(sessionId, {
+              ...fake.state.checkoutSessions.get(sessionId)!,
+              created: 1_900_000_000,
+            });
+            yield* t.handle({ checkoutSessionId: sessionId });
+            assert.deepStrictEqual(yield* balancesOf(user), []);
+          }),
+        );
+
+        it.effect("gives a purchase made before it no credits", () =>
+          Effect.gen(function* () {
+            // The purchase is from 2023 (Stripe time), the mapping from 2027.
+            yield* laterClock;
+            const offered = yield* t.offer([{ amount: 1000 }]);
+            yield* mapCredits(offered.productId, mealPlan(3));
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const sessionId = fresh("cs");
+            t.putPurchase({
+              sessionId,
+              intentId: fresh("pi"),
+              customerId,
+              productId: offered.productId,
+            });
+            yield* t.handle({ checkoutSessionId: sessionId });
+            assert.lengthOf(yield* t.paymentsOf(user), 1);
+            assert.deepStrictEqual(yield* balancesOf(user), []);
+            assert.isFalse(yield* holdsBuyerRole(user));
+          }),
+        );
+
+        it.effect("gives a purchase made after it its credits", () =>
+          Effect.gen(function* () {
+            yield* laterClock;
+            const offered = yield* t.offer([{ amount: 1000 }]);
+            yield* mapCredits(offered.productId, mealPlan(3));
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const sessionId = fresh("cs");
+            t.putPurchase({
+              sessionId,
+              intentId: fresh("pi"),
+              customerId,
+              productId: offered.productId,
+            });
+            fake.state.checkoutSessions.set(sessionId, {
+              ...fake.state.checkoutSessions.get(sessionId)!,
+              created: 1_900_000_000,
+            });
+            yield* t.handle({ checkoutSessionId: sessionId });
+            assert.strictEqual(yield* available(user), 3);
+          }),
+        );
+
+        it.effect("gives an earlier purchase nothing when synced later", () =>
+          Effect.gen(function* () {
+            // Bought before the product granted anything, synced after.
+            const offered = yield* t.offer([{ amount: 1000 }]);
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const sessionId = fresh("cs");
+            t.putPurchase({
+              sessionId,
+              intentId: fresh("pi"),
+              customerId,
+              productId: offered.productId,
+            });
+            yield* t.handle({ checkoutSessionId: sessionId });
+            yield* laterClock;
+            yield* mapCredits(offered.productId, mealPlan(3));
+            yield* t.handle({ checkoutSessionId: sessionId });
+            assert.deepStrictEqual(yield* balancesOf(user), []);
+          }),
+        );
+      });
+
+      describe("startCheckout", () => {
+        const checkout = (bought: {
+          readonly user: Member;
+          readonly priceIds: ReadonlyArray<string>;
+        }) =>
+          Effect.flatMap(PaymentCommands, (commands) =>
+            commands.startCheckout(bought.user.subject, {
+              kind: "price",
+              priceId: bought.priceIds[0]!,
+            }),
+          );
+
+        it.effect("lets a buyer buy a product with credits again", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* checkout(bought);
+            yield* checkout(bought);
+            assert.lengthOf(checkoutCount(fake, bought.user), 2);
+          }),
+        );
+
+        it.effect("refuses a product without credits as before", () =>
+          Effect.gen(function* () {
+            const bought = yield* t.buyer;
+            const failure = yield* checkout(bought).pipe(Effect.flip);
+            assert.instanceOf(failure, AlreadyEntitled);
+          }),
+        );
+
+        it.effect("refuses the product again once it grants no credits", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* checkout(bought);
+            yield* mapCredits(bought.productId, []);
+            const failure = yield* checkout(bought).pipe(Effect.flip);
+            assert.deepStrictEqual(
+              failure,
+              new AlreadyEntitled({
+                product: bought.productId,
+                reason: "purchased",
+              }),
+            );
+          }),
+        );
+
+        it.effect("still refuses a subscription the buyer already has", () =>
+          Effect.gen(function* () {
+            const { productId, priceIds } = yield* t.offer([
+              { amount: 500, interval: "month" },
+            ]);
+            yield* mapCredits(productId, mealPlan(3));
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const id = fresh("sub");
+            t.putSubscription({
+              id,
+              customerId,
+              status: "active",
+              productId,
+              priceId: priceIds[0]!,
+            });
+            yield* t.handle({ subscriptionId: id });
+            const failure = yield* checkout({ user, priceIds }).pipe(
+              Effect.flip,
+            );
+            assert.deepStrictEqual(
+              failure,
+              new AlreadyEntitled({ product: productId, reason: "subscribed" }),
+            );
+          }),
+        );
+      });
+
+      describe("setProductCredits", () => {
+        it.effect("refuses an unknown product", () =>
+          Effect.gen(function* () {
+            const commands = yield* PaymentCommands;
+            const root = yield* member("superAdmin");
+            const failure = yield* commands
+              .setProductCredits(fresh("prod"), mealPlan(1))
+              .pipe(asSuperAdmin(root), Effect.flip);
+            assert.instanceOf(failure, PaymentProductNotFound);
+          }),
+        );
+
+        it.effect("shows the credits in the catalog and to admins", () =>
+          Effect.gen(function* () {
+            const queries = yield* PaymentQueries;
+            const { productId } = yield* t.offer([{ amount: 500 }]);
+            const viewer = yield* member("admin");
+            const shown = () =>
+              Effect.gen(function* () {
+                const listed = (yield* queries.catalog).products.find(
+                  (item) => item.id === productId,
+                );
+                const admin = (yield* queries.products.pipe(
+                  asAdmin(viewer),
+                )).find((item) => item.id === productId);
+                return [listed?.credits, admin?.credits];
+              });
+            assert.deepStrictEqual(yield* shown(), [[], []]);
+
+            yield* mapCredits(productId, mealPlan(5));
+            assert.deepStrictEqual(yield* shown(), [mealPlan(5), mealPlan(5)]);
+
+            yield* mapCredits(productId, mealPlan(2));
+            assert.deepStrictEqual(yield* shown(), [mealPlan(2), mealPlan(2)]);
+
+            yield* mapCredits(productId, []);
+            assert.deepStrictEqual(yield* shown(), [[], []]);
+          }),
+        );
+
+        it.effect("records an audit entry naming the product", () =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const { productId } = yield* t.offer([{ amount: 500 }]);
+            const root = yield* mapCredits(productId, mealPlan(5));
+            const rows = yield* sql<{
+              readonly action: string;
+              readonly actorId: string;
+            }>`
+              SELECT action, actor_id FROM audit_log
+              WHERE action = 'payment_product_credits_changed'
+                AND detail = ${productId}
+            `;
+            assert.deepStrictEqual(rows, [
+              {
+                action: "payment_product_credits_changed",
+                actorId: root.user.id,
+              },
+            ]);
+          }),
+        );
+
+        it.effect("refuses credits for a product that grants roles", () =>
+          Effect.gen(function* () {
+            const commands = yield* PaymentCommands;
+            const { productId } = yield* t.offer([{ amount: 500 }], {
+              roles: ["foodPlanner"],
+            });
+            const root = yield* member("superAdmin");
+            const failure = yield* commands
+              .setProductCredits(productId, mealPlan(1))
+              .pipe(asSuperAdmin(root), Effect.flip);
+            assert.instanceOf(failure, ProductKindConflict);
+            // No credits at all is fine.
+            yield* commands
+              .setProductCredits(productId, [])
+              .pipe(asSuperAdmin(root));
+          }),
+        );
+
+        it.effect("refuses roles for a product that grants credits", () =>
+          Effect.gen(function* () {
+            const commands = yield* PaymentCommands;
+            const { productId } = yield* creditProduct(2);
+            const root = yield* member("superAdmin");
+            const failure = yield* commands
+              .setProductRoles(productId, ["foodPlanner"])
+              .pipe(asSuperAdmin(root), Effect.flip);
+            assert.instanceOf(failure, ProductKindConflict);
+            yield* commands
+              .setProductRoles(productId, [])
+              .pipe(asSuperAdmin(root));
+          }),
+        );
+
+        it.effect("takes roles once the credits are removed", () =>
+          Effect.gen(function* () {
+            const commands = yield* PaymentCommands;
+            const { productId } = yield* creditProduct(2);
+            yield* mapCredits(productId, []);
+            const root = yield* member("superAdmin");
+            yield* commands
+              .setProductRoles(productId, ["foodPlanner"])
+              .pipe(asSuperAdmin(root));
+          }),
+        );
+
+        it.effect("takes credits once the roles are removed", () =>
+          Effect.gen(function* () {
+            const commands = yield* PaymentCommands;
+            const { productId } = yield* t.offer([{ amount: 500 }], {
+              roles: ["foodPlanner"],
+            });
+            const root = yield* member("superAdmin");
+            yield* commands
+              .setProductRoles(productId, [])
+              .pipe(asSuperAdmin(root));
+            yield* mapCredits(productId, mealPlan(1));
+          }),
+        );
+
+        it.effect("adds a version only for what changes", () =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const { productId } = yield* creditProduct(3);
+            yield* laterClock;
+            const set = (quantity: number | null) =>
+              TestClock.adjust("1 hour").pipe(
+                Effect.andThen(
+                  mapCredits(
+                    productId,
+                    quantity === null ? [] : mealPlan(quantity),
+                  ),
+                ),
+              );
+            yield* set(3);
+            yield* set(5);
+            yield* set(null);
+            yield* set(null);
+            yield* set(4);
+            const rows = yield* sql<{ readonly quantity: number }>`
+              SELECT quantity FROM payment_product_credits
+              WHERE product_id = ${productId} ORDER BY since
+            `;
+            // 3 unchanged at first, 0 for the removal (once), then 4.
+            assert.deepStrictEqual(
+              rows.map((row) => row.quantity),
+              [3, 5, 0, 4],
+            );
+          }),
+        );
+
+        it.effect(
+          "refuses to make a product with credits the tip product",
+          () =>
+            Effect.gen(function* () {
+              const commands = yield* PaymentCommands;
+              const { productId } = yield* creditProduct(2);
+              const admin = yield* member("admin");
+              const failure = yield* commands
+                .updateProduct(productId, { enabled: true, kind: "tip" })
+                .pipe(asAdmin(admin), Effect.flip);
+              assert.instanceOf(failure, ProductKindConflict);
+            }),
+        );
+
+        it.effect("does not change the credits earlier purchases got", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* laterClock;
+            yield* mapCredits(bought.productId, mealPlan(5));
+            // A later sync of the old purchase keeps its three credits.
+            yield* t.handle({ checkoutSessionId: bought.sessionId });
+            assert.strictEqual(yield* available(bought.user), 3);
+            // A purchase made after the change gets the new quantity.
+            yield* bought.buy(1_900_000_000);
+            assert.strictEqual(yield* available(bought.user), 8);
+          }),
+        );
+
+        it.effect("keeps the effective date of an unchanged quantity", () =>
+          Effect.gen(function* () {
+            const offered = yield* creditProduct(3);
+            yield* laterClock;
+            // Setting what is set already does not move the start date.
+            yield* mapCredits(offered.productId, mealPlan(3));
+            const user = yield* member();
+            const customerId = yield* t.giveCustomer(user);
+            const sessionId = fresh("cs");
+            t.putPurchase({
+              sessionId,
+              intentId: fresh("pi"),
+              customerId,
+              productId: offered.productId,
+            });
+            yield* t.handle({ checkoutSessionId: sessionId });
+            assert.strictEqual(yield* available(user), 3);
+          }),
+        );
+
+        it.effect("grants nothing already bought if credits are removed", () =>
+          Effect.gen(function* () {
+            const bought = yield* creditBuyer(3);
+            yield* mapCredits(bought.productId, []);
+            yield* t.handle({ checkoutSessionId: bought.sessionId });
+            assert.strictEqual(yield* available(bought.user), 3);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+      });
+
+      describe("my payments", () => {
+        it.effect("lists the balance per feature", () =>
+          Effect.gen(function* () {
+            const queries = yield* PaymentQueries;
+            const bought = yield* creditBuyer(3);
+            assert.deepStrictEqual(
+              (yield* queries.mine(bought.user.subject)).credits,
+              [{ feature: "mealPlan", available: 3, used: 0 }],
+            );
+            yield* useOne(bought.user);
+            assert.deepStrictEqual(
+              (yield* queries.mine(bought.user.subject)).credits,
+              [{ feature: "mealPlan", available: 2, used: 1 }],
+            );
+          }),
+        );
+
+        it.effect("lists no balance without credits", () =>
+          Effect.gen(function* () {
+            const queries = yield* PaymentQueries;
+            const bought = yield* t.buyer;
+            assert.deepStrictEqual(
+              (yield* queries.mine(bought.user.subject)).credits,
+              [],
+            );
+            assert.deepStrictEqual(
+              (yield* queries.mine(crypto.randomUUID())).credits,
+              [],
+            );
+          }),
+        );
+
+        it.effect("leaves out the credits of a refunded purchase", () =>
+          Effect.gen(function* () {
+            const queries = yield* PaymentQueries;
+            const bought = yield* creditBuyer(3);
+            t.putIntent(bought.intentId, { amountRefunded: 1000 });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.deepStrictEqual(
+              (yield* queries.mine(bought.user.subject)).credits,
+              [],
+            );
+          }),
+        );
+      });
+
+      describe("account deletion", () => {
+        it.effect("revokes the credits and the role", () =>
+          Effect.gen(function* () {
+            const users = yield* UserCommands;
+            const bought = yield* creditBuyer(3);
+            yield* users.deleteAccount(bought.user.subject);
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("is not undone by a later webhook", () =>
+          Effect.gen(function* () {
+            const users = yield* UserCommands;
+            const bought = yield* creditBuyer(3);
+            yield* users.deleteAccount(bought.user.subject);
+            yield* t.handle({ checkoutSessionId: bought.sessionId });
+            yield* t.handle({ paymentIntentId: bought.intentId });
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+          }),
+        );
+
+        it.effect("grants a purchase made after it nothing", () =>
+          Effect.gen(function* () {
+            const users = yield* UserCommands;
+            const bought = yield* creditBuyer(3);
+            yield* users.deleteAccount(bought.user.subject);
+            yield* bought.buy();
+            assert.deepStrictEqual(yield* balancesOf(bought.user), []);
+          }),
+        );
+      });
+
+      describe("resyncPaidRoles", () => {
+        it.effect("gives a credit holder their role back", () =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const commands = yield* PaymentCommands;
+            const bought = yield* creditBuyer(3);
+            // Taken away by hand.
+            yield* sql`
+              DELETE FROM user_roles
+              WHERE user_id = ${bought.user.user.id} AND role = 'mealPlanBuyer'
+            `;
+            assert.isFalse(yield* holdsBuyerRole(bought.user));
+            assert.isAtLeast(yield* commands.resyncPaidRoles, 1);
+            assert.isTrue(yield* holdsBuyerRole(bought.user));
+            assert.strictEqual(yield* available(bought.user), 3);
+          }),
+        );
+
+        it.effect("takes the role from someone without credits", () =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient;
+            const commands = yield* PaymentCommands;
+            const stale = yield* member();
+            yield* sql`
+              INSERT INTO user_roles (user_id, role, manual)
+              VALUES (${stale.user.id}, 'mealPlanBuyer', false)
+            `;
+            yield* commands.resyncPaidRoles;
+            assert.isFalse(yield* holdsBuyerRole(stale));
+          }),
+        );
+
+        it.effect("keeps a role that was granted by hand", () =>
+          Effect.gen(function* () {
+            const commands = yield* PaymentCommands;
+            const manual = yield* member("mealPlanBuyer");
+            yield* commands.resyncPaidRoles;
+            assert.deepStrictEqual(yield* buyerRole(manual), Option.some(true));
+          }),
+        );
+      });
+    });
+
     describe("invoices", () => {
       const invoice = (
         subscriptionId: string,
@@ -1551,6 +2463,42 @@ describe("PaymentCommands with a tip product", () => {
         yield* commands
           .setProductRoles(tip.productId, [])
           .pipe(asSuperAdmin(root));
+      }),
+    );
+
+    it.effect("refuses credits for the tip product", () =>
+      Effect.gen(function* () {
+        const commands = yield* PaymentCommands;
+        const tip = yield* ensureTip;
+        const root = yield* member("superAdmin");
+        const failure = yield* commands
+          .setProductCredits(tip.productId, [
+            { feature: "mealPlan", quantity: 1 },
+          ])
+          .pipe(asSuperAdmin(root), Effect.flip);
+        assert.instanceOf(failure, ProductKindConflict);
+        // No credits at all is fine.
+        yield* commands
+          .setProductCredits(tip.productId, [])
+          .pipe(asSuperAdmin(root));
+      }),
+    );
+
+    it.effect("grants a tip no credits", () =>
+      Effect.gen(function* () {
+        const credits = yield* CreditQueries;
+        const tip = yield* ensureTip;
+        const ada = yield* member();
+        const customerId = yield* t.giveCustomer(ada);
+        const sessionId = fresh("cs");
+        t.putPurchase({
+          sessionId,
+          intentId: fresh("pi"),
+          customerId,
+          productId: tip.productId,
+        });
+        yield* t.handle({ checkoutSessionId: sessionId });
+        assert.deepStrictEqual(yield* credits.balancesOf(ada.user.id), []);
       }),
     );
   });

@@ -10,6 +10,7 @@ import {
   PaymentProviderFailed,
   PaymentsUnavailable,
   type PaymentId,
+  type ProductCredit,
   ProductKindConflict,
   type PurchasableRole,
   type RedirectUrl,
@@ -34,6 +35,13 @@ import { Outbox } from "#cqrs/Outbox";
 import * as Query from "#cqrs/Query";
 import { Transaction } from "#cqrs/Transaction";
 import { AuditCommands } from "#domains/audit/AuditCommands";
+import {
+  changedOffers,
+  offerAt,
+  rolesOfFeatures,
+} from "#domains/credits/Credit";
+import { CreditCommands } from "#domains/credits/CreditCommands";
+import { CreditQueries } from "#domains/credits/CreditQueries";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { actorIdOf, UserDirectory } from "#domains/users/UserDirectory";
@@ -52,6 +60,7 @@ import {
   fromStripeTime,
   paymentStatusOf,
   purchaseBlocksRepeat,
+  purchaseGrantsAccess,
   refundRefusal,
   subscriptionIsLive,
   subscriptionStatusOf,
@@ -73,6 +82,8 @@ const make = Effect.gen(function* () {
   const users = yield* UserDirectory;
   const moderation = yield* ModerationCommands;
   const moderationQueries = yield* ModerationQueries;
+  const credits = yield* CreditCommands;
+  const creditQueries = yield* CreditQueries;
   const audit = yield* AuditCommands;
   const outbox = yield* Outbox;
   const transaction = yield* Transaction;
@@ -107,30 +118,54 @@ const make = Effect.gen(function* () {
   // Roles
 
   /**
-   * Recomputes the roles the user holds through payments from the mirrored
-   * subscriptions and purchases and hands them to moderation. Joins the
-   * caller's transaction.
+   * Recomputes what the user holds through payments from the mirrored
+   * subscriptions and purchases: hands their one-off purchases to credits,
+   * and the roles (those of the products, and those that come with the
+   * credits they hold) to moderation. Joins the caller's transaction.
    */
   const syncRolesOf = Effect.fnUntraced(function* (userId: UserId) {
+    // First, so that what is read below is what the sync acts on: two
+    // syncs of the same user (a webhook and a product change) take turns.
+    yield* users.lockForUpdate([userId]);
     const subscriptions = yield* repository.subscriptionsOfUser(
       userId,
       livemode,
     );
     const payments = yield* repository.paymentsOfUser(userId, livemode);
-    const roles = yield* repository.rolesOf(
-      Arr.getSomes([
-        ...subscriptions.map((row) => row.productId),
-        ...payments.map((row) => row.productId),
-      ]),
-    );
-    yield* moderation.syncPaidRoles(
+    const productIds = Arr.getSomes([
+      ...subscriptions.map((row) => row.productId),
+      ...payments.map((row) => row.productId),
+    ]);
+    const roles = yield* repository.rolesOf(productIds);
+    const offers = yield* repository.creditsOf(productIds);
+    const features = yield* credits.syncPaidCredits(
       userId,
-      entitledRoles({
+      payments
+        .filter((row) => row.kind === "purchase")
+        .map((row) => ({
+          paymentId: row.id,
+          grantsAccess: purchaseGrantsAccess(row.status),
+          createdAt: row.createdAt,
+          offers: Option.match(row.productId, {
+            onNone: () => [],
+            onSome: (productId) => offers.get(productId) ?? [],
+          }),
+        })),
+    );
+    yield* moderation.syncPaidRoles(userId, [
+      ...entitledRoles({
         subscriptions,
         payments,
         rolesOf: (productId) => roles.get(productId) ?? [],
       }),
-    );
+      ...rolesOfFeatures(features),
+    ]);
+  });
+
+  /** What one purchase of the product grants now (its newest versions). */
+  const currentCreditsOf = Effect.fnUntraced(function* (productId: string) {
+    const versions = yield* repository.creditsOf([productId]);
+    return offerAt(versions.get(productId) ?? [], yield* DateTime.now);
   });
 
   // Mirroring Stripe. Every sync fetches the current state of an object, so
@@ -469,8 +504,12 @@ const make = Effect.gen(function* () {
         lineItem,
       };
     }
+    // Credits are used up, so a product that grants them is bought again
+    // and again.
+    const repeatable = (yield* currentCreditsOf(product.value.id)).length > 0;
     const payments = yield* repository.paymentsOfUser(user.id, livemode);
     if (
+      !repeatable &&
       payments.some(
         (row) =>
           row.kind === "purchase" &&
@@ -654,9 +693,11 @@ const make = Effect.gen(function* () {
       if (update.kind === "tip") {
         const tip = yield* repository.findTipProduct(livemode);
         const roles = yield* repository.rolesOf([productId]);
+        const credits = yield* currentCreditsOf(productId);
         if (
           (Option.isSome(tip) && tip.value.id !== productId) ||
-          (roles.get(productId) ?? []).length > 0
+          roles.has(productId) ||
+          credits.length > 0
         ) {
           return yield* new ProductKindConflict();
         }
@@ -696,8 +737,12 @@ const make = Effect.gen(function* () {
       if (Option.isNone(product) || product.value.livemode !== livemode) {
         return yield* new PaymentProductNotFound({ product: productId });
       }
-      // A tip buys nothing.
-      if (product.value.kind === "tip" && roles.length > 0) {
+      // A tip buys nothing, and a product grants roles or credits, not both.
+      if (
+        roles.length > 0 &&
+        (product.value.kind === "tip" ||
+          (yield* currentCreditsOf(productId)).length > 0)
+      ) {
         return yield* new ProductKindConflict();
       }
       yield* repository.setProductRoles(productId, [...new Set(roles)]);
@@ -712,6 +757,40 @@ const make = Effect.gen(function* () {
         yield* syncRolesOf(userId);
       }
     }, Command.boundary(transaction)),
+
+    setProductCredits: Effect.fn("PaymentCommands.setProductCredits")(
+      function* (productId: string, offered: ReadonlyArray<ProductCredit>) {
+        const actor = yield* actorOf(yield* Authorized("superAdmin"));
+        const product = yield* repository.findProductForUpdate(productId);
+        if (Option.isNone(product) || product.value.livemode !== livemode) {
+          return yield* new PaymentProductNotFound({ product: productId });
+        }
+        // A tip buys nothing, and a product grants roles or credits, not both.
+        if (
+          offered.length > 0 &&
+          (product.value.kind === "tip" ||
+            (yield* repository.rolesOf([productId])).has(productId))
+        ) {
+          return yield* new ProductKindConflict();
+        }
+        // A new version for each feature that changes: purchases started from
+        // now on get it, those started before keep theirs (see
+        // creditsOfPurchase), so nobody is resynced.
+        const now = yield* DateTime.now;
+        yield* repository.addCreditVersions(
+          productId,
+          changedOffers(yield* currentCreditsOf(productId), offered),
+          now,
+        );
+        yield* audit.record({
+          action: "payment_product_credits_changed",
+          actor: Option.some(actor),
+          target: Option.none(),
+          detail: productId,
+        });
+      },
+      Command.boundary(transaction),
+    ),
 
     receiveWebhook: Effect.fn("PaymentCommands.receiveWebhook")(function* (
       payload: string,
@@ -781,7 +860,13 @@ const make = Effect.gen(function* () {
     resyncPaidRoles: Effect.gen(function* () {
       // Without Stripe the current mode is unknown: leave every grant alone.
       if (!stripe.configured) return 0;
-      const holders = yield* moderationQueries.paidRoleHolders;
+      // Credits too: a superAdmin may have revoked a credit's role by hand.
+      const holders = [
+        ...new Set([
+          ...(yield* moderationQueries.paidRoleHolders),
+          ...(yield* creditQueries.holders),
+        ]),
+      ];
       for (const userId of holders) {
         yield* syncRolesOf(userId).pipe(Command.boundary(transaction));
       }
@@ -803,6 +888,7 @@ const make = Effect.gen(function* () {
     ) {
       // The current mode only: a test customer's subscriptions charge
       // nobody, and the current key can't reach the other mode anyway.
+      yield* credits.revokeAllOf(userId);
       const customerId = yield* repository.customerOf(userId, livemode);
       if (Option.isSome(customerId)) {
         yield* outbox.enqueue(CancelCustomerSubscriptions, {
@@ -822,8 +908,9 @@ const isInterval = (
  * The commands of the payments domain: starting a Stripe Checkout or the
  * customer portal for the logged-in user, refunds and catalog settings for
  * admins (product roles for superAdmins), and mirroring Stripe after each
- * webhook, which also grants and revokes the roles payments entitle users
- * to (through `ModerationCommands.syncPaidRoles`).
+ * webhook, which also grants and revokes the roles and credits payments
+ * entitle users to (through `ModerationCommands.syncPaidRoles` and
+ * `CreditCommands.syncPaidCredits`).
  */
 export class PaymentCommands extends Context.Service<
   PaymentCommands,
@@ -832,7 +919,8 @@ export class PaymentCommands extends Context.Service<
      * A Checkout session for the user with this `sub`: a price of an
      * offered product (a subscription, a one-off purchase or a preset tip)
      * or a custom tip. Refused for a product they already subscribe to or
-     * bought. Makes their Stripe customer on first use.
+     * bought, unless it grants credits. Makes their Stripe customer on first
+     * use.
      */
     readonly startCheckout: (
       subject: typeof Subject.Type,
@@ -899,6 +987,19 @@ export class PaymentCommands extends Context.Service<
       Authorized<"superAdmin">
     >;
     /**
+     * Which credits one purchase of a product grants (superAdmins only, as
+     * credits come with roles). Applies to purchases made from now on;
+     * earlier ones keep the credits they got.
+     */
+    readonly setProductCredits: (
+      productId: string,
+      credits: ReadonlyArray<ProductCredit>,
+    ) => Effect.Effect<
+      void,
+      PaymentProductNotFound | ProductKindConflict,
+      Authorized<"superAdmin">
+    >;
+    /**
      * A webhook delivery: checks its signature, remembers the event and
      * queues it for `handleEvent` (`payments.stripe-event`), in one
      * transaction. A repeated delivery is acknowledged and dropped.
@@ -918,8 +1019,8 @@ export class PaymentCommands extends Context.Service<
       customerId: string,
     ) => Effect.Effect<void, StripeFailed>;
     /**
-     * Checks everyone who holds a role through a payment against the
-     * current mode's subscriptions and purchases (at startup): a switch from
+     * Checks everyone who holds a role or credits through a payment against
+     * the current mode's subscriptions and purchases (at startup): a switch from
      * the test key to the live one takes away what test payments granted.
      * Does nothing while Stripe is not configured. Returns how many users
      * it checked.
@@ -930,17 +1031,18 @@ export class PaymentCommands extends Context.Service<
       retention: Duration.Input,
     ) => Effect.Effect<number>;
     /**
-     * For `UserCommands.deleteAccount`, in its transaction: queues the
-     * cancellation of the user's subscriptions. Their payments stay, as
-     * records of the business (tied to the anonymised account).
+     * For `UserCommands.deleteAccount`, in its transaction: revokes the
+     * user's credits and queues the cancellation of their subscriptions.
+     * Their payments stay, as records of the business (tied to the
+     * anonymised account).
      */
     readonly releaseCustomer: (userId: UserId) => Effect.Effect<void>;
   }
 >()("@unhalteproblem.de/backend/domains/payments/PaymentCommands") {
   /**
    * Needs `PaymentRepository`, `Stripe`, `UserDirectory`,
-   * `ModerationCommands`, `ModerationQueries`, `AuditCommands`, `Outbox` and
-   * `Transaction`.
+   * `ModerationCommands`, `ModerationQueries`, `CreditCommands`,
+   * `CreditQueries`, `AuditCommands`, `Outbox` and `Transaction`.
    */
   static readonly layer = Layer.effect(PaymentCommands, make);
 }

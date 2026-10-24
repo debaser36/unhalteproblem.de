@@ -33,8 +33,8 @@ const Consumers = Layer.unwrap(
 );
 
 /**
- * Background work: once at startup, check the roles granted by payments
- * against the current Stripe mode (a new key may be of the other mode);
+ * Background work: once at startup, check the roles and credits granted
+ * by payments against the current Stripe mode (a new key may be of the other mode);
  * once a day, forget old webhook event ids. A failed run is logged and
  * does not end the job.
  */
@@ -70,8 +70,8 @@ const Jobs = Layer.effectDiscard(
  * internal.
  *
  * Needs a migrated `SqlClient`, `Transaction`, `Outbox`, `Stripe`,
- * `UserDirectory`, `ModerationCommands`, `ModerationQueries` and
- * `AuditCommands`.
+ * `UserDirectory`, `ModerationCommands`, `ModerationQueries`,
+ * `CreditCommands`, `CreditQueries` and `AuditCommands`.
  */
 export const PaymentsLive = Layer.mergeAll(
   Layer.mergeAll(Consumers, Jobs).pipe(

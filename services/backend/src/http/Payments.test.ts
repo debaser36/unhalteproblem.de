@@ -308,3 +308,124 @@ describe("the payment admin endpoints", () => {
     }),
   );
 });
+
+describe("the credits of products", () => {
+  it.effect("are set for superAdmins only, and shown in the catalog", () =>
+    Effect.gen(function* () {
+      const { call, expect, request, admin, superAdmin, user } = yield* setup;
+      const path = `/admin/payments/products/${productId}/credits`;
+      const body = { credits: [{ feature: "mealPlan", quantity: 3 }] };
+
+      assert.strictEqual(
+        (yield* call(undefined, "PUT", path, { body })).status,
+        401,
+      );
+      assert.strictEqual(
+        (yield* call(user.cookie, "PUT", path, { body })).status,
+        403,
+      );
+      assert.strictEqual(
+        (yield* call(admin.cookie, "PUT", path, { body })).status,
+        403,
+      );
+      assert.strictEqual(
+        (yield* call(superAdmin.cookie, "PUT", path, { body, origin: null }))
+          .status,
+        403,
+      );
+      const unchanged = (yield* expect(
+        200,
+        admin.cookie,
+        "GET",
+        "/admin/payments/products",
+      )) as unknown as ReadonlyArray<Json>;
+      assert.deepStrictEqual(
+        unchanged.map((item) => item["credits"]),
+        [[]],
+      );
+
+      const answer = yield* expect(200, superAdmin.cookie, "PUT", path, {
+        body,
+      });
+      assert.deepStrictEqual(answer["credits"], body.credits);
+
+      const response = yield* request("/payments/catalog");
+      const catalog = (yield* Effect.promise(() => response.json())) as Json;
+      assert.deepStrictEqual(
+        (catalog["products"] as ReadonlyArray<Json>).map(
+          (item) => item["credits"],
+        ),
+        [body.credits],
+      );
+    }),
+  );
+
+  it.effect("are refused for invalid input and unknown products", () =>
+    Effect.gen(function* () {
+      const { expect, call, superAdmin } = yield* setup;
+      const path = `/admin/payments/products/${productId}/credits`;
+      const feature = "mealPlan";
+      for (const credits of [
+        [{ feature, quantity: 0 }],
+        [{ feature, quantity: 101 }],
+        [{ feature: "somethingElse", quantity: 1 }],
+        [
+          { feature, quantity: 1 },
+          { feature, quantity: 2 },
+        ],
+      ]) {
+        assert.strictEqual(
+          (yield* call(superAdmin.cookie, "PUT", path, { body: { credits } }))
+            .status,
+          400,
+        );
+      }
+      yield* expect(
+        404,
+        superAdmin.cookie,
+        "PUT",
+        "/admin/payments/products/prod_unknown/credits",
+        { body: { credits: [{ feature, quantity: 1 }] } },
+      );
+    }),
+  );
+
+  it.effect(
+    "leave a user's own payments without a balance if they have none",
+    () =>
+      Effect.gen(function* () {
+        const { expect, user } = yield* setup;
+        const me = yield* expect(200, user.cookie, "GET", "/payments/me");
+        assert.deepStrictEqual(me["credits"], []);
+      }),
+  );
+});
+
+describe("roles and credits of a product", () => {
+  const credits = { credits: [{ feature: "mealPlan", quantity: 3 }] };
+  const roles = { roles: ["foodPlanner"] };
+  const pathOf = (what: "roles" | "credits") =>
+    `/admin/payments/products/${productId}/${what}`;
+
+  it.effect("are never granted together (409)", () =>
+    Effect.gen(function* () {
+      const { expect, superAdmin } = yield* setup;
+      yield* expect(200, superAdmin.cookie, "PUT", pathOf("roles"), {
+        body: roles,
+      });
+      yield* expect(409, superAdmin.cookie, "PUT", pathOf("credits"), {
+        body: credits,
+      });
+      // Removing the roles makes room for credits, and the other way round.
+      yield* expect(200, superAdmin.cookie, "PUT", pathOf("roles"), {
+        body: { roles: [] },
+      });
+      yield* expect(200, superAdmin.cookie, "PUT", pathOf("credits"), {
+        body: credits,
+      });
+      yield* expect(409, superAdmin.cookie, "PUT", pathOf("roles"), {
+        body: roles,
+      });
+    }),
+  );
+});

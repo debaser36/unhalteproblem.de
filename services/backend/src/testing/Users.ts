@@ -10,6 +10,9 @@ import { AuditCommands } from "#domains/audit/AuditCommands";
 import { AuditRepository } from "#domains/audit/AuditRepository";
 import { BlogDirectory } from "#domains/blogs/BlogDirectory";
 import { BlogRepository } from "#domains/blogs/BlogRepository";
+import { CreditCommands } from "#domains/credits/CreditCommands";
+import { CreditQueries } from "#domains/credits/CreditQueries";
+import { CreditRepository } from "#domains/credits/CreditRepository";
 import { ModerationCommands } from "#domains/moderation/ModerationCommands";
 import { ModerationQueries } from "#domains/moderation/ModerationQueries";
 import { ModerationRepository } from "#domains/moderation/ModerationRepository";
@@ -36,7 +39,7 @@ export const KernelTest = Transaction.layer.pipe(
 );
 
 /**
- * The users, payments and moderation domains' commands and queries with
+ * The users, payments, credits and moderation domains' commands and queries with
  * their repositories, `UserDirectory`, `Sessions` and `stripe`, all of which
  * stay accessible to the test, on `KernelTest`.
  */
@@ -44,6 +47,9 @@ export const usersTestWith = (stripe: Layer.Layer<Stripe>) =>
   Layer.mergeAll(UserCommands.layer, UserQueries.layer).pipe(
     Layer.provideMerge(
       Layer.mergeAll(PaymentCommands.layer, PaymentQueries.layer),
+    ),
+    Layer.provideMerge(
+      Layer.mergeAll(CreditCommands.layer, CreditQueries.layer),
     ),
     Layer.provideMerge(
       Layer.mergeAll(ModerationCommands.layer, ModerationQueries.layer),
@@ -60,6 +66,7 @@ export const usersTestWith = (stripe: Layer.Layer<Stripe>) =>
         UserRepository.layer,
         ModerationRepository.layer,
         PaymentRepository.layer,
+        CreditRepository.layer,
         Sessions.layer,
         stripe,
       ),

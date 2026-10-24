@@ -79,6 +79,11 @@ export const PaymentAdminHandlers = HttpApiBuilder.group(
         commands
           .setProductRoles(params.productId, payload.roles)
           .pipe(Effect.andThen(product(params.productId)), noStore),
+      )
+      .handle("setPaymentProductCredits", ({ params, payload }) =>
+        commands
+          .setProductCredits(params.productId, payload.credits)
+          .pipe(Effect.andThen(product(params.productId)), noStore),
       );
   }),
 );
