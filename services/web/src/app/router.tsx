@@ -130,6 +130,20 @@ export const routes: Array<RouteObject> = [
               (m) => m.AdminApp,
             ),
           },
+          {
+            path: "impressum",
+            ...page(
+              () => import("#features/legal/ImpressumPage.tsx"),
+              (m) => m.ImpressumPage,
+            ),
+          },
+          {
+            path: "datenschutz",
+            ...page(
+              () => import("#features/legal/PrivacyPage.tsx"),
+              (m) => m.PrivacyPage,
+            ),
+          },
           { path: "*", element: <NotFoundPage /> },
         ],
       },
