@@ -17,7 +17,7 @@
   },
   "scripts": {
     "dev": "node --watch src/main.ts",
-    "build": "rolldown src/main.ts --platform node --format esm --file dist/main.js",
+    "build": "rolldown src/main.ts --platform node --format esm --no-codeSplitting --file dist/main.js",
     "start": "node dist/main.js",
     "check-types": "tsc --noEmit -p .",
     "lint": "oxlint",
