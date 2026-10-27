@@ -18,6 +18,9 @@ Run from the repo root; everything goes through Turborepo with `.env` loaded.
 
 - `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm check-types`
 - Scope to one package with `pnpm --filter <package-name> <script>`.
+- `pnpm test:e2e` runs the Playwright smoke tests in `services/web/e2e` against
+  the local stack (starts it with `stack up`). Testing layers of the website:
+  `services/web/README.md`.
 - Dev environment: `nix develop` (Node and pnpm come from `flake.nix`; they are not on the PATH outside it).
 - Trying a change in the real app: `stack up` in the dev shell starts Postgres, backend and website with a seeded admin (`stack help`, `/run-local`). Source: `nix/stack.sh`.
 - Keep command output short; it stays in context for the rest of the session.

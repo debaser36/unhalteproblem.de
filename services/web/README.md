@@ -15,25 +15,45 @@ page as readers do and switch it into an editor.
   exactly like nginx does in production, so the session cookie just works.
 - `build` type-checks and bundles into `dist/`, which nginx serves; every
   unknown path must fall back to `index.html` (client-side routing).
-- `test` runs the unit tests (vitest), `lint` oxlint.
+- `test` runs the unit and component tests (see Testing), `lint` oxlint.
 
 ## Layout
 
-| Folder (alias)       | What lives there                                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `src/app` (`#app/*`) | The shell: router (every page is a lazily loaded chunk), layout, header, footer, user menu, `RequireUser`, `site.ts` |
-| `src/api` (`#api/*`) | The typed client (`ApiClient`), the session atoms, `AsyncView` and error messages                                    |
-| `src/features/*`     | One folder per feature: `home`, `blog`, `projects`, `about`, `contact`, `account`, `admin`                           |
-| `src/editor`         | The rich document editor (TipTap), shared by posts and projects: viewer, toolbar, editor bar, cover picker           |
-| `src/ui` (`#ui/*`)   | The design system: buttons, fields, cards, badges, dialogs, tables, toasts. No data, no features                     |
-| `src/lib` (`#lib/*`) | Small pure helpers (slugs, tags, formatting, theme), with tests                                                      |
-| `src/styles`         | Design tokens (dark and light theme), document typography and code colors                                            |
+| Folder (alias)               | What lives there                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `src/app` (`#app/*`)         | The shell: router (every page is a lazily loaded chunk), layout, header, footer, user menu, `RequireUser`, `site.ts` |
+| `src/api` (`#api/*`)         | The typed client (`ApiClient`), the session atoms, `AsyncView` and error messages                                    |
+| `src/features/*`             | One folder per feature: `home`, `blog`, `projects`, `about`, `contact`, `account`, `admin`                           |
+| `src/editor`                 | The rich document editor (TipTap), shared by posts and projects: viewer, toolbar, editor bar, cover picker           |
+| `src/ui` (`#ui/*`)           | The design system: buttons, fields, cards, badges, dialogs, tables, toasts. No data, no features                     |
+| `src/lib` (`#lib/*`)         | Small pure helpers (slugs, tags, formatting, theme), with tests                                                      |
+| `src/styles`                 | Design tokens (dark and light theme), document typography and code colors                                            |
+| `src/testing` (`#testing/*`) | Test helpers only: the fake backend, render helpers, fixtures                                                        |
 
 Aliases map a folder without an extension (`"#ui/*": "./src/ui/*"`), and
 imports name the file with its extension (`#ui/Button.tsx`), since most
 folders mix `.ts` and `.tsx`. Features import from `ui`, `lib`, `api`,
 `editor` and, sparingly, from each other's atoms; `ui` and `lib` import from
 no feature.
+
+## Testing
+
+Three layers, all run in the dev shell (`nix develop`), which provides Chromium:
+
+- **Unit tests** (`src/**/*.test.ts`) for pure modules, in Node.
+- **Component tests** (`src/**/*.browser.test.tsx`) render components and
+  pages in a real Chromium through Vitest Browser Mode (the editor needs real
+  selections and layout). `fakeApi` (`#testing/FakeApi.ts`) replaces the
+  `ApiClient` with handlers typed against the contract, so a contract change
+  breaks the fakes at compile time; `renderApp(path, api)` renders the whole
+  site with its routes, `renderWithApi(element, api)` one component.
+  `callsTo(group, endpoint)` returns what a page sent. Both run with `test`.
+- **End-to-end smoke tests** (`e2e/`, Playwright) run against the local
+  stack: `pnpm test:e2e` from the root starts it with `stack up` if needed,
+  logs in an admin and a plain user with `stack login` and creates the `e2e`
+  blog. Each run adds a post and a contact message to the stack's database
+  (`stack reset` clears it). Pages are checked for console errors, and the
+  public pages with axe.
 
 ## Data
 
