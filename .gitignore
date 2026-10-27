@@ -149,3 +149,8 @@ result
 
 # Local stack (`stack up`): database, logs, cookies
 .dev/
+
+# Playwright (services/web/e2e)
+services/web/e2e/.auth/
+services/web/test-results/
+services/web/playwright-report/

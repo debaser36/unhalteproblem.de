@@ -26,6 +26,7 @@
     "dev": "dotenv -- turbo watch lint dev",
     "lint": "dotenv -- turbo lint",
     "test": "dotenv -- turbo test",
+    "test:e2e": "dotenv -- turbo test:e2e",
     "deploy": "dotenv -- turbo deploy",
     "check-types": "dotenv -- turbo check-types",
     "format": "prettier . --write",

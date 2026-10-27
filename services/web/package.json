@@ -10,6 +10,7 @@
     "#features/*": "./src/features/*",
     "#lib/*": "./src/lib/*",
     "#styles/*": "./src/styles/*",
+    "#testing/*": "./src/testing/*",
     "#ui/*": "./src/ui/*"
   },
   "scripts": {
@@ -19,6 +20,7 @@
     "check-types": "tsc -b",
     "lint": "oxlint",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -47,17 +49,22 @@
     "react-router": "^7.18.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@effect/tsgo": "catalog:",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "@vitest/browser-playwright": "catalog:",
     "only-allow": "^1.2.2",
     "oxlint": "catalog:",
+    "playwright": "1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "catalog:",
     "vite": "^8.3.4",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vitest-browser-react": "^2.3.0"
   },
   "packageManager": "pnpm@12.9.0"
 }

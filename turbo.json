@@ -23,7 +23,12 @@
     "test": {
       "dependsOn": ["^test"],
       "env": ["POSTGRES_*"],
+      "passThroughEnv": ["CHROMIUM_EXECUTABLE"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "test:e2e": {
+      "cache": false,
+      "passThroughEnv": ["CHROMIUM_EXECUTABLE", "CI"]
     }
   }
 }

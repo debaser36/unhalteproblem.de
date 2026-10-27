@@ -24,6 +24,8 @@ catalog:
   "@effect/sql-pglite": "4.0.5"
   "@effect/vitest": "4.0.5"
   "vitest": "^5.0.4"
+  # Has vitest as an exact peer; bump the two together.
+  "@vitest/browser-playwright": "^5.0.4"
   "oxlint": "^1.88.0"
 minimumReleaseAgeExclude:
   - prettier@3.9.1

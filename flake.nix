@@ -38,7 +38,7 @@
           version = "0.1.0";
           inherit src pnpm;
           fetcherVersion = 4;
-          hash = "sha256-+tWfLcA90HXKkup358tXWHXxvkmU5ZLMcCDVuTS9plU=";
+          hash = "sha256-ui+20D/WPPgekcd8CzZC6EH1nI1am4N19zEXP8Fpk+w=";
         };
 
         # Builds one workspace package (and the workspace packages it depends
