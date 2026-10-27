@@ -141,6 +141,9 @@ start_backend() {
     export OIDC_ISSUER=https://127.0.0.1:9/realms/dev OIDC_CLIENT_SECRET=dev
     export KEYCLOAK_ADMIN_CLIENT_SECRET=dev
     export PUBLIC_ORIGIN='"$web_origin"'
+    # Generous unless .env sets it: the end-to-end tests send a contact
+    # message on every run, and the limit only resets with a restart.
+    export CONTACT_RATE_LIMIT=${CONTACT_RATE_LIMIT:-1000}
     exec pnpm --filter @unhalteproblem.de/backend dev
   '
 }

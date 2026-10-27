@@ -42,3 +42,27 @@ jobs:
       - uses: cachix/install-nix-action@v31
       # Fails when pnpm-lock.yaml changed without updating pnpmDeps.hash.
       - run: nix build .#default .#backend .#backend-image --no-link
+
+  e2e:
+    name: End-to-end smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Install dependencies
+        run: nix develop -c pnpm install --frozen-lockfile
+      # Starts the local stack (Postgres, backend, Vite) through `stack up`
+      # in its global setup; Chromium comes from the dev shell.
+      - name: End-to-end tests
+        run: nix develop -c pnpm test:e2e --output-logs=errors-only
+      - name: Stack logs
+        if: failure()
+        run: tail -n 100 .dev/backend.log .dev/web.log
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: services/web/test-results/
+          retention-days: 7
